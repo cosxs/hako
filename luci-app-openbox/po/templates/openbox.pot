@@ -22,6 +22,9 @@ msgstr ""
 msgid "0-RTT handshake"
 msgstr ""
 
+msgid "A PEM certificate the server is verified with instead of the system ones."
+msgstr ""
+
 msgid "A file with the same name is replaced."
 msgstr ""
 
@@ -67,7 +70,13 @@ msgstr ""
 msgid "Auto by latency"
 msgstr ""
 
+msgid "BBR profile"
+msgstr ""
+
 msgid "Binary (.srs)"
+msgstr ""
+
+msgid "Bind interface"
 msgstr ""
 
 msgid "By the extension"
@@ -124,7 +133,13 @@ msgstr ""
 msgid "Congestion control"
 msgstr ""
 
+msgid "Connect timeout"
+msgstr ""
+
 msgid "Connection reuse"
+msgstr ""
+
+msgid "Connects through this network interface."
 msgstr ""
 
 msgid "Connects to the server through this node or group."
@@ -196,6 +211,9 @@ msgstr ""
 msgid "Direct connection"
 msgstr ""
 
+msgid "Disable Chrome fingerprint"
+msgstr ""
+
 msgid "Disabled"
 msgstr ""
 
@@ -203,6 +221,9 @@ msgid "Discard"
 msgstr ""
 
 msgid "Discard changes?"
+msgstr ""
+
+msgid "Do not send server name"
 msgstr ""
 
 msgid "Domain resolver"
@@ -217,6 +238,15 @@ msgstr ""
 msgid "Download via"
 msgstr ""
 
+msgid "ECH config"
+msgstr ""
+
+msgid "Early data"
+msgstr ""
+
+msgid "Early data header"
+msgstr ""
+
 msgid "Edit"
 msgstr ""
 
@@ -224,6 +254,9 @@ msgid "Edit: %s"
 msgstr ""
 
 msgid "Enable"
+msgstr ""
+
+msgid "Enable ECH"
 msgstr ""
 
 msgid "Enable Reality"
@@ -274,6 +307,12 @@ msgstr ""
 msgid "Format"
 msgstr ""
 
+msgid "Fragment TLS handshake"
+msgstr ""
+
+msgid "Fragment TLS records"
+msgstr ""
+
 msgid "Free space: %1024.2mB."
 msgstr ""
 
@@ -295,10 +334,16 @@ msgstr ""
 msgid "HTTP and SOCKS5 :%d"
 msgstr ""
 
+msgid "HTTP method"
+msgstr ""
+
 msgid "HTTP obfuscation"
 msgstr ""
 
 msgid "Hop interval"
+msgstr ""
+
+msgid "Hops at a random interval between the hop interval and this one."
 msgstr ""
 
 msgid "Hops between ports of these ranges, such as 20000:30000, in place of the port."
@@ -481,7 +526,31 @@ msgstr ""
 msgid "Matches the user of the proxy port."
 msgstr ""
 
+msgid "Maximum TLS version"
+msgstr ""
+
+msgid "Maximum connections"
+msgstr ""
+
+msgid "Maximum hop interval"
+msgstr ""
+
+msgid "Maximum packet size"
+msgstr ""
+
+msgid "Maximum streams"
+msgstr ""
+
 msgid "Members"
+msgstr ""
+
+msgid "Minimum TLS version"
+msgstr ""
+
+msgid "Minimum packet size"
+msgstr ""
+
+msgid "Minimum streams"
 msgstr ""
 
 msgid "Mode"
@@ -493,7 +562,19 @@ msgstr ""
 msgid "Multiple conditions"
 msgstr ""
 
+msgid "Multiplex protocol"
+msgstr ""
+
+msgid "Multiplexing"
+msgstr ""
+
 msgid "Name"
+msgstr ""
+
+msgid "Needs multiplexing on the server as well."
+msgstr ""
+
+msgid "Needs padding on the server as well."
 msgstr ""
 
 msgid "Network protocols"
@@ -577,6 +658,12 @@ msgstr ""
 msgid "Outbound mode"
 msgstr ""
 
+msgid "PEM; looked up by DNS if empty."
+msgstr ""
+
+msgid "Padding"
+msgstr ""
+
 msgid "Password"
 msgstr ""
 
@@ -586,7 +673,13 @@ msgstr ""
 msgid "Peer public key"
 msgstr ""
 
+msgid "Plugin"
+msgstr ""
+
 msgid "Plugin log"
+msgstr ""
+
+msgid "Plugin options"
 msgstr ""
 
 msgid "Plugin version"
@@ -631,6 +724,9 @@ msgstr ""
 msgid "Proxy port"
 msgstr ""
 
+msgid "Public key SHA-256"
+msgstr ""
+
 msgid "RealIP"
 msgstr ""
 
@@ -656,6 +752,9 @@ msgid "Reserved bytes"
 msgstr ""
 
 msgid "Resolve strategy"
+msgstr ""
+
+msgid "Resolves the server address; the node domain resolver of the core settings if not set."
 msgstr ""
 
 msgid "Route rules"
@@ -700,13 +799,22 @@ msgstr ""
 msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
 msgstr ""
 
+msgid "Sends up to this much data with the handshake, such as 2048."
+msgstr ""
+
 msgid "Server"
+msgstr ""
+
+msgid "Server certificate"
 msgstr ""
 
 msgid "Set this node as the detour of a Shadowsocks or other node, which then connects through it."
 msgstr ""
 
 msgid "ShadowTLS version"
+msgstr ""
+
+msgid "Shadowsocks ignores it while multiplexing is on."
 msgstr ""
 
 msgid "Show devices"
@@ -724,6 +832,12 @@ msgstr ""
 msgid "Source (.json)"
 msgstr ""
 
+msgid "Splits the handshake into TCP segments, to get past some firewalls."
+msgstr ""
+
+msgid "Splits the handshake into several TLS records."
+msgstr ""
+
 msgid "Start"
 msgstr ""
 
@@ -731,6 +845,15 @@ msgid "Status"
 msgstr ""
 
 msgid "Stop"
+msgstr ""
+
+msgid "Stops imitating the QUIC handshake of Chrome; needed for servers with Ed25519 certificates."
+msgstr ""
+
+msgid "Streams a connection takes at most; conflicts with the maximum connections and minimum streams."
+msgstr ""
+
+msgid "Streams on a connection before another one is opened."
 msgstr ""
 
 msgid "Switched; sing-box was reloaded."
@@ -788,6 +911,9 @@ msgid "Test interval"
 msgstr ""
 
 msgid "Tests pause after the group has not been used for this long."
+msgstr ""
+
+msgid "The base64 SHA-256 of the public key of the server certificate, which is trusted then; not used together with the server certificate."
 msgstr ""
 
 msgid "The changes to %s are not saved."
@@ -851,6 +977,9 @@ msgid "Transport protocol"
 msgstr ""
 
 msgid "Type"
+msgstr ""
+
+msgid "UDP fragmentation"
 msgstr ""
 
 msgid "UDP only"
@@ -919,6 +1048,9 @@ msgstr ""
 msgid "Use"
 msgstr ""
 
+msgid "Used while the bandwidth is not set."
+msgstr ""
+
 msgid "Used with the IPv6 takeover on."
 msgstr ""
 
@@ -940,6 +1072,9 @@ msgstr ""
 msgid "View logs"
 msgstr ""
 
+msgid "WebSocket and HTTPUpgrade use the first one."
+msgstr ""
+
 msgid "While OpenBox runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
 msgstr ""
 
@@ -947,6 +1082,12 @@ msgid "With the IPv6 takeover off, IPv6 TCP and UDP connections to other address
 msgstr ""
 
 msgid "XTLS flow"
+msgstr ""
+
+msgid "Xray servers use Sec-WebSocket-Protocol; the data goes in the path if empty."
+msgstr ""
+
+msgid "bytes"
 msgstr ""
 
 msgid "days"

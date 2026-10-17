@@ -47,16 +47,6 @@ const CUSTOM_RULES_EXAMPLE = JSON.stringify([
 	}
 ], null, 2);
 
-// dns servers that resolve real addresses: all but FakeIP
-function resolverChoices(option, empty) {
-	if (empty)
-		option.value('', empty);
-
-	uci.sections('openbox', 'dns_server')
-		.filter((section) => section.type != 'fakeip')
-		.forEach((section) => option.value(section['.name'], openbox.label(section)));
-}
-
 // outbounds a dial detour may use: a plain direct outbound is refused by
 // sing-box, and leaving detour empty already means direct
 function detourChoices(option) {
@@ -109,7 +99,7 @@ return view.extend({
 
 		o = s.taboption('dns', form.ListValue, 'final', _('Default DNS server'));
 		o.ucisection = 'dns';
-		resolverChoices(o);
+		openbox.resolverChoices(o);
 
 		o = s.taboption('dns', form.ListValue, 'strategy', _('Resolve strategy'));
 		o.ucisection = 'dns';
@@ -123,7 +113,7 @@ return view.extend({
 
 		o = s.taboption('dns', form.ListValue, 'default_domain_resolver', _('Node domain resolver'));
 		o.ucisection = 'route';
-		resolverChoices(o);
+		openbox.resolverChoices(o);
 
 		o = s.taboption('dns', form.SectionValue, '_dns_servers', form.GridSection, 'dns_server', _('DNS servers'));
 		const ss = o.subsection;
@@ -172,7 +162,7 @@ return view.extend({
 
 		so = ss.option(form.ListValue, 'domain_resolver', _('Domain resolver'));
 		so.modalonly = true;
-		resolverChoices(so, _('Default'));
+		openbox.resolverChoices(so, _('Default'));
 		dependsOnTypes(so, REMOTE_DNS_TYPES);
 
 		// dns rules of sing-box written as JSON, put in front of the split

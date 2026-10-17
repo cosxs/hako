@@ -70,6 +70,24 @@ const SS_METHODS = [
 
 const UTLS_FINGERPRINTS = [ 'chrome', 'firefox', 'edge', 'safari', '360', 'qq', 'ios', 'android', 'random', 'randomized' ];
 
+// PEM text kept as a UCI list, one line per item
+function pemLines(option) {
+	const cfgvalue = option.cfgvalue;
+	const write = option.write;
+
+	option.cfgvalue = function(...args) {
+		const value = cfgvalue.apply(this, args);
+		return Array.isArray(value) ? value.join('\n') : value;
+	};
+	option.write = function(section_id, value) {
+		const lines = String(value ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line != '');
+		return lines.length ? write.call(this, section_id, lines) : this.remove(section_id);
+	};
+	option.monospace = true;
+	option.rows = 4;
+	option.wrap = 'off';
+}
+
 // a tag is shared by groups and nodes and must be unique among all outbounds
 function validateTag(section_id, value) {
 	if (value == 'GLOBAL')
@@ -341,6 +359,12 @@ return view.extend({
 		o.modalonly = true;
 		remote(o, [ 'hysteria2', 'hysteria' ]);
 
+		o = s.option(form.Value, 'hop_interval_max', _('Maximum hop interval'));
+		o.description = _('Hops at a random interval between the hop interval and this one.');
+		openbox.duration(o, 's', _('seconds'));
+		o.modalonly = true;
+		o.depends('type', 'hysteria2');
+
 		// credentials
 
 		o = s.option(form.ListValue, 'method', _('Encryption method'));
@@ -394,12 +418,13 @@ return view.extend({
 		o.modalonly = true;
 		o.depends('type', 'vmess');
 
+		// vmess and vless
 		o = s.option(form.ListValue, 'packet_encoding', _('UDP packet encoding'));
-		o.value('', _('None'));
+		o.value('', _('Default'));
 		o.value('packetaddr', 'packetaddr');
 		o.value('xudp', 'xudp');
 		o.modalonly = true;
-		o.depends('type', 'vmess');
+		remote(o, [ 'vmess', 'vless' ]);
 
 		// tuic
 
@@ -562,9 +587,24 @@ return view.extend({
 		o.modalonly = true;
 		o.depends('type', 'socks');
 
-		o = s.option(form.Flag, 'udp_over_tcp', 'UDP over TCP');
+		// shadowsocks plugins
+		o = s.option(form.ListValue, 'plugin', _('Plugin'));
+		o.value('', _('None'));
+		o.value('obfs-local');
+		o.value('v2ray-plugin');
 		o.modalonly = true;
-		o.depends('type', 'socks');
+		o.depends('type', 'shadowsocks');
+
+		o = s.option(form.Value, 'plugin_opts', _('Plugin options'));
+		o.placeholder = 'obfs=http;obfs-host=www.bing.com';
+		o.modalonly = true;
+		[ 'obfs-local', 'v2ray-plugin' ].forEach((plugin) => o.depends({ type: 'shadowsocks', plugin: plugin }));
+
+		// socks and shadowsocks
+		o = s.option(form.Flag, 'udp_over_tcp', 'UDP over TCP');
+		o.description = _('Shadowsocks ignores it while multiplexing is on.');
+		o.modalonly = true;
+		remote(o, [ 'socks', 'shadowsocks' ]);
 
 		o = s.option(form.ListValue, 'network', _('Network protocols'));
 		o.value('', _('TCP and UDP'));
@@ -605,6 +645,34 @@ return view.extend({
 		o = s.option(form.Value, 'obfs_password', _('Obfuscation password'));
 		o.description = _('Leave empty to disable obfuscation.');
 		o.password = true;
+		o.modalonly = true;
+		o.depends('type', 'hysteria2');
+
+		o = s.option(form.Value, 'obfs_min_packet_size', _('Minimum packet size'));
+		openbox.suffix(o, _('bytes'));
+		o.datatype = 'uinteger';
+		o.placeholder = '512';
+		o.modalonly = true;
+		o.depends({ type: 'hysteria2', obfs_type: 'gecko' });
+
+		o = s.option(form.Value, 'obfs_max_packet_size', _('Maximum packet size'));
+		openbox.suffix(o, _('bytes'));
+		o.datatype = 'uinteger';
+		o.placeholder = '1200';
+		o.modalonly = true;
+		o.depends({ type: 'hysteria2', obfs_type: 'gecko' });
+
+		o = s.option(form.ListValue, 'bbr_profile', _('BBR profile'));
+		o.description = _('Used while the bandwidth is not set.');
+		o.value('', _('Default'));
+		o.value('conservative');
+		o.value('standard');
+		o.value('aggressive');
+		o.modalonly = true;
+		o.depends('type', 'hysteria2');
+
+		o = s.option(form.Flag, 'disable_chrome_parrot', _('Disable Chrome fingerprint'));
+		o.description = _('Stops imitating the QUIC handshake of Chrome; needed for servers with Ed25519 certificates.');
 		o.modalonly = true;
 		o.depends('type', 'hysteria2');
 
@@ -661,6 +729,49 @@ return view.extend({
 		o.modalonly = true;
 		o.depends({ type: 'vless', tls_enabled: '1', tls_reality_enabled: '1' });
 
+		o = s.option(form.Flag, 'tls_disable_sni', _('Do not send server name'));
+		o.modalonly = true;
+		tls(o, fullTls);
+
+		[ [ 'tls_min_version', _('Minimum TLS version') ], [ 'tls_max_version', _('Maximum TLS version') ] ].forEach(([ name, title ]) => {
+			o = s.option(form.ListValue, name, title);
+			o.value('', _('Default'));
+			[ '1.0', '1.1', '1.2', '1.3' ].forEach((version) => o.value(version));
+			o.modalonly = true;
+			tls(o, fullTls);
+		});
+
+		o = s.option(form.TextValue, 'tls_certificate', _('Server certificate'));
+		o.description = _('A PEM certificate the server is verified with instead of the system ones.');
+		pemLines(o);
+		o.modalonly = true;
+		tls(o, fullTls);
+
+		o = s.option(form.Value, 'tls_certificate_public_key_sha256', _('Public key SHA-256'));
+		o.description = _('The base64 SHA-256 of the public key of the server certificate, which is trusted then; not used together with the server certificate.');
+		o.modalonly = true;
+		tls(o, fullTls);
+
+		o = s.option(form.Flag, 'tls_ech_enabled', _('Enable ECH'));
+		o.modalonly = true;
+		tls(o, fullTls);
+
+		o = s.option(form.TextValue, 'tls_ech_config', _('ECH config'));
+		o.description = _('PEM; looked up by DNS if empty.');
+		pemLines(o);
+		o.modalonly = true;
+		o.depends('tls_ech_enabled', '1');
+
+		o = s.option(form.Flag, 'tls_fragment', _('Fragment TLS handshake'));
+		o.description = _('Splits the handshake into TCP segments, to get past some firewalls.');
+		o.modalonly = true;
+		tls(o, UTLS_TYPES);
+
+		o = s.option(form.Flag, 'tls_record_fragment', _('Fragment TLS records'));
+		o.description = _('Splits the handshake into several TLS records.');
+		o.modalonly = true;
+		tls(o, UTLS_TYPES);
+
 		// transport, for vmess, vless and trojan
 
 		o = s.option(form.ListValue, 'transport_type', _('Transport protocol'));
@@ -668,22 +779,82 @@ return view.extend({
 		o.value('ws', 'WebSocket');
 		o.value('httpupgrade', 'HTTPUpgrade');
 		o.value('grpc', 'gRPC');
+		o.value('http', 'HTTP');
+		o.value('quic', 'QUIC');
 		o.modalonly = true;
 		remote(o, [ 'vmess', 'vless', 'trojan' ]);
 
 		o = s.option(form.Value, 'transport_path', _('Path'));
 		o.placeholder = '/';
 		o.modalonly = true;
-		[ 'ws', 'httpupgrade' ].forEach((type) => o.depends('transport_type', type));
+		[ 'ws', 'httpupgrade', 'http' ].forEach((type) => o.depends('transport_type', type));
 
-		o = s.option(form.Value, 'transport_host', _('Host'));
+		// a list for http, of which WebSocket and HTTPUpgrade take the first
+		o = s.option(form.DynamicList, 'transport_host', _('Host'));
+		o.description = _('WebSocket and HTTPUpgrade use the first one.');
 		o.datatype = 'hostname';
 		o.modalonly = true;
-		[ 'ws', 'httpupgrade' ].forEach((type) => o.depends('transport_type', type));
+		[ 'ws', 'httpupgrade', 'http' ].forEach((type) => o.depends('transport_type', type));
+
+		o = s.option(form.Value, 'transport_method', _('HTTP method'));
+		o.modalonly = true;
+		o.depends('transport_type', 'http');
+
+		o = s.option(form.Value, 'transport_max_early_data', _('Early data'));
+		openbox.suffix(o, _('bytes'));
+		o.description = _('Sends up to this much data with the handshake, such as 2048.');
+		o.datatype = 'uinteger';
+		o.modalonly = true;
+		o.depends('transport_type', 'ws');
+
+		o = s.option(form.Value, 'transport_early_data_header_name', _('Early data header'));
+		o.description = _('Xray servers use Sec-WebSocket-Protocol; the data goes in the path if empty.');
+		o.placeholder = 'Sec-WebSocket-Protocol';
+		o.modalonly = true;
+		o.depends('transport_type', 'ws');
 
 		o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
 		o.modalonly = true;
 		o.depends('transport_type', 'grpc');
+
+		// multiplex, for vmess, vless, trojan and shadowsocks; the server
+		// has to support it
+
+		o = s.option(form.Flag, 'multiplex_enabled', _('Multiplexing'));
+		o.description = _('Needs multiplexing on the server as well.');
+		o.modalonly = true;
+		remote(o, [ 'vmess', 'vless', 'trojan', 'shadowsocks' ]);
+
+		o = s.option(form.ListValue, 'multiplex_protocol', _('Multiplex protocol'));
+		o.value('', 'h2mux');
+		o.value('smux');
+		o.value('yamux');
+		o.modalonly = true;
+		o.depends('multiplex_enabled', '1');
+
+		o = s.option(form.Value, 'multiplex_max_connections', _('Maximum connections'));
+		o.datatype = 'uinteger';
+		o.placeholder = '4';
+		o.modalonly = true;
+		o.depends('multiplex_enabled', '1');
+
+		o = s.option(form.Value, 'multiplex_min_streams', _('Minimum streams'));
+		o.description = _('Streams on a connection before another one is opened.');
+		o.datatype = 'uinteger';
+		o.placeholder = '4';
+		o.modalonly = true;
+		o.depends('multiplex_enabled', '1');
+
+		o = s.option(form.Value, 'multiplex_max_streams', _('Maximum streams'));
+		o.description = _('Streams a connection takes at most; conflicts with the maximum connections and minimum streams.');
+		o.datatype = 'uinteger';
+		o.modalonly = true;
+		o.depends('multiplex_enabled', '1');
+
+		o = s.option(form.Flag, 'multiplex_padding', _('Padding'));
+		o.description = _('Needs padding on the server as well.');
+		o.modalonly = true;
+		o.depends('multiplex_enabled', '1');
 
 		// dial: through another node or group, as through a shadowtls node
 
@@ -700,6 +871,31 @@ return view.extend({
 
 			return form.ListValue.prototype.load.call(this, section_id);
 		};
+
+		// other dial fields, rarely needed
+
+		o = s.option(form.Value, 'connect_timeout', _('Connect timeout'));
+		openbox.duration(o, 's', _('seconds'));
+		o.placeholder = '5';
+		o.modalonly = true;
+
+		o = s.option(form.Flag, 'tcp_fast_open', 'TCP Fast Open');
+		o.modalonly = true;
+
+		o = s.option(form.Flag, 'tcp_multi_path', 'Multipath TCP');
+		o.modalonly = true;
+
+		o = s.option(form.Flag, 'udp_fragment', _('UDP fragmentation'));
+		o.modalonly = true;
+
+		o = s.option(form.Value, 'bind_interface', _('Bind interface'));
+		o.description = _('Connects through this network interface.');
+		o.modalonly = true;
+
+		o = s.option(form.ListValue, 'domain_resolver', _('Domain resolver'));
+		o.description = _('Resolves the server address; the node domain resolver of the core settings if not set.');
+		openbox.resolverChoices(o, _('Default'));
+		o.modalonly = true;
 	},
 
 	render(data) {

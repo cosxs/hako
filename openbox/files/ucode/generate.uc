@@ -28,6 +28,12 @@ function list(value) {
 	return (value != null && value != '') ? [ value ] : [];
 }
 
+// a list, or null when it is empty
+function nonempty(value) {
+	const items = list(value);
+	return length(items) ? items : null;
+}
+
 function number(value) {
 	const n = int(value);
 	return (value != null && value != '' && n == n) ? n : null;
@@ -249,9 +255,21 @@ function tls(section, required) {
 
 	return {
 		enabled: true,
+		disable_sni: bool(section.tls_disable_sni) || null,
 		server_name: section.tls_server_name,
 		insecure: bool(section.tls_insecure) || null,
-		alpn: length(list(section.tls_alpn)) ? list(section.tls_alpn) : null,
+		alpn: nonempty(section.tls_alpn),
+		min_version: section.tls_min_version,
+		max_version: section.tls_max_version,
+		// PEM lines, one list item each
+		certificate: nonempty(section.tls_certificate),
+		certificate_public_key_sha256: nonempty(section.tls_certificate_public_key_sha256),
+		ech: bool(section.tls_ech_enabled) ? {
+			enabled: true,
+			config: nonempty(section.tls_ech_config)
+		} : null,
+		fragment: bool(section.tls_fragment) || null,
+		record_fragment: bool(section.tls_record_fragment) || null,
 		utls: fingerprint ? { enabled: true, fingerprint: fingerprint } : null,
 		reality: reality ? {
 			enabled: true,
@@ -261,23 +279,53 @@ function tls(section, required) {
 	};
 }
 
+// transport_host is a list for http; ws and httpupgrade take the first host
 function transport(section) {
+	const hosts = list(section.transport_host);
+
 	switch (section.transport_type) {
+	case 'http':
+		return {
+			type: 'http',
+			host: length(hosts) ? hosts : null,
+			path: section.transport_path,
+			method: section.transport_method
+		};
+
 	case 'ws':
 		return {
 			type: 'ws',
 			path: section.transport_path,
-			headers: section.transport_host ? { Host: section.transport_host } : null
+			headers: length(hosts) ? { Host: hosts[0] } : null,
+			max_early_data: number(section.transport_max_early_data),
+			early_data_header_name: section.transport_early_data_header_name
 		};
 
 	case 'httpupgrade':
-		return { type: 'httpupgrade', host: section.transport_host, path: section.transport_path };
+		return { type: 'httpupgrade', host: hosts[0], path: section.transport_path };
 
 	case 'grpc':
 		return { type: 'grpc', service_name: section.transport_service_name };
+
+	case 'quic':
+		return { type: 'quic' };
 	}
 
 	return null;
+}
+
+function multiplex(section) {
+	if (!bool(section.multiplex_enabled))
+		return null;
+
+	return {
+		enabled: true,
+		protocol: section.multiplex_protocol,
+		max_connections: number(section.multiplex_max_connections),
+		min_streams: number(section.multiplex_min_streams),
+		max_streams: number(section.multiplex_max_streams),
+		padding: bool(section.multiplex_padding) || null
+	};
 }
 
 // hysteria and hysteria2 hop over port ranges instead of one port
@@ -286,7 +334,12 @@ function hopping(section) {
 	if (!length(ranges))
 		return {};
 
-	return { server_port: null, server_ports: ranges, hop_interval: section.hop_interval };
+	return {
+		server_port: null,
+		server_ports: ranges,
+		hop_interval: section.hop_interval,
+		hop_interval_max: (section.type == 'hysteria2') ? section.hop_interval_max : null
+	};
 }
 
 // wireguard is an endpoint of sing-box, with the server as its one peer.
@@ -325,8 +378,22 @@ function proxy_outbound(section) {
 	case 'direct':
 		return { type: 'direct', tag: tag(section) };
 
-	case 'shadowsocks':
-		return merge(outbound, { method: section.method, password: section.password });
+	// udp_over_tcp conflicts with multiplex, which takes precedence
+	case 'shadowsocks': {
+		const mux = multiplex(section);
+		const uot = bool(section.udp_over_tcp);
+		if (mux && uot)
+			warn(`openbox: outbound ${section['.name']}: ignoring udp_over_tcp: multiplex is enabled\n`);
+
+		return merge(outbound, {
+			method: section.method,
+			password: section.password,
+			plugin: section.plugin,
+			plugin_opts: section.plugin ? section.plugin_opts : null,
+			udp_over_tcp: (uot && !mux) || null,
+			multiplex: mux
+		});
+	}
 
 	case 'vmess':
 		return merge(outbound, {
@@ -336,22 +403,26 @@ function proxy_outbound(section) {
 			packet_encoding: section.packet_encoding,
 			network: section.network,
 			tls: tls(section),
-			transport: transport(section)
+			transport: transport(section),
+			multiplex: multiplex(section)
 		});
 
 	case 'vless':
 		return merge(outbound, {
 			uuid: section.uuid,
 			flow: section.flow,
+			packet_encoding: section.packet_encoding,
 			tls: tls(section),
-			transport: transport(section)
+			transport: transport(section),
+			multiplex: multiplex(section)
 		});
 
 	case 'trojan':
 		return merge(outbound, {
 			password: section.password,
 			tls: tls(section),
-			transport: transport(section)
+			transport: transport(section),
+			multiplex: multiplex(section)
 		});
 
 	case 'hysteria2':
@@ -361,8 +432,12 @@ function proxy_outbound(section) {
 			down_mbps: number(section.down_mbps),
 			obfs: section.obfs_password ? {
 				type: section.obfs_type || 'salamander',
-				password: section.obfs_password
+				password: section.obfs_password,
+				min_packet_size: (section.obfs_type == 'gecko') ? number(section.obfs_min_packet_size) : null,
+				max_packet_size: (section.obfs_type == 'gecko') ? number(section.obfs_max_packet_size) : null
 			} : null,
+			bbr_profile: section.bbr_profile,
+			disable_chrome_parrot: bool(section.disable_chrome_parrot) || null,
 			tls: tls(section, true)
 		}), hopping(section));
 
@@ -428,7 +503,7 @@ function proxy_outbound(section) {
 			password: section.password,
 			private_key_path: section.private_key_path,
 			private_key_passphrase: section.private_key_passphrase,
-			host_key: length(list(section.host_key)) ? list(section.host_key) : null
+			host_key: nonempty(section.host_key)
 		});
 
 	case 'socks':
@@ -508,10 +583,35 @@ function resolve_detour(ref) {
 	return resolve(ref);
 }
 
-// a node may connect through another one, as a node does through shadowtls
+// dns servers, which nodes may resolve their server with
+const dnsServers = [];
+uci.foreach(CONFIG, 'dns_server', (section) => {
+	if (section.enabled != '0')
+		push(dnsServers, section);
+});
+
+function resolve_dns(ref) {
+	const section = find(dnsServers, ref);
+	return section ? tag(section) : null;
+}
+
+// dial fields of nodes; a node may connect through another one, as a node
+// does through shadowtls
+function dial(section) {
+	return {
+		detour: resolve_detour(section.detour),
+		bind_interface: section.bind_interface,
+		connect_timeout: section.connect_timeout,
+		tcp_fast_open: bool(section.tcp_fast_open) || null,
+		tcp_multi_path: bool(section.tcp_multi_path) || null,
+		udp_fragment: bool(section.udp_fragment) || null,
+		domain_resolver: resolve_dns(section.domain_resolver)
+	};
+}
+
 for (let i = 0; i < length(proxies); i++)
 	if (proxies[i].type != 'direct')
-		proxyObjects[i].detour = resolve_detour(proxies[i].detour);
+		merge(proxyObjects[i], dial(proxies[i]));
 
 // referenced groups first, then the groups from include_all_groups, then the
 // proxies from include_all_proxies (narrowed by filter and exclude_filter),
@@ -590,17 +690,6 @@ function group_outbound(group) {
 const groupOutbounds = map(groups, group_outbound);
 
 // dns servers
-
-const dnsServers = [];
-uci.foreach(CONFIG, 'dns_server', (section) => {
-	if (section.enabled != '0')
-		push(dnsServers, section);
-});
-
-function resolve_dns(ref) {
-	const section = find(dnsServers, ref);
-	return section ? tag(section) : null;
-}
 
 const REMOTE_DNS_TYPES = [ 'udp', 'tcp', 'tls', 'quic', 'https', 'h3' ];
 const TLS_DNS_TYPES = [ 'tls', 'quic', 'https', 'h3' ];

@@ -242,12 +242,21 @@ config outbound 'hk01'             # 节点示例
 	option tls_enabled '1'         # 其余字段：password、method、flow、tls_server_name、
 	…                              # tls_insecure、tls_alpn、tls_utls_fingerprint、
 	                               # tls_reality_enabled/public_key/short_id、
-	                               # transport_type/path/host/service_name、obfs_type/password；
+	                               # tls_disable_sni、tls_min_version/max_version、tls_certificate（PEM 每行一项 list）、
+	                               # tls_certificate_public_key_sha256、tls_ech_enabled/config、tls_fragment、tls_record_fragment；
+	                               # transport_type（ws | httpupgrade | grpc | http | quic）/path/host/service_name/method、
+	                               # transport_max_early_data/early_data_header_name（ws）；transport_host 是 list，
+	                               # http 全部输出，ws、httpupgrade 取第一项（旧的单值 option 照常读取）；
+	                               # obfs_type/password，gecko 另有 obfs_min_packet_size/max_packet_size；
 	                               # snell：version、psk、reuse、obfs_mode/host（v4）、mode（v6）；
 	                               # socks：version、username、udp_over_tcp；http：username、path；
-	                               # vmess：uuid、security、alter_id、packet_encoding，可用 tls 与 transport；
+	                               # vmess：uuid、security、alter_id、packet_encoding，可用 tls 与 transport；vless 也有 packet_encoding；
+	                               # vmess、vless、trojan、shadowsocks：multiplex_enabled/protocol/max_connections/
+	                               # min_streams/max_streams/padding；shadowsocks：plugin、plugin_opts、udp_over_tcp
+	                               # （与 multiplex 同时设置时忽略并警告）；
 	                               # hysteria：auth_str、obfs、up_mbps、down_mbps；hysteria 与 hysteria2 另有
-	                               # server_ports、hop_interval（设置后不输出 server_port）；
+	                               # server_ports、hop_interval（设置后不输出 server_port）；hysteria2 另有 hop_interval_max、
+	                               # bbr_profile、disable_chrome_parrot；
 	                               # tuic：uuid、password、congestion_control、udp_relay_mode、zero_rtt_handshake；
 	                               # anytls：password；shadowtls：version、password；naive：username、password、quic；
 	                               # ssh：user、password、private_key_path、private_key_passphrase、host_key；
@@ -255,7 +264,8 @@ config outbound 'hk01'             # 节点示例
 	                               # peer_public_key、peer_pre_shared_key、peer_allowed_ips（留空为全部）、
 	                               # peer_reserved（如 "1,2,3"）、peer_persistent_keepalive_interval；
 	                               # vmess、hysteria、tuic、snell、socks 另有 network；
-	                               # 所有节点可设 detour（前置节点，节点或策略组）
+	                               # 所有节点可设 detour（前置节点，节点或策略组）及拨号字段 connect_timeout、tcp_fast_open、
+	                               # tcp_multi_path、udp_fragment、bind_interface、domain_resolver（DNS 服务器）
 
 config outbound 'proxy'            # 策略组也是 outbound
 	option tag 'Proxy'

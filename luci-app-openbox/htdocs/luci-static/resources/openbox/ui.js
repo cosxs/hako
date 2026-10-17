@@ -89,6 +89,16 @@ return baseclass.extend({
 		sections.filter((section) => !isGroup(section)).forEach((section) => option.value(section['.name'], this.label(section)));
 	},
 
+	// dns servers that resolve real addresses: all but FakeIP
+	resolverChoices(option, empty) {
+		if (empty)
+			option.value('', empty);
+
+		uci.sections('openbox', 'dns_server')
+			.filter((section) => section.type != 'fakeip')
+			.forEach((section) => option.value(section['.name'], this.label(section)));
+	},
+
 	// a fixed unit after the input field of an option
 	suffix(option, text) {
 		const renderWidget = option.renderWidget;
