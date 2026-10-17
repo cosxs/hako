@@ -7,7 +7,7 @@ PKG_LICENSE:=GPL-3.0-only
 PKG_MAINTAINER:=cosxs
 
 LUCI_TITLE:=LuCI support for OpenBox
-LUCI_DEPENDS:=+luci-base +openbox +ucode-mod-socket
+LUCI_DEPENDS:=+luci-base +openbox
 LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk

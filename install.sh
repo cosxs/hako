@@ -19,9 +19,18 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+TAR="openbox_openwrt-25.12.tar.gz"
+URL="https://github.com/$REPO/releases/latest/download/$TAR"
+
 echo "Downloading OpenBox..."
-wget -qO "$tmp/openbox.tar.gz" "https://github.com/$REPO/releases/latest/download/openbox_openwrt-25.12.tar.gz"
-tar -xzf "$tmp/openbox.tar.gz" -C "$tmp"
+wget -qO "$tmp/$TAR" "$URL"
+wget -qO "$tmp/$TAR.sha256" "$URL.sha256"
+# busybox sha256sum -c resolves names relative to the cwd
+if ! (cd "$tmp" && sha256sum -c -s "$TAR.sha256"); then
+	echo "Checksum verification failed." >&2
+	exit 1
+fi
+tar -xzf "$tmp/$TAR" -C "$tmp"
 
 pkgs="$tmp/openbox-[0-9]*.apk $tmp/luci-app-openbox-[0-9]*.apk"
 for lang in $(apk info 2> /dev/null | sed -n 's/^luci-i18n-base-//p'); do

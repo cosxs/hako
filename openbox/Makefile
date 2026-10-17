@@ -14,7 +14,7 @@ define Package/openbox
   CATEGORY:=Network
   TITLE:=A minimal sing-box client for OpenWrt
   URL:=https://github.com/cosxs/openbox
-  DEPENDS:=firewall4 +ip-full +kmod-tun +kmod-nft-tproxy +kmod-inet-diag +kmod-nft-queue +ca-bundle +ucode +ucode-mod-uci +ucode-mod-socket
+  DEPENDS:=firewall4 +ip-full +kmod-tun +kmod-nft-tproxy +kmod-inet-diag +kmod-nft-queue +ca-bundle +jsonfilter +uclient-fetch +ucode +ucode-mod-fs +ucode-mod-uci +ucode-mod-socket +ucode-mod-ubus
   PKGARCH:=all
 endef
 
