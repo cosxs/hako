@@ -24,9 +24,6 @@ msgstr "0 使用 AEAD 协议；旧协议的服务器需要填 1。"
 msgid "0-RTT handshake"
 msgstr "0-RTT 握手"
 
-msgid "A PEM certificate the server is verified with instead of the system ones."
-msgstr "用于验证服务器的 PEM 证书，代替系统证书。"
-
 msgid "A file with the same name is replaced."
 msgstr "同名文件会被覆盖。"
 
@@ -72,14 +69,8 @@ msgstr "留空时接受任何主机密钥。"
 msgid "Auto by latency"
 msgstr "自动测速"
 
-msgid "BBR profile"
-msgstr "BBR 配置"
-
 msgid "Binary (.srs)"
 msgstr "二进制（.srs）"
-
-msgid "Bind interface"
-msgstr "绑定接口"
 
 msgid "By the extension"
 msgstr "按扩展名"
@@ -135,14 +126,8 @@ msgstr "配置"
 msgid "Congestion control"
 msgstr "拥塞控制"
 
-msgid "Connect timeout"
-msgstr "连接超时"
-
 msgid "Connection reuse"
 msgstr "连接复用"
-
-msgid "Connects through this network interface."
-msgstr "经由这个网络接口连接。"
 
 msgid "Connects to the server through this node or group."
 msgstr "经由这个节点或策略组连接服务器。"
@@ -213,9 +198,6 @@ msgstr "直连（默认）"
 msgid "Direct connection"
 msgstr "直接连接"
 
-msgid "Disable Chrome fingerprint"
-msgstr "关闭 Chrome 指纹"
-
 msgid "Disabled"
 msgstr "已禁用"
 
@@ -224,9 +206,6 @@ msgstr "放弃"
 
 msgid "Discard changes?"
 msgstr "放弃修改？"
-
-msgid "Do not send server name"
-msgstr "不发送服务器名称"
 
 msgid "Domain resolver"
 msgstr "域名解析服务器"
@@ -239,9 +218,6 @@ msgstr "下行带宽"
 
 msgid "Download via"
 msgstr "下载方式"
-
-msgid "ECH config"
-msgstr "ECH 配置"
 
 msgid "Early data"
 msgstr "前置数据"
@@ -257,9 +233,6 @@ msgstr "编辑：%s"
 
 msgid "Enable"
 msgstr "启用"
-
-msgid "Enable ECH"
-msgstr "启用 ECH"
 
 msgid "Enable Reality"
 msgstr "启用 Reality"
@@ -309,12 +282,6 @@ msgstr "第一个成员"
 msgid "Format"
 msgstr "格式"
 
-msgid "Fragment TLS handshake"
-msgstr "TLS 握手分片"
-
-msgid "Fragment TLS records"
-msgstr "TLS 记录分片"
-
 msgid "Free space: %1024.2mB."
 msgstr "剩余空间：%1024.2mB。"
 
@@ -344,9 +311,6 @@ msgstr "HTTP 混淆"
 
 msgid "Hop interval"
 msgstr "跳跃间隔"
-
-msgid "Hops at a random interval between the hop interval and this one."
-msgstr "在跳跃间隔与这个值之间随机选取间隔跳跃。"
 
 msgid "Hops between ports of these ranges, such as 20000:30000, in place of the port."
 msgstr "在这些范围（如 20000:30000）内跳跃端口，代替上面的端口。"
@@ -528,32 +492,8 @@ msgstr "匹配来源端口。"
 msgid "Matches the user of the proxy port."
 msgstr "匹配代理端口的用户。"
 
-msgid "Maximum TLS version"
-msgstr "最高 TLS 版本"
-
-msgid "Maximum connections"
-msgstr "最大连接数"
-
-msgid "Maximum hop interval"
-msgstr "最大跳跃间隔"
-
-msgid "Maximum packet size"
-msgstr "最大包大小"
-
-msgid "Maximum streams"
-msgstr "最大流数"
-
 msgid "Members"
 msgstr "成员"
-
-msgid "Minimum TLS version"
-msgstr "最低 TLS 版本"
-
-msgid "Minimum packet size"
-msgstr "最小包大小"
-
-msgid "Minimum streams"
-msgstr "最小流数"
 
 msgid "Mode"
 msgstr "模式"
@@ -575,9 +515,6 @@ msgstr "名称"
 
 msgid "Needs multiplexing on the server as well."
 msgstr "服务器也需要开启多路复用。"
-
-msgid "Needs padding on the server as well."
-msgstr "服务器也需要开启填充。"
 
 msgid "Network protocols"
 msgstr "网络协议"
@@ -660,12 +597,6 @@ msgstr "出站"
 msgid "Outbound mode"
 msgstr "出站模式"
 
-msgid "PEM; looked up by DNS if empty."
-msgstr "PEM 格式；留空时通过 DNS 查询。"
-
-msgid "Padding"
-msgstr "填充"
-
 msgid "Password"
 msgstr "密码"
 
@@ -726,9 +657,6 @@ msgstr "协议"
 msgid "Proxy port"
 msgstr "代理端口"
 
-msgid "Public key SHA-256"
-msgstr "公钥 SHA-256"
-
 msgid "RealIP"
 msgstr "RealIP"
 
@@ -755,9 +683,6 @@ msgstr "保留字节"
 
 msgid "Resolve strategy"
 msgstr "解析策略"
-
-msgid "Resolves the server address; the node domain resolver of the core settings if not set."
-msgstr "解析服务器地址；未设置时使用内核设置中的节点域名解析服务器。"
 
 msgid "Route rules"
 msgstr "路由规则"
@@ -807,9 +732,6 @@ msgstr "随握手发送的数据上限，如 2048。"
 msgid "Server"
 msgstr "服务器"
 
-msgid "Server certificate"
-msgstr "服务器证书"
-
 msgid "Set this node as the detour of a Shadowsocks or other node, which then connects through it."
 msgstr "在 Shadowsocks 等节点的“前置节点”中选择本节点，该节点即经由它连接。"
 
@@ -834,12 +756,6 @@ msgstr "Snell 版本"
 msgid "Source (.json)"
 msgstr "源文件（.json）"
 
-msgid "Splits the handshake into TCP segments, to get past some firewalls."
-msgstr "把握手拆成多个 TCP 分段，用于绕过部分防火墙。"
-
-msgid "Splits the handshake into several TLS records."
-msgstr "把握手拆成多个 TLS 记录。"
-
 msgid "Start"
 msgstr "启动"
 
@@ -848,15 +764,6 @@ msgstr "状态"
 
 msgid "Stop"
 msgstr "停止"
-
-msgid "Stops imitating the QUIC handshake of Chrome; needed for servers with Ed25519 certificates."
-msgstr "不再模仿 Chrome 的 QUIC 握手；服务器使用 Ed25519 证书时需要开启。"
-
-msgid "Streams a connection takes at most; conflicts with the maximum connections and minimum streams."
-msgstr "每个连接最多承载的流数；与最大连接数和最小流数冲突。"
-
-msgid "Streams on a connection before another one is opened."
-msgstr "一个连接上的流达到这个数后才开新连接。"
 
 msgid "Switched; sing-box was reloaded."
 msgstr "已切换，sing-box 已重载。"
@@ -914,9 +821,6 @@ msgstr "测速间隔"
 
 msgid "Tests pause after the group has not been used for this long."
 msgstr "策略组闲置超过这个时间后暂停测速。"
-
-msgid "The base64 SHA-256 of the public key of the server certificate, which is trusted then; not used together with the server certificate."
-msgstr "服务器证书公钥的 SHA-256（base64），匹配即信任该证书；不能与服务器证书同时设置。"
 
 msgid "The changes to %s are not saved."
 msgstr "%s 的修改还没有保存。"
@@ -980,9 +884,6 @@ msgstr "传输协议"
 
 msgid "Type"
 msgstr "类型"
-
-msgid "UDP fragmentation"
-msgstr "UDP 分片"
 
 msgid "UDP only"
 msgstr "仅 UDP"
@@ -1049,9 +950,6 @@ msgstr "已运行"
 
 msgid "Use"
 msgstr "使用"
-
-msgid "Used while the bandwidth is not set."
-msgstr "未设置带宽时使用。"
 
 msgid "Used with the IPv6 takeover on."
 msgstr "开启 IPv6 接管后生效。"

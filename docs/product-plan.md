@@ -265,7 +265,13 @@ config outbound 'hk01'             # 节点示例
 	                               # peer_reserved（如 "1,2,3"）、peer_persistent_keepalive_interval；
 	                               # vmess、hysteria、tuic、snell、socks 另有 network；
 	                               # 所有节点可设 detour（前置节点，节点或策略组）及拨号字段 connect_timeout、tcp_fast_open、
-	                               # tcp_multi_path、udp_fragment、bind_interface、domain_resolver（DNS 服务器）
+	                               # tcp_multi_path、udp_fragment、bind_interface、domain_resolver（DNS 服务器）。
+	                               # 以上字段生成器都支持，节点编辑弹窗只提供常用的；下面这些界面不提供，需要时手改 UCI：
+	                               # tls_disable_sni、tls_min_version/max_version、tls_certificate、tls_certificate_public_key_sha256、
+	                               # tls_ech_enabled/config、tls_fragment、tls_record_fragment；multiplex_max_connections/min_streams/
+	                               # max_streams/padding；hysteria2 的 hop_interval_max、obfs_min_packet_size/max_packet_size、bbr_profile、
+	                               # disable_chrome_parrot；拨号字段 connect_timeout、tcp_fast_open、tcp_multi_path、udp_fragment、
+	                               # bind_interface、domain_resolver
 
 config outbound 'proxy'            # 策略组也是 outbound
 	option tag 'Proxy'
