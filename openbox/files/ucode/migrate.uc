@@ -10,7 +10,8 @@ import { cursor } from 'uci';
 
 const CONFIG = 'openbox';
 
-const uci = cursor();
+// OPENBOX_CONFDIR and OPENBOX_SAVEDIR point the tests at their own config
+const uci = cursor(getenv('OPENBOX_CONFDIR'), getenv('OPENBOX_SAVEDIR'));
 uci.load(CONFIG);
 
 // MIGRATIONS[i] moves version i + 1 to i + 2; version 1 is the first release

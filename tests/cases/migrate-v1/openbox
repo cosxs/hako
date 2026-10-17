@@ -1,0 +1,115 @@
+# a config of the first release, before main.config_version
+
+config openbox 'main'
+	option enabled '1'
+	option source 'model'
+	option profile ''
+
+config log 'log'
+	option level 'warn'
+	option timestamp '1'
+
+config dns 'dns'
+	option final 'remote'
+	option strategy 'ipv4_only'
+
+config dns_server 'local'
+	option tag 'local'
+	option type 'udp'
+	option server '223.5.5.5'
+
+config dns_server 'dnsmasq'
+	option tag 'dnsmasq'
+	option type 'udp'
+	option server '127.0.0.1'
+
+config dns_server 'fakeip'
+	option tag 'fakeip'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+
+config dns_server 'remote'
+	option tag 'remote'
+	option type 'https'
+	option server '1.1.1.1'
+	option detour 'proxy'
+	option domain_resolver 'local'
+
+config dns_rule
+	list domain_suffix 'lan'
+	option server 'dnsmasq'
+
+config dns_rule
+	option action 'evaluate'
+	option server 'local'
+
+config dns_rule 'foreign'
+	option match_response '1'
+	option ip_accept_any '1'
+	option server 'fakeip'
+
+config dns_rule 'fallback'
+	option server 'fakeip'
+
+config ntp 'ntp'
+	option enabled '0'
+	option server 'ntp.aliyun.com'
+	option domain_resolver 'local'
+
+config inbound 'tun'
+	option enabled '1'
+	option type 'tun'
+	option tag 'tun-in'
+	list address '172.19.0.1/30'
+	list route_exclude_address '10.0.0.0/8'
+	list route_exclude_address 'fc00::/7'
+	list route_exclude_address_set 'cn_ip'
+
+config inbound 'dns_in'
+	option enabled '0'
+	option type 'direct'
+	option tag 'dns-in'
+	option listen '::'
+	option listen_port '1053'
+
+config openbox 'firewall'
+	option ipv6 '0'
+	list bypass_address '10.0.0.0/8'
+	list bypass_address6 'fc00::/7'
+
+config route 'route'
+	option final 'proxy'
+	option default_domain_resolver 'local'
+	option auto_detect_interface '1'
+
+config rule_set 'cn_ip'
+	option tag 'cn-mainland-ip'
+	option type 'local'
+	option format 'binary'
+	option path '/usr/share/openbox/rule-set/cn-mainland-ip.srs'
+
+config outbound 'direct'
+	option tag 'Direct'
+	option type 'direct'
+
+config outbound 'proxy'
+	option tag 'Proxy'
+	option type 'selector'
+	option include_all_proxies '1'
+	list outbounds 'direct'
+
+config route_rule
+	option action 'sniff'
+
+config route_rule
+	option ip_is_private '1'
+	option outbound 'direct'
+
+config route_rule
+	option clash_mode 'Direct'
+	option outbound 'direct'
+
+config route_rule
+	option network 'udp'
+	list port '443'
+	option action 'reject'

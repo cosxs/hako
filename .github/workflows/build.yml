@@ -49,3 +49,55 @@ jobs:
           files: |
             openbox_${{ matrix.branch }}.tar.gz
             openbox_${{ matrix.branch }}.tar.gz.sha256
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    env:
+      # the ucode, uci and libubox of OpenWrt 25.12
+      LIBUBOX_REF: 7dd127841e82eb1cfb61185da37dde7b9bd9ba6d
+      UCI_REF: 66127cd76c5d0bd46d5a90302cc6110f53a4e2f8
+      UCODE_REF: 85922056ef7abeace3cca3ab28bc1ac2d88e31b1
+      SING_BOX_VERSION: 1.14.3
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libjson-c-dev pkg-config
+
+      - name: build ucode
+        run: |
+          prefix="$RUNNER_TEMP/ucode"
+          fetch() {
+            git init -q "$RUNNER_TEMP/$1"
+            git -C "$RUNNER_TEMP/$1" fetch -q --depth 1 "$2" "$3"
+            git -C "$RUNNER_TEMP/$1" checkout -q FETCH_HEAD
+          }
+          build() {
+            name="$1"
+            shift
+            cmake -S "$RUNNER_TEMP/$name" -B "$RUNNER_TEMP/$name/build" -DCMAKE_INSTALL_PREFIX="$prefix" \
+              -DCMAKE_PREFIX_PATH="$prefix" -DCMAKE_INSTALL_RPATH="$prefix/lib" "$@"
+            cmake --build "$RUNNER_TEMP/$name/build" -j"$(nproc)"
+            cmake --install "$RUNNER_TEMP/$name/build"
+          }
+          fetch libubox https://github.com/openwrt/libubox "$LIBUBOX_REF"
+          build libubox -DBUILD_LUA=OFF -DBUILD_EXAMPLES=OFF
+          fetch uci https://github.com/openwrt/uci "$UCI_REF"
+          build uci -DBUILD_LUA=OFF
+          fetch ucode https://github.com/jow-/ucode "$UCODE_REF"
+          build ucode -DUCI_SUPPORT=ON -DUBUS_SUPPORT=OFF -DULOOP_SUPPORT=OFF -DRTNL_SUPPORT=OFF -DNL80211_SUPPORT=OFF
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+
+      - name: install sing-box
+        run: |
+          mkdir -p "$RUNNER_TEMP/sing-box"
+          curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v$SING_BOX_VERSION/sing-box-$SING_BOX_VERSION-linux-amd64.tar.gz" |
+            tar -xzf - -C "$RUNNER_TEMP/sing-box" --strip-components=1
+          echo "$RUNNER_TEMP/sing-box" >> "$GITHUB_PATH"
+
+      - name: run tests
+        run: tests/run.sh

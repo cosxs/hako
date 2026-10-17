@@ -13,7 +13,8 @@ import { cursor } from 'uci';
 
 const CONFIG = 'openbox';
 
-const uci = cursor();
+// OPENBOX_CONFDIR and OPENBOX_SAVEDIR point the tests at their own config
+const uci = cursor(getenv('OPENBOX_CONFDIR'), getenv('OPENBOX_SAVEDIR'));
 uci.load(CONFIG);
 
 function bool(value) {

@@ -1,0 +1,251 @@
+
+config openbox 'main'
+	option config_version '12'
+	option enabled '0'
+	option source 'model'
+	option profile ''
+
+config openbox 'logs'
+	option auto_clean '1'
+	option retention_days '7'
+
+config log 'log'
+	option level 'warn'
+	option timestamp '1'
+
+config dns 'dns'
+	option final 'remote'
+	option strategy 'ipv4_only'
+	option optimistic '1'
+
+config dns_server 'local'
+	option tag 'local'
+	option type 'local'
+
+config dns_server 'alidns'
+	option tag 'alidns'
+	option type 'udp'
+	option server '223.5.5.5'
+
+config dns_server 'fakeip'
+	option tag 'fakeip'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range '2001:2::/48'
+
+config dns_server 'remote'
+	option tag 'remote'
+	option type 'https'
+	option server '1.1.1.1'
+	option detour 'proxy'
+
+config dns_rule
+	list domain_suffix 'lan'
+	list domain_suffix '10.in-addr.arpa'
+	list domain_suffix '168.192.in-addr.arpa'
+	list domain_regex '\.(1[6-9]|2[0-9]|3[01])\.172\.in-addr\.arpa$'
+	option server 'local'
+
+config dns_rule
+	option action 'evaluate'
+	option server 'alidns'
+	option timeout '2s'
+
+config dns_rule
+	option match_response '1'
+	list rule_set 'cn_ip'
+	option action 'respond'
+
+config dns_rule 'foreign'
+	option match_response '1'
+	option response_rcode 'NOERROR'
+	option ip_accept_any '1'
+	list query_type 'A'
+	list query_type 'AAAA'
+	option server 'fakeip'
+	option rewrite_ttl '1'
+
+config dns_rule
+	option match_response '1'
+	option response_rcode 'NOERROR'
+	option action 'respond'
+
+config dns_rule
+	option match_response '1'
+	option response_rcode 'NXDOMAIN'
+	option action 'respond'
+
+config dns_rule 'fallback'
+	list query_type 'A'
+	list query_type 'AAAA'
+	option server 'fakeip'
+	option rewrite_ttl '1'
+
+config ntp 'ntp'
+	option enabled '0'
+	option server 'ntp.aliyun.com'
+	option server_port '123'
+	option interval '30m'
+
+config experimental 'clash_api'
+	option external_controller '127.0.0.1:9090'
+	option secret ''
+	option default_mode 'Rule'
+
+config experimental 'cache_file'
+	option enabled '1'
+	option path '/etc/openbox/cache.db'
+	option store_fakeip '1'
+
+config inbound 'tun'
+	option enabled '1'
+	option type 'tun'
+	option tag 'tun-in'
+	option interface_name 'openbox-tun'
+	list address '172.19.0.1/30'
+	option auto_route '1'
+	option auto_redirect '1'
+	list route_exclude_address '0.0.0.0/8'
+	list route_exclude_address '10.0.0.0/8'
+	list route_exclude_address '100.64.0.0/10'
+	list route_exclude_address '127.0.0.0/8'
+	list route_exclude_address '169.254.0.0/16'
+	list route_exclude_address '172.16.0.0/12'
+	list route_exclude_address '192.0.0.0/24'
+	list route_exclude_address '192.168.0.0/16'
+	list route_exclude_address '224.0.0.0/4'
+	list route_exclude_address '240.0.0.0/4'
+	list route_exclude_address '::1/128'
+	list route_exclude_address 'fd00::/8'
+	list route_exclude_address 'fe80::/10'
+	list route_exclude_address 'ff00::/8'
+	list route_exclude_address_set 'cn_ip'
+
+config inbound 'tproxy'
+	option enabled '0'
+	option type 'tproxy'
+	option tag 'tproxy-in'
+	option listen '::'
+	option listen_port '7893'
+
+config inbound 'dns_in'
+	option enabled '1'
+	option type 'direct'
+	option tag 'dns-in'
+	option listen '::'
+	option listen_port '1053'
+
+config inbound 'mixed'
+	option enabled '0'
+	option type 'mixed'
+	option tag 'mixed-in'
+	option listen '::'
+	option listen_port '7890'
+
+config openbox 'firewall'
+	option ipv6 '0'
+	list interface 'lan'
+	list bypass_address '0.0.0.0/8'
+	list bypass_address '10.0.0.0/8'
+	list bypass_address '100.64.0.0/10'
+	list bypass_address '127.0.0.0/8'
+	list bypass_address '169.254.0.0/16'
+	list bypass_address '172.16.0.0/12'
+	list bypass_address '192.0.0.0/24'
+	list bypass_address '192.168.0.0/16'
+	list bypass_address '224.0.0.0/4'
+	list bypass_address '240.0.0.0/4'
+	list bypass_address6 '::1/128'
+	list bypass_address6 'fd00::/8'
+	list bypass_address6 'fe80::/10'
+	list bypass_address6 'ff00::/8'
+	list bypass_rule_set 'cn_ip'
+	option mark '0x6f62'
+	option output_mark '0x6f63'
+	option route_table '233'
+	option rule_priority '1100'
+
+config route 'route'
+	option final 'proxy'
+	option default_domain_resolver 'alidns'
+	option auto_detect_interface '1'
+	option find_neighbor '1'
+
+config rule_set 'cn_ip'
+	option tag 'cn-mainland-ip'
+	option type 'local'
+	option format 'binary'
+	option path '/usr/share/openbox/rule-set/cn-mainland-ip.srs'
+
+config outbound 'direct'
+	option tag 'Direct'
+	option type 'direct'
+	option hidden '1'
+
+config outbound 'proxy'
+	option tag 'Proxy'
+	option type 'selector'
+	option include_all_proxies '1'
+	list outbounds 'direct'
+
+config outbound 'global'
+	option tag 'Global'
+	option type 'selector'
+	option hidden '1'
+	option include_all_groups '1'
+	option include_all_proxies '1'
+	list outbounds 'direct'
+
+config route_rule
+	option action 'sniff'
+	option hidden '1'
+
+config route_rule
+	list protocol 'dns'
+	option action 'hijack-dns'
+	option hidden '1'
+
+config route_rule
+	option ip_is_private '1'
+	option outbound 'direct'
+	option hidden '1'
+
+config route_rule
+	option clash_mode 'Direct'
+	option outbound 'direct'
+	option hidden '1'
+
+config route_rule
+	option clash_mode 'Global'
+	option outbound 'global'
+	option hidden '1'
+
+config route_rule
+	list port '853'
+	option action 'reject'
+
+config route_rule
+	list protocol 'quic'
+	option action 'reject'
+
+config route_rule
+	list rule_set 'cn_ip'
+	option outbound 'direct'
+
+config outbound 'stls'
+	option tag 'ShadowTLS'
+	option type 'shadowtls'
+	option server '192.0.2.3'
+	option server_port '443'
+	option version '3'
+	option password 'placeholder-password'
+	option tls_server_name 'www.example.com'
+
+config outbound 'ss_stls'
+	option tag 'SS over ShadowTLS'
+	option type 'shadowsocks'
+	option server '127.0.0.1'
+	option server_port '8388'
+	option method 'aes-128-gcm'
+	option password 'placeholder-password'
+	option detour 'stls'

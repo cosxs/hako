@@ -32,6 +32,10 @@ echo "src-git openbox https://github.com/cosxs/openbox.git;main" >> feeds.conf.d
 make package/luci-app-openbox/compile
 ```
 
+## 测试
+
+`tests/run.sh` 用 `tests/cases` 下的 UCI 配置运行 `generate.uc` 和 `migrate.uc`，与各用例的预期结果比对，并用 `sing-box check` 检查生成的配置。在装有 OpenBox 依赖的设备上，或装有 ucode（含 uci 模块）和 sing-box 的 Linux 上，于仓库根目录运行 `tests/run.sh` 即可；命令路径可用 `UCODE`、`SING_BOX` 环境变量指定。修改生成逻辑后，用 `tests/run.sh --update` 重新生成预期结果，再核对差异。
+
 ## License
 
 [GPL-3.0](LICENSE)
