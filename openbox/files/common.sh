@@ -1,0 +1,305 @@
+#!/bin/sh
+# shellcheck disable=SC2034
+
+CORE="/usr/bin/sing-box"
+CORE_MIN_VERSION="1.14.0"
+GENERATOR="/usr/share/openbox/ucode/generate.uc"
+FIREWALL="/usr/share/openbox/ucode/firewall.uc"
+MODE_SCRIPT="/usr/share/openbox/ucode/mode.uc"
+PROFILE_DIR="/etc/openbox/profiles"
+RUN_DIR="/var/run/openbox"
+RUN_CONFIG="$RUN_DIR/config.json"
+LOG_DIR="/var/log/openbox"
+APP_LOG="$LOG_DIR/app.log"
+CORE_LOG="$LOG_DIR/core.log"
+FIREWALL_STATE="$RUN_DIR/firewall.state"
+DNSMASQ_STATE="$RUN_DIR/dnsmasq.state"
+DNSMASQ_CONF="openbox.conf"
+
+log() {
+	mkdir -p "$LOG_DIR"
+	echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$APP_LOG"
+}
+
+core_version() {
+	"$CORE" version 2> /dev/null | sed -n 's/^sing-box version //p'
+}
+
+# version_ge A B: whether version A >= B, comparing the numeric x.y.z parts
+version_ge() {
+	awk -v a="$1" -v b="$2" 'BEGIN {
+		split(a, x, "."); split(b, y, ".")
+		for (i = 1; i <= 3; i++) {
+			if (x[i] + 0 > y[i] + 0) exit 0
+			if (x[i] + 0 < y[i] + 0) exit 1
+		}
+		exit 0
+	}'
+}
+
+# rotate_logs: append each log last written before today to its dated file
+# (app-YYYY-MM-DD.log, core-YYYY-MM-DD.log) and empty it, keeping the file
+# open for sing-box; then clean up old dated logs.
+rotate_logs() {
+	local name current day today
+
+	today=$(date +%F)
+	for name in app core; do
+		current="$LOG_DIR/$name.log"
+		[ -s "$current" ] || continue
+
+		day=$(date -r "$current" +%F)
+		if [ "$day" != "$today" ]; then
+			cat "$current" >> "$LOG_DIR/$name-$day.log" && : > "$current"
+		fi
+	done
+
+	clean_logs
+}
+
+# clean_logs: when logs.auto_clean is on, remove the dated logs older than
+# logs.retention_days days, today included
+clean_logs() {
+	local days cutoff file day
+
+	[ "$(uci -q get openbox.logs.auto_clean)" = 1 ] || return 0
+
+	days=$(uci -q get openbox.logs.retention_days)
+	case "$days" in
+	'' | *[!0-9]* | 0) return 0 ;;
+	esac
+
+	cutoff=$(date -d "@$(($(date +%s) - (days - 1) * 86400))" +%Y%m%d)
+
+	for file in "$LOG_DIR"/app-*.log "$LOG_DIR"/core-*.log; do
+		[ -f "$file" ] || continue
+
+		day=${file##*/}
+		day=${day#*-}
+		day=$(echo "${day%.log}" | tr -d '-')
+
+		case "$day" in
+		[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+			if [ "$day" -lt "$cutoff" ]; then
+				rm -f "$file"
+			fi
+			;;
+		esac
+	done
+}
+
+# core_service_active: whether the service of the sing-box package, the
+# official one or one built into the firmware, runs or starts at boot; it
+# would then take over alongside OpenBox. Its init script starts sing-box
+# only when sing-box.main.enabled is set as well.
+core_service_active() {
+	[ -x /etc/init.d/sing-box ] || return 1
+
+	/etc/init.d/sing-box running 2> /dev/null && return 0
+
+	/etc/init.d/sing-box enabled && [ "$(uci -q get sing-box.main.enabled)" = 1 ]
+}
+
+# core_service_off: OpenBox runs sing-box itself; stop and disable the
+# service of the sing-box package so the two never run or take over at once
+core_service_off() {
+	local changed=
+
+	[ -x /etc/init.d/sing-box ] || return 0
+
+	if /etc/init.d/sing-box running 2> /dev/null; then
+		/etc/init.d/sing-box stop 2> /dev/null
+		changed=1
+
+		# procd stops the instance after the call returns
+		for i in 1 2 3 4 5 6 7 8 9 10; do
+			/etc/init.d/sing-box running 2> /dev/null || break
+			sleep 1
+		done
+	fi
+
+	if /etc/init.d/sing-box enabled; then
+		/etc/init.d/sing-box disable
+		changed=1
+	fi
+
+	if [ "$(uci -q get sing-box.main.enabled)" = 1 ]; then
+		uci set sing-box.main.enabled=0
+		uci commit sing-box
+		changed=1
+	fi
+
+	if [ -n "$changed" ]; then
+		log "took over sing-box: stopped and disabled the service of its package"
+	fi
+
+	return 0
+}
+
+# set the outbound mode chosen in OpenBox on the running sing-box; $1 is how
+# often to try, half a second apart, while sing-box is still starting
+apply_mode() {
+	ucode "$MODE_SCRIPT" "$RUN_CONFIG" "${1:-1}" >/dev/null 2>> "$APP_LOG"
+}
+
+# flush_dns_cache: dnsmasq caches the answers sing-box gives the router
+# itself; drop them whenever sing-box starts or exits, so no fakeip address
+# outlives it
+flush_dns_cache() {
+	killall -HUP dnsmasq 2> /dev/null || true
+}
+
+# dns_inbound: the listen address and port of the dns inbound (the direct one
+# tagged dns-in) of the config sing-box runs, separated by a space
+dns_inbound() {
+	local port listen
+
+	port=$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="direct" && @.tag="dns-in"].listen_port')
+	[ -n "$port" ] || return 0
+
+	listen=$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="direct" && @.tag="dns-in"].listen')
+	case "$listen" in
+	"" | "::" | "0.0.0.0") listen="127.0.0.1" ;;
+	esac
+
+	echo "$listen $port"
+}
+
+# dnsmasq_dirs: the conf-dir of each dnsmasq instance, as its init script
+# sets it up
+dnsmasq_dirs() {
+	local section dir
+
+	for section in $(uci -q -X show dhcp | sed -n 's/^dhcp\.\([^.=]*\)=dnsmasq$/\1/p'); do
+		dir=$(uci -q get "dhcp.$section.confdir")
+		dir="${dir:-/tmp/dnsmasq.$section.d}"
+		dir="${dir%%,*}"
+		case "$dir" in
+		/*) echo "$dir" ;;
+		esac
+	done
+}
+
+# dnsmasq_up: while sing-box runs, dnsmasq sends the queries it does not
+# answer itself (local names, private reverse lookups) to the dns inbound
+# instead of its upstream servers. Those are often private addresses, such as
+# the main router, and neither tun nor tproxy takes over the router's queries
+# to them; so the router itself and the devices asking dnsmasq get the answers
+# of sing-box too. The files written are kept in a state file.
+dnsmasq_up() {
+	local inbound server port dir
+
+	dnsmasq_down
+
+	inbound=$(dns_inbound)
+	if [ -z "$inbound" ]; then
+		log "no dns inbound in the running config: dnsmasq keeps its upstream servers"
+		return 0
+	fi
+
+	server="${inbound% *}"
+	port="${inbound#* }"
+
+	for dir in $(dnsmasq_dirs); do
+		mkdir -p "$dir"
+		printf '# set up by OpenBox while sing-box runs\nno-resolv\nserver=%s#%s\n' \
+			"$server" "$port" > "$dir/$DNSMASQ_CONF"
+		echo "$dir/$DNSMASQ_CONF" >> "$DNSMASQ_STATE"
+	done
+
+	/etc/init.d/dnsmasq restart > /dev/null 2>&1
+	log "dnsmasq sends its queries to sing-box ($server#$port)"
+}
+
+dnsmasq_down() {
+	local file
+
+	[ -f "$DNSMASQ_STATE" ] || return 0
+
+	while read -r file; do
+		rm -f "$file"
+	done < "$DNSMASQ_STATE"
+	rm -f "$DNSMASQ_STATE"
+
+	/etc/init.d/dnsmasq restart > /dev/null 2>&1
+	log "dnsmasq uses its upstream servers again"
+}
+
+# uses_tproxy: whether the config sing-box runs has a tproxy inbound, which
+# needs the firewall OpenBox sets up (tun sets up its own)
+uses_tproxy() {
+	[ -n "$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tproxy"].type')" ]
+}
+
+# uses_tun_route: whether the config sing-box runs has a tun inbound that
+# sets up routes and nftables rules (auto_route)
+uses_tun_route() {
+	[ -n "$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tun" && @.auto_route=true].type')" ]
+}
+
+# core_cleanup: remove what a tun inbound with auto_route sets up. sing-box
+# removes it itself when it stops, but not when it crashes or is killed, and
+# its nftables table then sends traffic nowhere. The priorities and the table
+# are sing-box's defaults (iproute2_rule_index, iproute2_table_index), which
+# OpenBox does not change; priority 1 holds its redirect routes.
+core_cleanup() {
+	local family priority
+
+	nft delete table inet sing-box 2> /dev/null
+
+	for family in -4 -6; do
+		for priority in 1 9000 9001 9002 9003 32768; do
+			while ip "$family" rule del pref "$priority" 2> /dev/null; do :; done
+		done
+		ip "$family" route flush table 2022 2> /dev/null
+	done
+
+	return 0
+}
+
+# firewall_up: the rules that send traffic to the tproxy inbound, and a route
+# that delivers marked packets to the local host; what was set up is kept in
+# a state file so it can be removed after the config changed
+firewall_up() {
+	local mark table priority
+
+	firewall_down
+
+	mark=$(uci -q get openbox.firewall.mark)
+	table=$(uci -q get openbox.firewall.route_table)
+	priority=$(uci -q get openbox.firewall.rule_priority)
+
+	if ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" > "$RUN_DIR/firewall.nft" 2>> "$APP_LOG" ||
+	   ! nft -f "$RUN_DIR/firewall.nft" 2>> "$APP_LOG"; then
+		log "failed to set up the firewall for tproxy"
+		nft delete table inet openbox 2> /dev/null
+		return 1
+	fi
+
+	ip -4 rule add pref "$priority" fwmark "$mark" table "$table"
+	ip -4 route add local default dev lo table "$table"
+	if [ "$(uci -q get openbox.firewall.ipv6)" = 1 ]; then
+		ip -6 rule add pref "$priority" fwmark "$mark" table "$table"
+		ip -6 route add local default dev lo table "$table"
+	fi
+	echo "$priority $table" > "$FIREWALL_STATE"
+	log "tproxy firewall set up"
+}
+
+firewall_down() {
+	local priority table
+
+	nft delete table inet openbox 2> /dev/null
+
+	if [ -f "$FIREWALL_STATE" ]; then
+		read -r priority table < "$FIREWALL_STATE"
+		ip -4 rule del pref "$priority" 2> /dev/null
+		ip -4 route flush table "$table" 2> /dev/null
+		ip -6 rule del pref "$priority" 2> /dev/null
+		ip -6 route flush table "$table" 2> /dev/null
+		rm -f "$FIREWALL_STATE"
+		log "tproxy firewall removed"
+	fi
+
+	return 0
+}

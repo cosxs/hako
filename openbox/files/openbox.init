@@ -1,0 +1,155 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+USE_PROCD=1
+
+. /usr/share/openbox/common.sh
+
+extra_command 'rotate_logs' 'Move the logs of previous days into dated files'
+extra_command 'refresh_firewall' 'Set up the tproxy firewall again, e.g. after a LAN interface came up'
+extra_command 'takeover_core' 'Stop and disable the service of the sing-box package so OpenBox can run it'
+
+CRON_TAG="#openbox"
+RUNNER="/usr/share/openbox/run.sh"
+CRONTAB="/etc/crontabs/root"
+
+# rotate the logs daily at midnight while the service is running
+set_cron() {
+	mkdir -p "${CRONTAB%/*}"
+	touch "$CRONTAB"
+	sed -i "/$CRON_TAG\$/d" "$CRONTAB"
+
+	[ "$1" = 1 ] && echo "0 0 * * * /etc/init.d/openbox rotate_logs $CRON_TAG" >> "$CRONTAB"
+}
+
+start_service() {
+	mkdir -p "$RUN_DIR" "$LOG_DIR"
+	rotate_logs
+
+	config_load openbox
+
+	local enabled
+	config_get_bool enabled main enabled 0
+
+	if [ "$enabled" != 1 ]; then
+		rm -f "$RUN_CONFIG"
+		set_cron 0
+		firewall_down
+		dnsmasq_down
+		return 0
+	fi
+
+	if [ ! -x "$CORE" ]; then
+		log "sing-box not found: $CORE"
+		return 1
+	fi
+
+	if ! version_ge "$(core_version)" "$CORE_MIN_VERSION"; then
+		log "sing-box $CORE_MIN_VERSION or later is required"
+		return 1
+	fi
+
+	# any sing-box of a supported version is used, also one built into the
+	# firmware; but while the service of its package runs or starts at boot,
+	# OpenBox does not start, until it is told to take it over
+	if core_service_active; then
+		log "the service of the sing-box package runs or starts at boot; take it over on the Activity page"
+		return 1
+	fi
+
+	if prepare_config; then
+		log "start"
+	elif [ -f "$RUN_CONFIG" ]; then
+		# reloading a running service: keep the config it is running with
+		log "keep running with the previous config"
+	else
+		return 1
+	fi
+
+	# the runner sets up the tproxy firewall while sing-box runs and removes
+	# it as soon as sing-box exits, crashed or stopped
+	procd_open_instance
+	procd_set_param command "$RUNNER"
+	procd_set_param file "$RUN_CONFIG"
+	procd_set_param respawn
+	procd_close_instance
+
+	set_cron 1
+
+	# a reload that leaves sing-box running: set the outbound mode on it, and
+	# the tproxy firewall again if its rules changed (rule sets are bypassed
+	# except in Global mode); after a restart the runner does both
+	apply_mode
+	if [ -f "$FIREWALL_STATE" ] && uses_tproxy &&
+	   ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
+		firewall_up
+	fi
+}
+
+takeover_core() {
+	core_service_off
+}
+
+# called by hotplug when an interface comes up: its device may have changed
+refresh_firewall() {
+	[ -f "$FIREWALL_STATE" ] || return 0
+
+	if [ -n "$1" ] && ! uci -q get openbox.firewall.interface | grep -qw "$1"; then
+		return 0
+	fi
+
+	firewall_up
+}
+
+# writes the config to run into $RUN_CONFIG: generated from UCI, or a raw JSON
+# profile when main.source is "profile"; it must pass "sing-box check" first
+prepare_config() {
+	local staged="$RUN_DIR/config.new.json"
+	local source profile
+
+	config_get source main source model
+	config_get profile main profile
+
+	if [ "$source" = profile ]; then
+		if [ -z "$profile" ] || [ ! -f "$PROFILE_DIR/$profile" ]; then
+			log "profile not found: $profile"
+			return 1
+		fi
+
+		cp -f "$PROFILE_DIR/$profile" "$staged"
+		log "using profile: $profile"
+	elif ! ucode "$GENERATOR" > "$staged" 2>> "$APP_LOG"; then
+		log "failed to generate the config"
+		rm -f "$staged"
+		return 1
+	fi
+
+	if ! "$CORE" check -c "$staged" -D "$RUN_DIR" >> "$CORE_LOG" 2>&1; then
+		log "config check failed, see the core log"
+		rm -f "$staged"
+		return 1
+	fi
+
+	mv -f "$staged" "$RUN_CONFIG"
+}
+
+stop_service() {
+	rm -f "$RUN_CONFIG"
+	set_cron 0
+	log "stop"
+}
+
+service_started() {
+	flush_dns_cache
+}
+
+service_stopped() {
+	firewall_down
+	dnsmasq_down
+	flush_dns_cache
+}
+
+service_triggers() {
+	procd_add_reload_trigger openbox
+}

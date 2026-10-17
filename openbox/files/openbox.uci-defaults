@@ -1,0 +1,6 @@
+#!/bin/sh
+# bring /etc/config/openbox, which upgrades keep, to the current version
+
+ucode /usr/share/openbox/ucode/migrate.uc
+
+exit 0

@@ -1,0 +1,1000 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_Hans\n"
+
+msgid "%dd %dh %dm"
+msgstr "%d 天 %d 小时 %d 分钟"
+
+msgid "%dh %dm"
+msgstr "%d 小时 %d 分钟"
+
+msgid "%dm"
+msgstr "%d 分钟"
+
+msgid "%s (inverted)"
+msgstr "%s（反向）"
+
+msgid "%s (native JSON)"
+msgstr "%s（原生 JSON）"
+
+msgid "0 uses the AEAD protocol; servers of the legacy protocol need 1."
+msgstr "0 使用 AEAD 协议；旧协议的服务器需要填 1。"
+
+msgid "0-RTT handshake"
+msgstr "0-RTT 握手"
+
+msgid "A file with the same name is replaced."
+msgstr "同名文件会被覆盖。"
+
+msgid "A key file on the router, in place of or together with the password."
+msgstr "路由器上的密钥文件，可代替密码或与密码同时使用。"
+
+msgid "A local file used at start while the rule set has not been downloaded yet."
+msgstr "启动时规则集还没下载下来，先用这个本地文件。"
+
+msgid "A minimal sing-box client for OpenWrt."
+msgstr "在 OpenWrt 上运行 sing-box 的简约客户端。"
+
+msgid "A regular expression matched against node names."
+msgstr "按节点名称匹配的正则表达式。"
+
+msgid "Action"
+msgstr "操作"
+
+msgid "Activity"
+msgstr "活动"
+
+msgid "Address"
+msgstr "地址"
+
+msgid "All IPv4 and IPv6 addresses if empty."
+msgstr "留空时为全部 IPv4 和 IPv6 地址。"
+
+msgid "Allowed IPs"
+msgstr "允许的 IP"
+
+msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
+msgstr "sing-box <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">无头规则</a>数组。"
+
+msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box DNS rules</a>, used as they are: after the names of the LAN, which go to dnsmasq, and before the split between mainland and foreign answers by the DNS mode. Servers and rule sets are named by their tags."
+msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box DNS 规则</a>数组，原样使用：排在交给 dnsmasq 的局域网域名之后、按 DNS 模式的国内外分流之前。服务器和规则集用 tag 引用。"
+
+msgid "Another outbound already uses this name."
+msgstr "已有其他出站使用此名称。"
+
+msgid "Any host key is accepted if empty."
+msgstr "留空时接受任何主机密钥。"
+
+msgid "Auto by latency"
+msgstr "自动测速"
+
+msgid "Binary (.srs)"
+msgstr "二进制（.srs）"
+
+msgid "By the extension"
+msgstr "按扩展名"
+
+msgid "Bypass IPv4 addresses"
+msgstr "绕过的 IPv4 地址"
+
+msgid "Bypass IPv6 addresses"
+msgstr "绕过的 IPv6 地址"
+
+msgid "Bypass rule sets"
+msgstr "绕过的规则集"
+
+msgid "Cache file"
+msgstr "缓存文件"
+
+msgid "Cache file path"
+msgstr "缓存文件路径"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Check"
+msgstr "检查"
+
+msgid "Checking the latest release…"
+msgstr "正在查询最新版本…"
+
+msgid "Clash API listen address"
+msgstr "Clash API 监听地址"
+
+msgid "Clash API secret"
+msgstr "Clash API 密钥"
+
+msgid "Clean up logs automatically"
+msgstr "自动清理日志"
+
+msgid "Clear"
+msgstr "清空"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Closes the connections of the previous outbound when the outbound in use changes."
+msgstr "当前出站改变时，断开经由原出站的连接。"
+
+msgid "Comment"
+msgstr "注释"
+
+msgid "Configuration"
+msgstr "配置"
+
+msgid "Congestion control"
+msgstr "拥塞控制"
+
+msgid "Connection reuse"
+msgstr "连接复用"
+
+msgid "Connects to the server through this node or group."
+msgstr "经由这个节点或策略组连接服务器。"
+
+msgid "Continue"
+msgstr "继续"
+
+msgid "Core log"
+msgstr "内核日志"
+
+msgid "Core settings"
+msgstr "内核设置"
+
+msgid "Core version"
+msgstr "内核版本"
+
+msgid "Current outbound"
+msgstr "当前节点"
+
+msgid "DNS"
+msgstr "DNS"
+
+msgid "DNS hijack"
+msgstr "DNS 劫持"
+
+msgid "DNS hijack (%s :%d)"
+msgstr "DNS 劫持（%s :%d）"
+
+msgid "DNS mode"
+msgstr "DNS 模式"
+
+msgid "DNS port"
+msgstr "DNS 端口"
+
+msgid "DNS rules"
+msgstr "DNS 规则"
+
+msgid "DNS servers"
+msgstr "DNS 服务器"
+
+msgid "Default"
+msgstr "默认"
+
+msgid "Default DNS server"
+msgstr "默认 DNS 服务器"
+
+msgid "Default outbound"
+msgstr "默认出站"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete %s?"
+msgstr "删除 %s？"
+
+msgid "Destinations in these rule sets bypass sing-box in the firewall."
+msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。"
+
+msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
+msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。只能用本地和内联规则集。"
+
+msgid "Detour"
+msgstr "前置节点"
+
+msgid "Direct (default)"
+msgstr "直连（默认）"
+
+msgid "Direct connection"
+msgstr "直接连接"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Discard"
+msgstr "放弃"
+
+msgid "Discard changes?"
+msgstr "放弃修改？"
+
+msgid "Domain resolver"
+msgstr "域名解析服务器"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Download bandwidth"
+msgstr "下行带宽"
+
+msgid "Download via"
+msgstr "下载方式"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "Edit: %s"
+msgstr "编辑：%s"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Enable Reality"
+msgstr "启用 Reality"
+
+msgid "Enable TLS"
+msgstr "启用 TLS"
+
+msgid "Encryption method"
+msgstr "加密方式"
+
+msgid "Expecting a range such as 1000:2000"
+msgstr "需要是 1000:2000 这样的范围"
+
+msgid "Expecting a whole number"
+msgstr "请输入整数"
+
+msgid "Expecting an HTTP or HTTPS URL"
+msgstr "需要是 HTTP 或 HTTPS 地址"
+
+msgid "Expecting an array of rules"
+msgstr "需要是规则数组"
+
+msgid "Expecting three numbers such as 0,0,0"
+msgstr "需要是 0,0,0 这样的三个数字"
+
+msgid "Experimental"
+msgstr "实验性"
+
+msgid "FakeIP"
+msgstr "FakeIP"
+
+msgid "FakeIP IPv4 range"
+msgstr "FakeIP IPv4 地址段"
+
+msgid "FakeIP IPv6 range"
+msgstr "FakeIP IPv6 地址段"
+
+msgid "FakeIP answers foreign domains at once and lets the node resolve them. RealIP resolves them through the proxy first: slower on the first visit, but works with every app."
+msgstr "FakeIP：境外域名立即返回假地址，由节点解析，速度快。RealIP：先经代理查询真实地址，首次访问稍慢，但所有应用都能正常使用。"
+
+msgid "File name"
+msgstr "文件名"
+
+msgid "First member"
+msgstr "第一个成员"
+
+msgid "Format"
+msgstr "格式"
+
+msgid "Free space: %1024.2mB."
+msgstr "剩余空间：%1024.2mB。"
+
+msgid "From the settings on the Takeover, Policies, Route rules and Core settings pages."
+msgstr "由接管、策略、路由规则和内核设置页的设置生成。"
+
+msgid "GLOBAL is reserved by the clash API."
+msgstr "GLOBAL 是 clash API 保留的名称。"
+
+msgid "Generated by OpenBox"
+msgstr "由 OpenBox 生成"
+
+msgid "Generated config (read-only)"
+msgstr "生成的配置（只读）"
+
+msgid "Global proxy"
+msgstr "全局代理"
+
+msgid "HTTP and SOCKS5 :%d"
+msgstr "HTTP 和 SOCKS5 :%d"
+
+msgid "HTTP obfuscation"
+msgstr "HTTP 混淆"
+
+msgid "Hop interval"
+msgstr "跳跃间隔"
+
+msgid "Hops between ports of these ranges, such as 20000:30000, in place of the port."
+msgstr "在这些范围（如 20000:30000）内跳跃端口，代替上面的端口。"
+
+msgid "Host"
+msgstr "主机"
+
+msgid "Host keys"
+msgstr "主机密钥"
+
+msgid "IPv4 only"
+msgstr "仅 IPv4"
+
+msgid "IPv6"
+msgstr "IPv6"
+
+msgid "IPv6 only"
+msgstr "仅 IPv6"
+
+msgid "Idle timeout"
+msgstr "闲置超时"
+
+msgid "In use"
+msgstr "使用中"
+
+msgid "Include all groups"
+msgstr "包含全部策略组"
+
+msgid "Include all nodes"
+msgstr "包含全部节点"
+
+msgid "Initial file"
+msgstr "初始文件"
+
+msgid "Inline"
+msgstr "内联"
+
+msgid "Install sing-box"
+msgstr "安装 sing-box"
+
+msgid "Install sing-box…"
+msgstr "安装 sing-box…"
+
+msgid "Installation failed, see the output for details."
+msgstr "安装失败，请查看输出。"
+
+msgid "Installing sing-box"
+msgstr "正在安装 sing-box"
+
+msgid "Interface name"
+msgstr "接口名称"
+
+msgid "Interrupt existing connections"
+msgstr "中断现有连接"
+
+msgid "Invalid JSON: %s"
+msgstr "JSON 格式错误：%s"
+
+msgid "Invalid file name."
+msgstr "文件名无效。"
+
+msgid "Invert"
+msgstr "反向匹配"
+
+msgid "Its own service runs or starts at boot"
+msgstr "自带服务正在运行或开机启动"
+
+msgid "Keep logs for"
+msgstr "日志保留"
+
+msgid "Keepalive interval"
+msgstr "保活间隔"
+
+msgid "LAN devices can use the router as an HTTP or SOCKS5 proxy at this port, with or without the takeover."
+msgstr "局域网设备可以把路由器的这个端口设为 HTTP 或 SOCKS5 代理，开不开接管都能用。"
+
+msgid "LAN interfaces"
+msgstr "局域网接口"
+
+msgid "Latest release from GitHub"
+msgstr "从 GitHub 安装最新版"
+
+msgid "Leave empty to disable obfuscation."
+msgstr "留空不启用混淆。"
+
+msgid "Leave empty to use the proxy without a password."
+msgstr "留空时不需要密码。"
+
+msgid "Letters, digits, dot, dash and underscore, ending in .json."
+msgstr "只能用字母、数字、点、短横线和下划线，以 .json 结尾。"
+
+msgid "Level"
+msgstr "级别"
+
+msgid "Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well."
+msgstr "域名或地址列表，供路由规则使用；DNS 规则和接管页的绕过规则集也会引用。"
+
+msgid "Local addresses"
+msgstr "本地地址"
+
+msgid "Local file"
+msgstr "本地文件"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Log settings"
+msgstr "日志设置"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "Logs connections with the MAC address and host name of the LAN device."
+msgstr "连接日志里显示局域网设备的 MAC 地址和主机名。"
+
+msgid "MTU"
+msgstr "MTU"
+
+msgid "Manual selection"
+msgstr "手动选择"
+
+msgid "Matches IPv4 or IPv6 connections."
+msgstr "匹配 IPv4 或 IPv6 连接。"
+
+msgid "Matches connections from private addresses."
+msgstr "匹配来自内网地址的连接。"
+
+msgid "Matches connections of the takeover or of the proxy port."
+msgstr "匹配来自接管或代理端口的连接。"
+
+msgid "Matches destination ports from the first to the last."
+msgstr "匹配从起始到结束的目标端口。"
+
+msgid "Matches domains by a regular expression."
+msgstr "按正则表达式匹配域名。"
+
+msgid "Matches domains containing the keyword."
+msgstr "匹配包含该关键字的域名。"
+
+msgid "Matches private destination addresses."
+msgstr "匹配目标为内网地址的连接。"
+
+msgid "Matches source ports from the first to the last."
+msgstr "匹配从起始到结束的来源端口。"
+
+msgid "Matches the MAC address of the LAN device."
+msgstr "匹配局域网设备的 MAC 地址。"
+
+msgid "Matches the address of the LAN device."
+msgstr "匹配局域网设备的地址。"
+
+msgid "Matches the destination address. With FakeIP, connections to domains have a FakeIP destination; match them by domain instead."
+msgstr "匹配目标地址。FakeIP 模式下，通过域名访问的连接目标地址是 FakeIP，请用域名类型匹配。"
+
+msgid "Matches the destination port."
+msgstr "匹配目标端口。"
+
+msgid "Matches the domain and its subdomains."
+msgstr "匹配该域名及其子域名。"
+
+msgid "Matches the domains and addresses of rule sets, which are added on the Rule sets tab."
+msgstr "匹配规则集中的域名和地址，规则集在「规则集」标签中添加。"
+
+msgid "Matches the full domain."
+msgstr "匹配完整域名。"
+
+msgid "Matches the host name the LAN device has from DHCP."
+msgstr "匹配局域网设备从 DHCP 获得的主机名。"
+
+msgid "Matches the network of the connection."
+msgstr "匹配连接的网络类型。"
+
+msgid "Matches the protocol found by sniffing."
+msgstr "匹配嗅探到的协议。"
+
+msgid "Matches the source port."
+msgstr "匹配来源端口。"
+
+msgid "Matches the user of the proxy port."
+msgstr "匹配代理端口的用户。"
+
+msgid "Members"
+msgstr "成员"
+
+msgid "Mode"
+msgstr "模式"
+
+msgid "Modified"
+msgstr "修改时间"
+
+msgid "Multiple conditions"
+msgstr "多个条件"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Network protocols"
+msgstr "网络协议"
+
+msgid "New"
+msgstr "新建"
+
+msgid "New DNS server"
+msgstr "新 DNS 服务器"
+
+msgid "New group"
+msgstr "新策略组"
+
+msgid "New node"
+msgstr "新节点"
+
+msgid "New profile"
+msgstr "新建配置文件"
+
+msgid "New rule set"
+msgstr "新规则集"
+
+msgid "Node domain resolver"
+msgstr "节点域名解析服务器"
+
+msgid "Node exclusion"
+msgstr "节点排除"
+
+msgid "Node filter"
+msgstr "节点筛选"
+
+msgid "Nodes"
+msgstr "节点"
+
+msgid "None"
+msgstr "无"
+
+msgid "Not installed"
+msgstr "未安装"
+
+msgid "Not running"
+msgstr "未运行"
+
+msgid "Not running: the service of the sing-box package is in use"
+msgstr "未运行：sing-box 自带服务正在使用中"
+
+msgid "Not selected"
+msgstr "未选择"
+
+msgid "OK"
+msgstr "确定"
+
+msgid "Obfuscation"
+msgstr "混淆"
+
+msgid "Obfuscation host"
+msgstr "混淆主机名"
+
+msgid "Obfuscation password"
+msgstr "混淆密码"
+
+msgid "Only clears what is shown here; the log file is kept."
+msgstr "只清空此处显示的内容，日志文件不受影响。"
+
+msgid "OpenBox"
+msgstr "OpenBox"
+
+msgid "OpenBox generates the sing-box config from its settings, or runs a native sing-box JSON profile from /etc/openbox/profiles as it is."
+msgstr "OpenBox 按各页面的设置生成 sing-box 配置，也可以原样运行 /etc/openbox/profiles 中的 sing-box 原生 JSON 配置。"
+
+msgid "Operation failed, see the logs for details."
+msgstr "操作失败，请查看日志。"
+
+msgid "Optimistic cache"
+msgstr "乐观缓存"
+
+msgid "Outbound"
+msgstr "出站"
+
+msgid "Outbound mode"
+msgstr "出站模式"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Path"
+msgstr "路径"
+
+msgid "Peer public key"
+msgstr "对端公钥"
+
+msgid "Plugin log"
+msgstr "插件日志"
+
+msgid "Plugin version"
+msgstr "插件版本"
+
+msgid "Policies"
+msgstr "策略"
+
+msgid "Policy groups"
+msgstr "策略组"
+
+msgid "Port"
+msgstr "端口"
+
+msgid "Port ranges"
+msgstr "端口范围"
+
+msgid "Pre-shared key"
+msgstr "预共享密钥"
+
+msgid "Prefer IPv4"
+msgstr "优先 IPv4"
+
+msgid "Prefer IPv6"
+msgstr "优先 IPv6"
+
+msgid "Private key"
+msgstr "私钥"
+
+msgid "Private key file"
+msgstr "私钥文件"
+
+msgid "Private key passphrase"
+msgstr "私钥密码"
+
+msgid "Profiles"
+msgstr "配置文件"
+
+msgid "Protocol"
+msgstr "协议"
+
+msgid "Proxy port"
+msgstr "代理端口"
+
+msgid "RealIP"
+msgstr "RealIP"
+
+msgid "Reality public key"
+msgstr "Reality 公钥"
+
+msgid "Reality short ID"
+msgstr "Reality short ID"
+
+msgid "Redirect (%s)"
+msgstr "Redirect（%s）"
+
+msgid "Reject with"
+msgstr "拒绝方式"
+
+msgid "Reload"
+msgstr "重载"
+
+msgid "Remote"
+msgstr "远程"
+
+msgid "Reserved bytes"
+msgstr "保留字节"
+
+msgid "Resolve strategy"
+msgstr "解析策略"
+
+msgid "Route rules"
+msgstr "路由规则"
+
+msgid "Rule sets"
+msgstr "规则集"
+
+msgid "Rule type"
+msgstr "规则类型"
+
+msgid "Rule-based"
+msgstr "规则判定"
+
+msgid "Rules"
+msgstr "规则"
+
+msgid "Rules are matched from top to bottom and the first match decides; drag a rule to change the order. Sniffing, DNS hijacking, private addresses and the Global and Direct modes are handled before these rules."
+msgstr "规则从上到下匹配，命中第一条即生效，拖动可以调整顺序。嗅探、DNS 劫持、内网地址直连和全局 / 直连模式在这些规则之前处理。"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Running status"
+msgstr "运行状态"
+
+msgid "SOCKS version"
+msgstr "SOCKS 版本"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save and reload"
+msgstr "保存并重载"
+
+msgid "Saved."
+msgstr "已保存。"
+
+msgid "Saved; sing-box was reloaded."
+msgstr "已保存，sing-box 已重载。"
+
+msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
+msgstr "手动切换前使用的出站，必须是成员之一；留空时使用第一个成员。"
+
+msgid "Server"
+msgstr "服务器"
+
+msgid "Set this node as the detour of a Shadowsocks or other node, which then connects through it."
+msgstr "在 Shadowsocks 等节点的“前置节点”中选择本节点，该节点即经由它连接。"
+
+msgid "ShadowTLS version"
+msgstr "ShadowTLS 版本"
+
+msgid "Show devices"
+msgstr "显示设备"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Skip certificate verification"
+msgstr "跳过证书验证"
+
+msgid "Snell version"
+msgstr "Snell 版本"
+
+msgid "Source (.json)"
+msgstr "源文件（.json）"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Switched; sing-box was reloaded."
+msgstr "已切换，sing-box 已重载。"
+
+msgid "Switched; used when OpenBox starts."
+msgstr "已切换，OpenBox 启动时使用。"
+
+msgid "Sync interval"
+msgstr "同步间隔"
+
+msgid "TCP and UDP"
+msgstr "TCP 和 UDP"
+
+msgid "TCP only"
+msgstr "仅 TCP"
+
+msgid "TLS server name"
+msgstr "TLS 服务器名称"
+
+msgid "TProxy (%s)"
+msgstr "TProxy（%s）"
+
+msgid "TProxy port"
+msgstr "TProxy 端口"
+
+msgid "TUN (%s)"
+msgstr "TUN（%s）"
+
+msgid "TUN is set up by sing-box itself. TProxy uses firewall rules set up by OpenBox and handles TCP and UDP in the kernel."
+msgstr "TUN 由 sing-box 自己设置。TProxy 使用 OpenBox 设置的防火墙规则，TCP 和 UDP 都在内核中处理。"
+
+msgid "Tag"
+msgstr "标签"
+
+msgid "Take over with OpenBox"
+msgstr "由 OpenBox 接管"
+
+msgid "Takeover"
+msgstr "接管"
+
+msgid "Takeover mode"
+msgstr "接管方式"
+
+msgid "Takes over IPv6 as well, and DNS answers IPv6 addresses. Mainland IPv6 addresses stay direct. With RealIP the nodes need to reach IPv6 addresses; with FakeIP they resolve the domains themselves."
+msgstr "同时接管 IPv6，DNS 也返回 IPv6 地址，国内 IPv6 地址照样直连。RealIP 模式下节点需要能访问 IPv6 地址；FakeIP 模式下由节点自己解析域名，不受此限制。"
+
+msgid "Takes over the traffic of LAN devices and of the router itself with TUN or TProxy. DNS queries are answered by sing-box; local names still go to dnsmasq."
+msgstr "通过 TUN 或 TProxy 接管局域网设备和路由器自身的流量。DNS 查询由 sing-box 应答，本地域名仍交给 dnsmasq。"
+
+msgid "Test URL"
+msgstr "测速地址"
+
+msgid "Test interval"
+msgstr "测速间隔"
+
+msgid "Tests pause after the group has not been used for this long."
+msgstr "策略组闲置超过这个时间后暂停测速。"
+
+msgid "The changes to %s are not saved."
+msgstr "%s 的修改还没有保存。"
+
+msgid "The clash API is not enabled in the current profile, so the outbound mode cannot be changed."
+msgstr "当前配置未启用 clash API，无法切换出站模式。"
+
+msgid "The current outbound of each group takes effect immediately; other changes, the outbound mode included, after Save & Apply."
+msgstr "策略组的当前节点立即生效；其余修改（包括出站模式）在保存并应用后生效。"
+
+msgid "The current profile defines no other mode. Add route rules with clash_mode to switch modes."
+msgstr "当前配置没有定义其他模式。在路由规则中使用 clash_mode 后即可切换。"
+
+msgid "The file does not exist."
+msgstr "文件不存在。"
+
+msgid "The file is not valid JSON."
+msgstr "文件不是有效的 JSON。"
+
+msgid "The file is removed from the router."
+msgstr "文件会从路由器上删除。"
+
+msgid "The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page."
+msgstr "当前使用配置文件 %s，这里的设置要在「配置文件」页切换回 OpenBox 生成的配置后才生效。"
+
+msgid "The profile in use cannot be deleted."
+msgstr "使用中的配置文件不能删除。"
+
+msgid "The profile in use cannot be replaced here; edit it instead."
+msgstr "使用中的配置文件不能在这里覆盖，请直接编辑。"
+
+msgid "The rule applies when the condition does not match."
+msgstr "条件不满足时规则生效。"
+
+msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
+msgstr "sing-box 发布页中的 sing-box_*_openwrt_%s.apk 文件。"
+
+msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
+msgstr "这条规则有多个条件，是在页面之外设置的。这里可以改动作和注释，条件保持原样。"
+
+msgid "Three numbers, for servers such as Cloudflare WARP."
+msgstr "三个数字，用于 Cloudflare WARP 等服务器。"
+
+msgid "Timestamp"
+msgstr "时间戳"
+
+msgid "Tolerance"
+msgstr "容差"
+
+msgid "Traffic coming in on these interfaces is taken over."
+msgstr "从这些接口进入的流量会被接管。"
+
+msgid "Traffic shaping"
+msgstr "流量整形"
+
+msgid "Traffic that matches no rule uses this outbound."
+msgstr "不匹配任何规则的流量使用这个出站。"
+
+msgid "Transport protocol"
+msgstr "传输协议"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "UDP only"
+msgstr "仅 UDP"
+
+msgid "UDP packet encoding"
+msgstr "UDP 包编码"
+
+msgid "UDP relay mode"
+msgstr "UDP 中继模式"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Unable to delete %s"
+msgstr "无法删除 %s"
+
+msgid "Unable to generate the config"
+msgstr "无法生成配置"
+
+msgid "Unable to generate the config."
+msgstr "无法生成配置。"
+
+msgid "Unable to read %s"
+msgstr "无法读取 %s"
+
+msgid "Unable to save %s"
+msgstr "无法保存 %s"
+
+msgid "Unable to start the installation."
+msgstr "无法开始安装。"
+
+msgid "Unable to switch the config"
+msgstr "无法切换配置"
+
+msgid "Unable to switch the outbound of %s."
+msgstr "无法切换 %s 的节点。"
+
+msgid "Unable to write the file."
+msgstr "无法写入文件。"
+
+msgid "Unknown error"
+msgstr "未知错误"
+
+msgid "Update interval"
+msgstr "更新间隔"
+
+msgid "Update sing-box…"
+msgstr "更新 sing-box…"
+
+msgid "Upload an apk package"
+msgstr "上传 apk 安装包"
+
+msgid "Upload bandwidth"
+msgstr "上行带宽"
+
+msgid "Upload profile"
+msgstr "上传配置文件"
+
+msgid "Upload…"
+msgstr "上传…"
+
+msgid "Uptime"
+msgstr "已运行"
+
+msgid "Use"
+msgstr "使用"
+
+msgid "Used with the IPv6 takeover on."
+msgstr "开启 IPv6 接管后生效。"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Uses QUIC instead of HTTP/2."
+msgstr "使用 QUIC 代替 HTTP/2。"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Version 1.14 or later required"
+msgstr "需要 1.14 或更高版本"
+
+msgid "View"
+msgstr "查看"
+
+msgid "View logs"
+msgstr "查看日志"
+
+msgid "While OpenBox runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
+msgstr "OpenBox 运行时，dnsmasq 自己不应答的查询改发到 sing-box 的这个端口，而不是它的上游服务器。TProxy 模式下，发往 53 端口的查询也会重定向到这里。"
+
+msgid "With the IPv6 takeover off, IPv6 TCP and UDP connections to other addresses are refused, so clients fall back to IPv4."
+msgstr "关闭 IPv6 接管时，发往其他 IPv6 地址的 TCP 和 UDP 连接会被拒绝，客户端会回退到 IPv4。"
+
+msgid "XTLS flow"
+msgstr "流控"
+
+msgid "days"
+msgstr "天"
+
+msgid "default: refuse the connection"
+msgstr "default：拒绝连接"
+
+msgid "drop: drop it silently"
+msgstr "drop：静默丢弃"
+
+msgid "gRPC service name"
+msgstr "gRPC 服务名"
+
+msgid "hours"
+msgstr "小时"
+
+msgid "minutes"
+msgstr "分钟"
+
+msgid "ms"
+msgstr "毫秒"
+
+msgid "seconds"
+msgstr "秒"
+
+msgid "sing-box %s for %s, %1024.2mB download."
+msgstr "sing-box %s（%s），下载 %1024.2mB。"
+
+msgid "sing-box %s or later is required. The official build takes about 90 MB of storage."
+msgstr "需要 sing-box %s 或更高版本。官方构建安装后约占 90 MB 存储空间。"
+
+msgid "sing-box check failed."
+msgstr "sing-box 检查未通过。"
+
+msgid "sing-box check passed."
+msgstr "sing-box 检查通过。"
+
+msgid "sing-box installed."
+msgstr "sing-box 已安装。"
+
+msgid "sing-box not installed"
+msgstr "未安装 sing-box"
+
+msgid "sing-box too old"
+msgstr "sing-box 版本过低"
+
+msgid "uTLS fingerprint"
+msgstr "uTLS 指纹"
