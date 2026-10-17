@@ -39,12 +39,6 @@ const callCoreInstallStatus = rpc.declare({
 	expect: { '': {} }
 });
 
-const modeNames = {
-	rule: _('Rule-based'),
-	global: _('Global proxy'),
-	direct: _('Direct connection')
-};
-
 function renderState(status) {
 	if (!status.core?.installed)
 		return E('span', { 'class': 'label' }, _('sing-box not installed'));
@@ -133,7 +127,7 @@ function renderRows(status) {
 		[ _('Takeover'), renderTakeover(status.takeover ?? {}) ],
 		[ _('Proxy port'), status.takeover?.mixed ? _('HTTP and SOCKS5 :%d').format(status.takeover.mixed.port) : null ],
 		[ _('Outbound mode'), api ? E('a', { 'href': L.url('admin/services/openbox/policy') },
-			modeNames[api.mode.toLowerCase()] ?? api.mode) : null ],
+			openbox.modeNames[api.mode.toLowerCase()] ?? api.mode) : null ],
 		[ _('Uptime'), status.running && status.uptime != null ? formatUptime(status.uptime) : null ],
 		[ _('Core version'), renderCore(status.core) ],
 		[ _('Plugin version'), status.version ?? '?' ]
@@ -159,7 +153,8 @@ return view.extend({
 		});
 	},
 
-	handleCoreInstall() {
+	// minVersion: the oldest sing-box OpenBox supports, from status
+	handleCoreInstall(minVersion) {
 		ui.showModal(_('Install sing-box'), [
 			E('p', { 'class': 'spinning' }, _('Checking the latest release…'))
 		]);
@@ -184,7 +179,7 @@ return view.extend({
 						_('The sing-box_*_openwrt_%s.apk file from the sing-box release page.').format(latest.arch ?? '…'))
 				]),
 				E('p', { 'class': 'cbi-value-description' }, [
-					_('sing-box %s or later is required. The official build takes about 90 MB of storage.').format('1.14'),
+					_('sing-box %s or later is required. The official build takes about 90 MB of storage.').format(minVersion.replace(/\.0$/, '')),
 					latest.free_space != null ? ' ' + _('Free space: %1024.2mB.').format(latest.free_space) : ''
 				]),
 				E('div', { 'class': 'right' }, [
@@ -246,7 +241,7 @@ return view.extend({
 		if (!status.core?.installed || !status.core.supported) {
 			buttons.push(E('button', {
 				'class': 'cbi-button cbi-button-positive',
-				'click': ui.createHandlerFn(this, 'handleCoreInstall')
+				'click': ui.createHandlerFn(this, 'handleCoreInstall', status.core?.min_version ?? '')
 			}, _('Install sing-box…')));
 
 			return buttons;
@@ -285,7 +280,7 @@ return view.extend({
 
 		buttons.push(E('button', {
 			'class': 'cbi-button',
-			'click': ui.createHandlerFn(this, 'handleCoreInstall')
+			'click': ui.createHandlerFn(this, 'handleCoreInstall', status.core?.min_version ?? '')
 		}, _('Update sing-box…')));
 
 		return buttons;

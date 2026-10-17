@@ -415,7 +415,8 @@ openbox/
 │       ├── common.sh
 │       ├── core-install.sh
 │       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
-│       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc
+│       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
+│                               # clash.uc、config.uc 为共享模块，装到 /usr/share/ucode/openbox/
 ├── luci-app-openbox/
 │   ├── Makefile
 │   ├── htdocs/…/view/openbox/  # 各页面

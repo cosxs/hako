@@ -3,13 +3,15 @@
 import { readfile, writefile, unlink, access, popen, open, stat, lsdir, rename, mkdtemp, rmdir } from 'fs';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
-import * as socket from 'socket';
+import { clash_api, clash_request, config_modes } from 'openbox.clash';
+import { dns_inbound } from 'openbox.config';
 
 const PROFILE_DIR = '/etc/openbox/profiles';
 const GENERATOR = '/usr/share/openbox/ucode/generate.uc';
 const RUN_DIR = '/var/run/openbox';
 const RUN_CONFIG = `${RUN_DIR}/config.json`;
 const CORE = '/usr/bin/sing-box';
+const COMMON = '/usr/share/openbox/common.sh';
 const CORE_INSTALL = '/usr/share/openbox/core-install.sh';
 const CORE_UPLOAD = '/tmp/openbox-core-upload.apk';
 const INSTALL_LOG = `${RUN_DIR}/core-install.log`;
@@ -31,15 +33,29 @@ function command_output(cmd) {
 	return out;
 }
 
-// version >= 1.14, the oldest sing-box OpenBox supports
-function version_supported(version) {
-	const parts = map(split(version, '.'), (v) => +v);
-	return parts[0] > 1 || (parts[0] == 1 && parts[1] >= 14);
+// the oldest sing-box OpenBox supports, CORE_MIN_VERSION of common.sh
+function core_min_version() {
+	return match(readfile(COMMON) ?? '', /\nCORE_MIN_VERSION="([^"]+)"/)?.[1];
+}
+
+// whether version A >= B, comparing the numeric x.y.z parts as common.sh does
+function version_ge(a, b) {
+	const x = split(a, '.'), y = split(b, '.');
+
+	for (let i = 0; i < 3; i++) {
+		const m = int(x[i] ?? 0) || 0, n = int(y[i] ?? 0) || 0;
+		if (m != n)
+			return m > n;
+	}
+
+	return true;
 }
 
 function core_info() {
+	const min_version = core_min_version();
+
 	if (!access(CORE, 'x'))
-		return { installed: false };
+		return { installed: false, min_version: min_version };
 
 	const out = command_output(`${CORE} version 2>/dev/null`) ?? '';
 	const version = match(out, /sing-box version (\S+)/)?.[1];
@@ -48,7 +64,8 @@ function core_info() {
 	return {
 		installed: true,
 		version: version,
-		supported: version ? version_supported(version) : false,
+		min_version: min_version,
+		supported: version ? version_ge(version, min_version) : false,
 		tags: tags ? split(tags, ',') : [],
 		// the service of the sing-box package runs or starts at boot
 		service_active: system('. /usr/share/openbox/common.sh; core_service_active') == 0
@@ -129,66 +146,15 @@ function takeover(config) {
 				result.mixed = { tag: inbound.tag ?? inbound.type, port: inbound.listen_port };
 			break;
 
-		case 'direct':
-			if (inbound.tag == 'dns-in')
-				result.dns = { tag: inbound.tag, port: inbound.listen_port };
-			break;
 		}
 	}
 
+	// the dns inbound comes before the DNS hijack of tun
+	const dns = dns_inbound(config);
+	if (dns)
+		result.dns = { tag: dns.tag, port: dns.port };
+
 	return result;
-}
-
-function clash_api(config) {
-	const api = config?.experimental?.clash_api;
-	if (!api?.external_controller)
-		return null;
-
-	const controller = api.external_controller;
-	const host = substr(controller, 0, rindex(controller, ':'));
-
-	return {
-		host: host,
-		port: +substr(controller, rindex(controller, ':') + 1),
-		secret: api.secret,
-		default_mode: api.default_mode ?? 'Rule'
-	};
-}
-
-// a minimal HTTP/1.0 client for the clash API of the running sing-box
-function clash_request(api, method, path, body) {
-	let host = replace(api.host, /^\[|\]$/g, '');
-	if (host in [ '', '0.0.0.0', '::' ])
-		host = '127.0.0.1';
-
-	const sock = socket.connect(host, `${api.port}`, null, 3000);
-	if (!sock)
-		return null;
-
-	let req = `${method} ${path} HTTP/1.0\r\nHost: ${host}\r\n`;
-	if (api.secret)
-		req += `Authorization: Bearer ${api.secret}\r\n`;
-	if (body != null)
-		req += `Content-Type: application/json\r\nContent-Length: ${length(body)}\r\n`;
-
-	sock.send(`${req}\r\n${body ?? ''}`);
-
-	let resp = '', chunk;
-	while ((chunk = sock.recv(4096)) != null && length(chunk) > 0)
-		resp += chunk;
-
-	sock.close();
-
-	const status = +match(resp, /^HTTP\/1\.\d (\d+)/)?.[1];
-	const content = substr(resp, index(resp, '\r\n\r\n') + 4);
-	let data = null;
-
-	try {
-		data = length(content) ? json(content) : null;
-	}
-	catch (e) {}
-
-	return { status: status, data: data };
 }
 
 // the clash API of the running sing-box, or why it is not available
@@ -214,18 +180,6 @@ function clash_mode(api) {
 // percent-encode a path segment, for group and outbound names
 function escape_path(value) {
 	return join('', map(split(value, ''), (c) => match(c, /^[A-Za-z0-9._~-]$/) ? c : sprintf('%%%02X', ord(c))));
-}
-
-// the outbound modes a config offers: its default mode and those of the
-// rules, which sing-box matches regardless of case
-function config_modes(config, api) {
-	const modes = [ api.default_mode ];
-
-	for (let rule in [ ...(config?.route?.rules ?? []), ...(config?.dns?.rules ?? []) ])
-		if (type(rule.clash_mode) == 'string' && !length(filter(modes, (m) => lc(m) == lc(rule.clash_mode))))
-			push(modes, rule.clash_mode);
-
-	return modes;
 }
 
 function profile_path(name) {

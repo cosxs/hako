@@ -58,6 +58,12 @@ define Package/openbox/install
 	$(INSTALL_DATA) ./files/ucode/firewall.uc $(1)/usr/share/openbox/ucode/firewall.uc
 	$(INSTALL_DATA) ./files/ucode/migrate.uc $(1)/usr/share/openbox/ucode/migrate.uc
 	$(INSTALL_DATA) ./files/ucode/mode.uc $(1)/usr/share/openbox/ucode/mode.uc
+	$(INSTALL_DATA) ./files/ucode/inspect.uc $(1)/usr/share/openbox/ucode/inspect.uc
+
+	# modules shared with luci-app-openbox: import ... from 'openbox.clash'
+	$(INSTALL_DIR) $(1)/usr/share/ucode/openbox
+	$(INSTALL_DATA) ./files/ucode/clash.uc $(1)/usr/share/ucode/openbox/clash.uc
+	$(INSTALL_DATA) ./files/ucode/config.uc $(1)/usr/share/ucode/openbox/config.uc
 
 	# the mainland China IP list from cosxs/cn-mainland-ip, so the bypass works
 	# without downloading anything at start

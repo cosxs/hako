@@ -47,10 +47,6 @@ const CUSTOM_RULES_EXAMPLE = JSON.stringify([
 	}
 ], null, 2);
 
-function label(section) {
-	return section.tag || section['.name'];
-}
-
 // dns servers that resolve real addresses: all but FakeIP
 function resolverChoices(option, empty) {
 	if (empty)
@@ -58,7 +54,7 @@ function resolverChoices(option, empty) {
 
 	uci.sections('openbox', 'dns_server')
 		.filter((section) => section.type != 'fakeip')
-		.forEach((section) => option.value(section['.name'], label(section)));
+		.forEach((section) => option.value(section['.name'], openbox.label(section)));
 }
 
 // outbounds a dial detour may use: a plain direct outbound is refused by
@@ -68,20 +64,11 @@ function detourChoices(option) {
 
 	uci.sections('openbox', 'outbound')
 		.filter((section) => section.type != 'direct')
-		.forEach((section) => option.value(section['.name'], label(section)));
+		.forEach((section) => option.value(section['.name'], openbox.label(section)));
 }
 
 function dependsOnTypes(option, types) {
 	types.forEach((type) => option.depends('type', type));
-}
-
-// the settings of this page are only used while OpenBox generates the config
-function profileNotice() {
-	if (uci.get('openbox', 'main', 'source') != 'profile')
-		return '';
-
-	return E('div', { 'class': 'alert-message warning' },
-		_('The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page.').format(uci.get('openbox', 'main', 'profile')));
 }
 
 return view.extend({
@@ -273,6 +260,6 @@ return view.extend({
 		o.placeholder = '/etc/openbox/cache.db';
 		o.depends('cache_enabled', '1');
 
-		return m.render().then((node) => E([], [ ...openbox.header(), profileNotice(), node ]));
+		return m.render().then((node) => E([], [ ...openbox.header(), openbox.profileNotice(), node ]));
 	}
 });

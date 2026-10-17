@@ -37,25 +37,6 @@ const TYPES = {
 // used by the hidden rules of the outbound modes
 const MATCH_KEYS = [ ...Object.keys(TYPES), 'clash_mode' ];
 
-function label(section) {
-	return section.tag || section['.name'];
-}
-
-// rules with hidden set (sniffing, DNS hijacking, private addresses and the
-// outbound modes) stay in front of the listed ones
-function isHidden(section_id) {
-	return uci.get('openbox', section_id, 'hidden') == '1';
-}
-
-// groups first, then nodes and direct outbounds, stored by section name
-function outboundChoices(option) {
-	const sections = uci.sections('openbox', 'outbound');
-	const isGroup = (section) => section.type == 'selector' || section.type == 'urltest';
-
-	sections.filter(isGroup).forEach((section) => option.value(section['.name'], label(section)));
-	sections.filter((section) => !isGroup(section)).forEach((section) => option.value(section['.name'], label(section)));
-}
-
 // a section of the config by section name or tag, as the generator looks it up
 function lookup(type, name) {
 	return uci.get('openbox', name) ?? uci.sections('openbox', type).find((section) => section.tag == name);
@@ -66,7 +47,7 @@ function sectionChoices(option, type, empty) {
 	if (empty)
 		option.value('', empty);
 
-	uci.sections('openbox', type).forEach((section) => option.value(section['.name'], label(section)));
+	uci.sections('openbox', type).forEach((section) => option.value(section['.name'], openbox.label(section)));
 }
 
 // show the label of a ListValue choice in a table instead of its value
@@ -95,7 +76,7 @@ function valueText(key, section) {
 		return 'true';
 
 	if (key == 'rule_set')
-		return shortList(values.map((value) => label(lookup('rule_set', value) ?? { tag: value })));
+		return shortList(values.map((value) => openbox.label(lookup('rule_set', value) ?? { tag: value })));
 
 	return shortList(values);
 }
@@ -114,15 +95,6 @@ const RuleSection = form.GridSection.extend({
 	}
 });
 
-// the settings of this page are only used while OpenBox generates the config
-function profileNotice() {
-	if (uci.get('openbox', 'main', 'source') != 'profile')
-		return '';
-
-	return E('div', { 'class': 'alert-message warning' },
-		_('The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page.').format(uci.get('openbox', 'main', 'profile')));
-}
-
 return view.extend({
 	load() {
 		return uci.load('openbox');
@@ -139,7 +111,7 @@ return view.extend({
 		this.renderRules(s);
 		this.renderRuleSets(s);
 
-		return m.render().then((node) => E([], [ ...openbox.header(), profileNotice(), node ]));
+		return m.render().then((node) => E([], [ ...openbox.header(), openbox.profileNotice(), node ]));
 	},
 
 	renderRules(s) {
@@ -150,7 +122,7 @@ return view.extend({
 		rs.addremove = true;
 		rs.sortable = true;
 		rs.nodescriptions = true;
-		rs.filter = (section_id) => !isHidden(section_id);
+		rs.filter = (section_id) => !openbox.isHidden(section_id);
 		rs.modaltitle = _('Route rules');
 
 		// enabled is only written when a rule is switched off
@@ -195,7 +167,7 @@ return view.extend({
 			if (action != 'route')
 				return '%h'.format(action);
 
-			return section.outbound ? '%h'.format(label(lookup('outbound', section.outbound) ?? { tag: section.outbound })) : E('em', {}, _('None'));
+			return section.outbound ? '%h'.format(openbox.label(lookup('outbound', section.outbound) ?? { tag: section.outbound })) : E('em', {}, _('None'));
 		};
 
 		o = rs.option(form.DummyValue, '_comment', _('Comment'));
@@ -307,7 +279,7 @@ return view.extend({
 		o.modalonly = true;
 		// keep other actions set by hand
 		uci.sections('openbox', 'route_rule').forEach((section) => {
-			if (!isHidden(section['.name']) && section.action && !(section.action in { route: 1, reject: 1 }))
+			if (!openbox.isHidden(section['.name']) && section.action && !(section.action in { route: 1, reject: 1 }))
 				o.value(section.action);
 		});
 
@@ -316,7 +288,7 @@ return view.extend({
 		o.modalonly = true;
 		o.depends('action', '');
 		o.depends('action', 'route');
-		outboundChoices(o);
+		openbox.outboundChoices(o);
 		if (uci.get('openbox', 'proxy'))
 			o.default = 'proxy';
 
@@ -332,7 +304,7 @@ return view.extend({
 		// where traffic no rule matched goes
 		o = s.taboption('rules', form.ListValue, 'final', _('Default outbound'));
 		o.description = _('Traffic that matches no rule uses this outbound.');
-		outboundChoices(o);
+		openbox.outboundChoices(o);
 	},
 
 	// rule sets, used by route rules, dns rules and the takeover bypass

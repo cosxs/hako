@@ -27,12 +27,6 @@ const callSelect = rpc.declare({
 	expect: { '': {} }
 });
 
-const modeNames = {
-	rule: _('Rule-based'),
-	global: _('Global proxy'),
-	direct: _('Direct connection')
-};
-
 const unavailableReasons = {
 	no_clash_api: _('The clash API is not enabled in the current profile, so the outbound mode cannot be changed.')
 };
@@ -76,46 +70,15 @@ const SS_METHODS = [
 
 const UTLS_FINGERPRINTS = [ 'chrome', 'firefox', 'edge', 'safari', '360', 'qq', 'ios', 'android', 'random', 'randomized' ];
 
-function label(section) {
-	return section.tag || section['.name'];
-}
-
-// outbounds with hidden set, like Global and Direct, are not listed; they
-// stay selectable wherever an outbound is chosen
-function isHidden(section_id) {
-	return uci.get('openbox', section_id, 'hidden') == '1';
-}
-
-function isGroup(section) {
-	return section.type in GROUP_TYPES;
-}
-
-// groups first, then nodes and direct outbounds, stored by section name
-function outboundChoices(option, except) {
-	const sections = uci.sections('openbox', 'outbound').filter((section) => section['.name'] != except);
-
-	sections.filter(isGroup).forEach((section) => option.value(section['.name'], label(section)));
-	sections.filter((section) => !isGroup(section)).forEach((section) => option.value(section['.name'], label(section)));
-}
-
 // a tag is shared by groups and nodes and must be unique among all outbounds
 function validateTag(section_id, value) {
 	if (value == 'GLOBAL')
 		return _('GLOBAL is reserved by the clash API.');
 
-	if (uci.sections('openbox', 'outbound').some((section) => section['.name'] != section_id && label(section) == value))
+	if (uci.sections('openbox', 'outbound').some((section) => section['.name'] != section_id && openbox.label(section) == value))
 		return _('Another outbound already uses this name.');
 
 	return true;
-}
-
-// the settings of this page are only used while OpenBox generates the config
-function profileNotice() {
-	if (uci.get('openbox', 'main', 'source') != 'profile')
-		return '';
-
-	return E('div', { 'class': 'alert-message warning' },
-		_('The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page.').format(uci.get('openbox', 'main', 'profile')));
 }
 
 return view.extend({
@@ -170,7 +133,7 @@ return view.extend({
 		const o = s.option(form.ListValue, 'mode', _('Mode'));
 		o.widget = 'radio';
 		o.orientation = 'horizontal';
-		modes.forEach((mode) => o.value(mode, modeNames[mode.toLowerCase()] ?? mode));
+		modes.forEach((mode) => o.value(mode, openbox.modeNames[mode.toLowerCase()] ?? mode));
 		o.default = state.default;
 		o.cfgvalue = (section_id) => find(uci.get('openbox', section_id, 'mode')) ?? state.default;
 
@@ -197,7 +160,7 @@ return view.extend({
 
 	updateCell(section_id) {
 		const cell = this.cells[section_id];
-		const tag = label(uci.get('openbox', section_id) ?? {});
+		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
 		const group = this.runtime.groups?.[tag];
 		const key = JSON.stringify([ tag, group, group?.all.map((name) => this.delayOf(name)) ]);
 
@@ -239,7 +202,7 @@ return view.extend({
 		s.addremove = true;
 		s.sortable = true;
 		s.nodescriptions = true;
-		s.filter = (section_id) => uci.get('openbox', section_id, 'type') in GROUP_TYPES && !isHidden(section_id);
+		s.filter = (section_id) => uci.get('openbox', section_id, 'type') in GROUP_TYPES && !openbox.isHidden(section_id);
 		s.modaltitle = (section_id) => _('Policy groups') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New group'));
 
 		let o = s.option(form.Value, 'tag', _('Name'));
@@ -259,7 +222,7 @@ return view.extend({
 		o.load = function(section_id) {
 			this.keylist = [];
 			this.vallist = [];
-			outboundChoices(this, section_id);
+			openbox.outboundChoices(this, section_id);
 
 			return form.MultiValue.prototype.load.call(this, section_id);
 		};
@@ -289,7 +252,7 @@ return view.extend({
 			this.keylist = [];
 			this.vallist = [];
 			this.value('', _('First member'));
-			outboundChoices(this, section_id);
+			openbox.outboundChoices(this, section_id);
 
 			return form.ListValue.prototype.load.call(this, section_id);
 		};
@@ -330,7 +293,7 @@ return view.extend({
 		s.addremove = true;
 		s.sortable = true;
 		s.nodescriptions = true;
-		s.filter = (section_id) => !(uci.get('openbox', section_id, 'type') in GROUP_TYPES) && !isHidden(section_id);
+		s.filter = (section_id) => !(uci.get('openbox', section_id, 'type') in GROUP_TYPES) && !openbox.isHidden(section_id);
 		s.modaltitle = (section_id) => _('Nodes') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New node'));
 
 		let o = s.option(form.Value, 'tag', _('Name'));
@@ -732,8 +695,8 @@ return view.extend({
 			this.vallist = [];
 			this.value('', _('None'));
 			uci.sections('openbox', 'outbound')
-				.filter((section) => section['.name'] != section_id && section.type != 'direct' && !isHidden(section['.name']))
-				.forEach((section) => this.value(section['.name'], label(section)));
+				.filter((section) => section['.name'] != section_id && section.type != 'direct' && !openbox.isHidden(section['.name']))
+				.forEach((section) => this.value(section['.name'], openbox.label(section)));
 
 			return form.ListValue.prototype.load.call(this, section_id);
 		};
@@ -753,7 +716,7 @@ return view.extend({
 		return m.render().then((mapEl) => {
 			poll.add(() => this.refresh(), 5);
 
-			return E([], [ ...openbox.header(), profileNotice(), mapEl ]);
+			return E([], [ ...openbox.header(), openbox.profileNotice(), mapEl ]);
 		});
 	}
 });

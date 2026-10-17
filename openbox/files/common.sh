@@ -6,6 +6,7 @@ CORE_MIN_VERSION="1.14.0"
 GENERATOR="/usr/share/openbox/ucode/generate.uc"
 FIREWALL="/usr/share/openbox/ucode/firewall.uc"
 MODE_SCRIPT="/usr/share/openbox/ucode/mode.uc"
+INSPECT="/usr/share/openbox/ucode/inspect.uc"
 PROFILE_DIR="/etc/openbox/profiles"
 RUN_DIR="/var/run/openbox"
 RUN_CONFIG="$RUN_DIR/config.json"
@@ -149,26 +150,22 @@ flush_dns_cache() {
 	killall -HUP dnsmasq 2> /dev/null || true
 }
 
+# inspect <what>: what the shell needs from the config sing-box runs, read by
+# inspect.uc for the functions below named the same
+inspect() {
+	ucode "$INSPECT" "$RUN_CONFIG" "$1" 2> /dev/null
+}
+
 # dns_inbound: the listen address and port of the dns inbound (the direct one
 # tagged dns-in) of the config sing-box runs, separated by a space
 dns_inbound() {
-	local port listen
-
-	port=$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="direct" && @.tag="dns-in"].listen_port')
-	[ -n "$port" ] || return 0
-
-	listen=$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="direct" && @.tag="dns-in"].listen')
-	case "$listen" in
-	"" | "::" | "0.0.0.0") listen="127.0.0.1" ;;
-	esac
-
-	echo "$listen $port"
+	inspect dns_inbound
 }
 
 # tproxy_port: the listen port of the (first) tproxy inbound of the config
 # sing-box runs
 tproxy_port() {
-	jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tproxy"].listen_port' | head -n 1
+	inspect tproxy_port
 }
 
 # wait_for_listen <port> <pid>: wait up to about 10 seconds, half a second
@@ -269,33 +266,19 @@ dnsmasq_down() {
 # uses_tproxy: whether the config sing-box runs has a tproxy inbound, which
 # needs the firewall OpenBox sets up (tun sets up its own)
 uses_tproxy() {
-	[ -n "$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tproxy"].type')" ]
+	inspect uses_tproxy
 }
 
 # uses_tun_route: whether the config sing-box runs has a tun inbound that
 # sets up routes and nftables rules (auto_route)
 uses_tun_route() {
-	[ -n "$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tun" && @.auto_route=true].type')" ]
-}
-
-# tun_option <name> <default>: an option of the tun inbound with auto_route in
-# the config sing-box runs, or sing-box's default when it is left out
-tun_option() {
-	local value
-
-	value=$(jsonfilter -q -i "$RUN_CONFIG" -e "@.inbounds[@.type=\"tun\" && @.auto_route=true].$1" | head -n 1)
-	echo "${value:-$2}"
+	inspect uses_tun_route
 }
 
 # tun_route_params: the route table, rule priority, input and output marks
-# and fallback rule priority of that tun inbound, for core_cleanup; marks may
-# be written as numbers or hex strings, ip prints them in hex
+# and fallback rule priority of that tun inbound, for core_cleanup
 tun_route_params() {
-	echo "$(tun_option iproute2_table_index 2022)" \
-		"$(tun_option iproute2_rule_index 9000)" \
-		"$(printf '0x%x' "$(tun_option auto_redirect_input_mark 0x2023)")" \
-		"$(printf '0x%x' "$(tun_option auto_redirect_output_mark 0x2024)")" \
-		"$(tun_option auto_redirect_iproute2_fallback_rule_index 32768)"
+	inspect tun_route_params
 }
 
 # core_cleanup <table> <priority> <input mark> <output mark> <fallback>: remove

@@ -17,15 +17,6 @@ function modeOption(option, mode) {
 	return option;
 }
 
-// the settings of this page are only used while OpenBox generates the config
-function profileNotice() {
-	if (uci.get('openbox', 'main', 'source') != 'profile')
-		return '';
-
-	return E('div', { 'class': 'alert-message warning' },
-		_('The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page.').format(uci.get('openbox', 'main', 'profile')));
-}
-
 return view.extend({
 	load() {
 		return uci.load('openbox');
@@ -238,6 +229,6 @@ return view.extend({
 			o.depends({ username: /./ });
 		}
 
-		return m.render().then((node) => E([], [ ...openbox.header(), profileNotice(), node ]));
+		return m.render().then((node) => E([], [ ...openbox.header(), openbox.profileNotice(), node ]));
 	}
 });
