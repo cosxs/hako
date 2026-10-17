@@ -13,6 +13,11 @@ const RUN_CONFIG = `${RUN_DIR}/config.json`;
 const CORE = '/usr/bin/sing-box';
 const COMMON = '/usr/share/openbox/common.sh';
 const CORE_INSTALL = '/usr/share/openbox/core-install.sh';
+const SUBSCRIPTION = '/usr/share/openbox/subscription.sh';
+// the page gives up on a call after 20 seconds: leave time for sing-box check
+const SUBSCRIPTION_TIMEOUT = 10;
+// the exit codes of subscription.sh
+const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
 const CORE_UPLOAD = '/tmp/openbox-core-upload.apk';
 const INSTALL_LOG = `${RUN_DIR}/core-install.log`;
 const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
@@ -189,6 +194,44 @@ function profile_path(name) {
 function profile_in_use(name) {
 	const uci = cursor();
 	return uci.get('openbox', 'main', 'source') == 'profile' && uci.get('openbox', 'main', 'profile') == name;
+}
+
+// the section of the subscription of a profile
+function subscription_section(uci, name) {
+	let found = null;
+
+	uci.foreach('openbox', 'subscription', (section) => {
+		if (section.file == name && !found)
+			found = section['.name'];
+	});
+
+	return found;
+}
+
+// whether the value is a sing-box duration of s, m, h and d parts, or 0
+function valid_interval(value) {
+	return value == '0' || match(value, /^([0-9]+[smhd])+$/) != null;
+}
+
+// runs subscription.sh update; changed and reloaded tell what it did
+function update_subscription(name) {
+	const path = `${PROFILE_DIR}/${name}`;
+	const before = readfile(path);
+	const running = profile_in_use(name) && instance_pid() != null;
+
+	const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} 2>&1`);
+	if (!proc)
+		return { result: false, error: 'update_failed', output: '' };
+
+	const output = trim(proc.read('all') ?? '');
+	const code = proc.close();
+
+	if (code != 0)
+		return { result: false, error: SUBSCRIPTION_ERRORS[code] ?? 'update_failed', output: output };
+
+	const changed = readfile(path) != before;
+
+	return { result: true, output: output, changed: changed, reloaded: changed && running };
 }
 
 // a directory of its own for the files of one call, so calls at the same
@@ -466,10 +509,21 @@ const methods = {
 			const uci = cursor();
 			const profiles = [];
 
+			const subscriptions = {};
+			uci.foreach('openbox', 'subscription', (section) => {
+				if (section.file && !subscriptions[section.file])
+					subscriptions[section.file] = {
+						url: section.url,
+						update_interval: section.update_interval,
+						last_update: section.last_update ? +section.last_update : null,
+						last_error: section.last_error
+					};
+			});
+
 			for (let name in lsdir(PROFILE_DIR) ?? []) {
 				const info = stat(`${PROFILE_DIR}/${name}`);
 				if (info?.type == 'file' && match(name, PROFILE_NAME))
-					push(profiles, { name: name, size: info.size, mtime: info.mtime });
+					push(profiles, { name: name, size: info.size, mtime: info.mtime, subscription: subscriptions[name] });
 			}
 
 			return {
@@ -547,17 +601,92 @@ const methods = {
 		}
 	},
 
+	// a subscription goes with its profile
 	profile_delete: {
 		args: { name: 'name' },
 		call: function(req) {
-			const path = profile_path(req.args?.name);
+			const name = req.args?.name;
+			const path = profile_path(name);
 			if (!path)
 				return { result: false, error: 'invalid_name' };
 
-			if (profile_in_use(req.args.name))
+			if (profile_in_use(name))
 				return { result: false, error: 'in_use' };
 
-			return { result: unlink(path) == true };
+			const uci = cursor();
+			const section = subscription_section(uci, name);
+			if (section) {
+				uci.delete('openbox', section);
+				uci.commit('openbox');
+			}
+
+			return { result: unlink(path) == true || section != null };
+		}
+	},
+
+	// adds or changes the subscription of a profile, then downloads it; a
+	// new one is dropped again when its first download fails
+	subscription_save: {
+		args: { file: 'file', url: 'url', update_interval: 'update_interval' },
+		call: function(req) {
+			const name = req.args?.file;
+			const url = req.args?.url;
+			const interval = req.args?.update_interval ?? '';
+
+			if (!profile_path(name))
+				return { result: false, error: 'invalid_name' };
+
+			if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
+				return { result: false, error: 'invalid_url' };
+
+			if (type(interval) != 'string' || (interval != '' && !valid_interval(interval)))
+				return { result: false, error: 'invalid_interval' };
+
+			const uci = cursor();
+			let section = subscription_section(uci, name);
+			const created = !section;
+
+			// a file of its own is not taken over by a subscription
+			if (created && access(`${PROFILE_DIR}/${name}`))
+				return { result: false, error: 'exists' };
+
+			if (created) {
+				section = uci.add('openbox', 'subscription');
+				uci.set('openbox', section, 'file', name);
+			}
+			uci.set('openbox', section, 'url', url);
+			if (interval == '' || interval == '0')
+				uci.delete('openbox', section, 'update_interval');
+			else
+				uci.set('openbox', section, 'update_interval', interval);
+			uci.commit('openbox');
+
+			const res = update_subscription(name);
+
+			if (!res.result && created && !access(`${PROFILE_DIR}/${name}`)) {
+				const uci = cursor();
+				const section = subscription_section(uci, name);
+				if (section) {
+					uci.delete('openbox', section);
+					uci.commit('openbox');
+				}
+			}
+
+			return res;
+		}
+	},
+
+	subscription_update: {
+		args: { file: 'file' },
+		call: function(req) {
+			const name = req.args?.file;
+			if (!profile_path(name))
+				return { result: false, error: 'invalid_name' };
+
+			if (!subscription_section(cursor(), name))
+				return { result: false, error: 'not_found' };
+
+			return update_subscription(name);
 		}
 	},
 

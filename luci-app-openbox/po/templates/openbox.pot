@@ -16,10 +16,31 @@ msgstr ""
 msgid "%s (native JSON)"
 msgstr ""
 
+msgid "%s downloaded."
+msgstr ""
+
+msgid "%s downloaded; sing-box was reloaded."
+msgstr ""
+
+msgid "%s is up to date."
+msgstr ""
+
+msgid "%s updated."
+msgstr ""
+
+msgid "%s updated; sing-box was reloaded."
+msgstr ""
+
+msgid "0 updates only by hand."
+msgstr ""
+
 msgid "0 uses the AEAD protocol; servers of the legacy protocol need 1."
 msgstr ""
 
 msgid "0-RTT handshake"
+msgstr ""
+
+msgid "A URL that returns a full sing-box JSON config. It is downloaded as a profile and updated while OpenBox runs."
 msgstr ""
 
 msgid "A file with the same name is replaced."
@@ -32,6 +53,9 @@ msgid "A local file used at start while the rule set has not been downloaded yet
 msgstr ""
 
 msgid "A minimal sing-box client for OpenWrt."
+msgstr ""
+
+msgid "A profile with this name exists and is not a subscription."
 msgstr ""
 
 msgid "A regular expression matched against node names."
@@ -59,6 +83,9 @@ msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 
 msgstr ""
 
 msgid "Another outbound already uses this name."
+msgstr ""
+
+msgid "Another update is running; try again later."
 msgstr ""
 
 msgid "Any host key is accepted if empty."
@@ -214,6 +241,9 @@ msgstr ""
 msgid "Download bandwidth"
 msgstr ""
 
+msgid "Download failed."
+msgstr ""
+
 msgid "Download via"
 msgstr ""
 
@@ -251,6 +281,9 @@ msgid "Expecting an HTTP or HTTPS URL"
 msgstr ""
 
 msgid "Expecting an array of rules"
+msgstr ""
+
+msgid "Expecting an http:// or https:// URL."
 msgstr ""
 
 msgid "Expecting three numbers such as 0,0,0"
@@ -370,6 +403,9 @@ msgstr ""
 msgid "Invalid file name."
 msgstr ""
 
+msgid "Invalid update interval."
+msgstr ""
+
 msgid "Invert"
 msgstr ""
 
@@ -386,6 +422,9 @@ msgid "LAN devices can use the router as an HTTP or SOCKS5 proxy at this port, w
 msgstr ""
 
 msgid "LAN interfaces"
+msgstr ""
+
+msgid "Last update failed: %s"
 msgstr ""
 
 msgid "Latest release from GitHub"
@@ -763,6 +802,12 @@ msgstr ""
 msgid "Stop"
 msgstr ""
 
+msgid "Subscribe"
+msgstr ""
+
+msgid "Subscribe…"
+msgstr ""
+
 msgid "Switched; sing-box was reloaded."
 msgstr ""
 
@@ -841,6 +886,9 @@ msgstr ""
 msgid "The file is removed from the router."
 msgstr ""
 
+msgid "The name of an existing subscription changes its URL and interval."
+msgstr ""
+
 msgid "The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page."
 msgstr ""
 
@@ -854,6 +902,9 @@ msgid "The rule applies when the condition does not match."
 msgstr ""
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
+msgstr ""
+
+msgid "This is a subscription; its next update replaces the changes made here."
 msgstr ""
 
 msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
@@ -919,16 +970,37 @@ msgstr ""
 msgid "Unable to switch the outbound of %s."
 msgstr ""
 
+msgid "Unable to update %s"
+msgstr ""
+
 msgid "Unable to write the file."
 msgstr ""
 
 msgid "Unknown error"
 msgstr ""
 
+msgid "Update"
+msgstr ""
+
+msgid "Update failed."
+msgstr ""
+
 msgid "Update interval"
 msgstr ""
 
 msgid "Update sing-box…"
+msgstr ""
+
+msgid "Updated by hand"
+msgstr ""
+
+msgid "Updated every %d hours"
+msgstr ""
+
+msgid "Updated every %s"
+msgstr ""
+
+msgid "Updated every hour"
 msgstr ""
 
 msgid "Upload an apk package"
@@ -1003,10 +1075,16 @@ msgstr ""
 msgid "hours"
 msgstr ""
 
+msgid "last %s"
+msgstr ""
+
 msgid "minutes"
 msgstr ""
 
 msgid "ms"
+msgstr ""
+
+msgid "not updated yet"
 msgstr ""
 
 msgid "seconds"

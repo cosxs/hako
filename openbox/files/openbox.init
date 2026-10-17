@@ -12,15 +12,19 @@ extra_command 'takeover_core' 'Stop and disable the service of the sing-box pack
 
 CRON_TAG="#openbox"
 RUNNER="/usr/share/openbox/run.sh"
+SUBSCRIPTION="/usr/share/openbox/subscription.sh"
 CRONTAB="/etc/crontabs/root"
 
-# rotate the logs daily at midnight while the service is running
+# while the service is running: rotate the logs daily at midnight, and
+# update the subscriptions whose interval is up hourly
 set_cron() {
 	mkdir -p "${CRONTAB%/*}"
 	touch "$CRONTAB"
 	sed -i "/$CRON_TAG\$/d" "$CRONTAB"
 
-	[ "$1" = 1 ] && echo "0 0 * * * /etc/init.d/openbox rotate_logs $CRON_TAG" >> "$CRONTAB"
+	[ "$1" = 1 ] || return 0
+	echo "0 0 * * * /etc/init.d/openbox rotate_logs $CRON_TAG" >> "$CRONTAB"
+	echo "30 * * * * $SUBSCRIPTION due >/dev/null 2>&1 $CRON_TAG" >> "$CRONTAB"
 }
 
 start_service() {

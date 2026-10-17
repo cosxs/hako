@@ -52,6 +52,7 @@ define Package/openbox/install
 	$(INSTALL_DATA) ./files/common.sh $(1)/usr/share/openbox/common.sh
 	$(INSTALL_BIN) ./files/core-install.sh $(1)/usr/share/openbox/core-install.sh
 	$(INSTALL_BIN) ./files/run.sh $(1)/usr/share/openbox/run.sh
+	$(INSTALL_BIN) ./files/subscription.sh $(1)/usr/share/openbox/subscription.sh
 
 	$(INSTALL_DIR) $(1)/usr/share/openbox/ucode
 	$(INSTALL_DATA) ./files/ucode/generate.uc $(1)/usr/share/openbox/ucode/generate.uc

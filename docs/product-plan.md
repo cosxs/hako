@@ -82,6 +82,13 @@ config openbox 'logs'              # OpenBox 的日志管理
 	option auto_clean '1'          # 自动清理按天保存的旧日志
 	option retention_days '7'      # 保留天数（含当天）
 
+config subscription                # 示例：订阅，OpenBox 自己的概念，生成器不读；配置文件页「订阅…」添加，匿名 section
+	option file 'my.json'          # /etc/openbox/profiles 里的文件名，规则同配置文件名，每个文件至多一个订阅
+	option url 'https://example.com/sing-box.json'  # 返回完整的 sing-box JSON 配置（http / https）
+	option update_interval '24h'   # sing-box 时长写法（界面按小时填）；不写或 '0' 时只手动更新
+	option last_update '1792230866'  # 由 subscription.sh 写入：最近一次成功更新的时间（epoch）
+	# option last_error ''         # 由 subscription.sh 写入：最近一次失败的原因，成功后删除
+
 config log 'log'                   # → log
 	option level 'warn'            # info 及更低级别会为每个连接记录日志
 	option timestamp '1'
@@ -396,13 +403,25 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 
 `/etc/config/openbox` 是配置文件，升级时保留，默认值的改动不会自动出现在老用户的配置里。`main.config_version` 记录配置格式的版本；软件包附带的 uci-defaults 脚本在每次安装或升级时运行 `migrate.uc`，按版本逐级执行迁移步骤（例如补上新增的 section），最后把版本号更新到最新。新安装的配置已是最新版本，不执行任何步骤。改动默认值时，必须同时加一个迁移步骤。
 
+### 3.3.4 订阅更新
+
+订阅是一个返回完整 sing-box JSON 配置的 URL，下载后就是 `/etc/openbox/profiles` 里的一个普通配置文件，可以「使用」、编辑、下载。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
+
+- **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新时 10 秒，LuCI 的调用 20 秒超时）；UA 为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
+- **校验**：必须是 JSON 对象，且通过 `sing-box check`（没装内核时跳过检查）；任何一步失败都不动原文件，原因写进 `last_error`。
+- **替换**：内容与原文件相同时不写闪存、不重载；否则先复制到同目录的临时文件，再改名原子替换。成功后写 `last_update`、删掉 `last_error`。
+- **使用中则重载**：这个文件正是 `main.source 'profile'` 且 `main.profile` 所指的，并且服务在运行，就执行 `/etc/init.d/openbox reload`。
+- **定时**：服务运行期间，`/etc/crontabs/root` 里带 `#openbox` 标记的一行每小时（第 30 分）执行 `subscription.sh due`，与日志轮转一起随服务启停写入、删除；所以 **OpenBox 停止时订阅不会自动更新**。距 `last_update` 达到 `update_interval`（留 5 分钟余量，避免每小时的检查刚好差几秒）或从未更新过的才下载。
+- 同一时间只有一次更新（`flock`）；页面上手动更新时如果正有更新在进行，提示稍后再试。输出同时写进插件日志 `app.log`。下载失败不影响正在运行的服务。
+- 在配置文件页添加订阅时先下载一次；第一次就失败的新订阅不保存。已有同名的普通文件时报错，不会把它变成订阅。删除文件时一并删除它的订阅。
+
 ### 3.4 组件
 
 ```
 LuCI JS 界面（form.Map 直接读写 UCI）
    │ ubus / rpcd
    ▼
-rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点（经 clash API）；配置文件的列表、读写、检查、切换
+rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点（经 clash API）；配置文件的列表、读写、检查、切换；订阅的保存与更新（经 subscription.sh）
    │
    ▼
 /etc/init.d/openbox（procd）
@@ -430,6 +449,7 @@ openbox/
 │       ├── run.sh              # procd 运行它，它运行 sing-box 并管理 TProxy 规则
 │       ├── common.sh
 │       ├── core-install.sh
+│       ├── subscription.sh     # 下载、检查并替换订阅的配置文件；cron 每小时执行 due
 │       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
 │       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
 │                               # clash.uc、config.uc 为共享模块，装到 /usr/share/ucode/openbox/
@@ -452,7 +472,7 @@ openbox/
 | 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
-| 配置文件 | 一张表列出「由 OpenBox 生成」和 `/etc/openbox/profiles` 中的 JSON 文件（大小、修改时间、使用中）；生成的配置：使用、查看（只读，附生成器警告）；文件：使用、编辑、下载、删除（使用中的不能删除）。新建从当前生成的配置开始，上传时填文件名（字母、数字、`.`、`-`、`_`，以 `.json` 结尾），同名覆盖。编辑器可「检查」（`sing-box check`）、保存；使用中的文件先检查通过才保存并重载。切换前也要检查通过，运行中则立即重载。使用配置文件时，接管、策略、路由规则和内核设置页顶部提示这些设置暂不生效 |
+| 配置文件 | 一张表列出「由 OpenBox 生成」和 `/etc/openbox/profiles` 中的 JSON 文件（大小、修改时间、使用中）；生成的配置：使用、查看（只读，附生成器警告）；文件：使用、编辑、下载、删除（使用中的不能删除）。新建从当前生成的配置开始，上传时填文件名（字母、数字、`.`、`-`、`_`，以 `.json` 结尾），同名覆盖。编辑器可「检查」（`sing-box check`）、保存；使用中的文件先检查通过才保存并重载。切换前也要检查通过，运行中则立即重载。「订阅…」填文件名（默认 `sub.json`）、URL 和更新间隔（小时，0 为只手动更新），保存后立即下载（见 3.3.4）；订阅的文件名下显示 URL 和「每 N 小时更新 · 上次时间」或上次失败的原因，多一个「更新」按钮；编辑订阅文件时提示下次更新会覆盖修改。使用配置文件时，接管、策略、路由规则和内核设置页顶部提示这些设置暂不生效 |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 
 设置放在用户处理那件事时会去找的页面上；很少改、偏技术的 sing-box 全局设置放进「内核设置」。

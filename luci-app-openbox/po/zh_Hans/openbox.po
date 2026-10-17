@@ -18,11 +18,32 @@ msgstr "%s（反向）"
 msgid "%s (native JSON)"
 msgstr "%s（原生 JSON）"
 
+msgid "%s downloaded."
+msgstr "已下载 %s。"
+
+msgid "%s downloaded; sing-box was reloaded."
+msgstr "已下载 %s，sing-box 已重载。"
+
+msgid "%s is up to date."
+msgstr "%s 已是最新。"
+
+msgid "%s updated."
+msgstr "已更新 %s。"
+
+msgid "%s updated; sing-box was reloaded."
+msgstr "已更新 %s，sing-box 已重载。"
+
+msgid "0 updates only by hand."
+msgstr "填 0 则只手动更新。"
+
 msgid "0 uses the AEAD protocol; servers of the legacy protocol need 1."
 msgstr "0 使用 AEAD 协议；旧协议的服务器需要填 1。"
 
 msgid "0-RTT handshake"
 msgstr "0-RTT 握手"
+
+msgid "A URL that returns a full sing-box JSON config. It is downloaded as a profile and updated while OpenBox runs."
+msgstr "返回完整 sing-box JSON 配置的 URL。下载后作为一个配置文件，OpenBox 运行期间定期更新。"
 
 msgid "A file with the same name is replaced."
 msgstr "同名文件会被覆盖。"
@@ -35,6 +56,9 @@ msgstr "启动时规则集还没下载下来，先用这个本地文件。"
 
 msgid "A minimal sing-box client for OpenWrt."
 msgstr "在 OpenWrt 上运行 sing-box 的简约客户端。"
+
+msgid "A profile with this name exists and is not a subscription."
+msgstr "已有同名的配置文件，且不是订阅。"
 
 msgid "A regular expression matched against node names."
 msgstr "按节点名称匹配的正则表达式。"
@@ -62,6 +86,9 @@ msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box DNS 规则<
 
 msgid "Another outbound already uses this name."
 msgstr "已有其他出站使用此名称。"
+
+msgid "Another update is running; try again later."
+msgstr "另一个更新正在进行，请稍后再试。"
 
 msgid "Any host key is accepted if empty."
 msgstr "留空时接受任何主机密钥。"
@@ -216,6 +243,9 @@ msgstr "下载"
 msgid "Download bandwidth"
 msgstr "下行带宽"
 
+msgid "Download failed."
+msgstr "下载失败。"
+
 msgid "Download via"
 msgstr "下载方式"
 
@@ -254,6 +284,9 @@ msgstr "需要是 HTTP 或 HTTPS 地址"
 
 msgid "Expecting an array of rules"
 msgstr "需要是规则数组"
+
+msgid "Expecting an http:// or https:// URL."
+msgstr "请输入 http:// 或 https:// 开头的 URL。"
 
 msgid "Expecting three numbers such as 0,0,0"
 msgstr "需要是 0,0,0 这样的三个数字"
@@ -372,6 +405,9 @@ msgstr "JSON 格式错误：%s"
 msgid "Invalid file name."
 msgstr "文件名无效。"
 
+msgid "Invalid update interval."
+msgstr "更新间隔无效。"
+
 msgid "Invert"
 msgstr "反向匹配"
 
@@ -389,6 +425,9 @@ msgstr "局域网设备可以把路由器的这个端口设为 HTTP 或 SOCKS5 �
 
 msgid "LAN interfaces"
 msgstr "局域网接口"
+
+msgid "Last update failed: %s"
+msgstr "上次更新失败：%s"
 
 msgid "Latest release from GitHub"
 msgstr "从 GitHub 安装最新版"
@@ -765,6 +804,12 @@ msgstr "状态"
 msgid "Stop"
 msgstr "停止"
 
+msgid "Subscribe"
+msgstr "订阅"
+
+msgid "Subscribe…"
+msgstr "订阅…"
+
 msgid "Switched; sing-box was reloaded."
 msgstr "已切换，sing-box 已重载。"
 
@@ -843,6 +888,9 @@ msgstr "文件不是有效的 JSON。"
 msgid "The file is removed from the router."
 msgstr "文件会从路由器上删除。"
 
+msgid "The name of an existing subscription changes its URL and interval."
+msgstr "填已有订阅的文件名，则修改它的 URL 和更新间隔。"
+
 msgid "The profile %s is in use. These settings take effect after switching to the generated config on the Profiles page."
 msgstr "当前使用配置文件 %s，这里的设置要在「配置文件」页切换回 OpenBox 生成的配置后才生效。"
 
@@ -857,6 +905,9 @@ msgstr "条件不满足时规则生效。"
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
 msgstr "sing-box 发布页中的 sing-box_*_openwrt_%s.apk 文件。"
+
+msgid "This is a subscription; its next update replaces the changes made here."
+msgstr "这是订阅文件，下次更新会覆盖这里的修改。"
 
 msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
 msgstr "这条规则有多个条件，是在页面之外设置的。这里可以改动作和注释，条件保持原样。"
@@ -921,17 +972,38 @@ msgstr "无法切换配置"
 msgid "Unable to switch the outbound of %s."
 msgstr "无法切换 %s 的节点。"
 
+msgid "Unable to update %s"
+msgstr "无法更新 %s"
+
 msgid "Unable to write the file."
 msgstr "无法写入文件。"
 
 msgid "Unknown error"
 msgstr "未知错误"
 
+msgid "Update"
+msgstr "更新"
+
+msgid "Update failed."
+msgstr "更新失败。"
+
 msgid "Update interval"
 msgstr "更新间隔"
 
 msgid "Update sing-box…"
 msgstr "更新 sing-box…"
+
+msgid "Updated by hand"
+msgstr "手动更新"
+
+msgid "Updated every %d hours"
+msgstr "每 %d 小时更新"
+
+msgid "Updated every %s"
+msgstr "每 %s 更新"
+
+msgid "Updated every hour"
+msgstr "每小时更新"
 
 msgid "Upload an apk package"
 msgstr "上传 apk 安装包"
@@ -1005,11 +1077,17 @@ msgstr "gRPC 服务名"
 msgid "hours"
 msgstr "小时"
 
+msgid "last %s"
+msgstr "上次 %s"
+
 msgid "minutes"
 msgstr "分钟"
 
 msgid "ms"
 msgstr "毫秒"
+
+msgid "not updated yet"
+msgstr "尚未更新"
 
 msgid "seconds"
 msgstr "秒"
