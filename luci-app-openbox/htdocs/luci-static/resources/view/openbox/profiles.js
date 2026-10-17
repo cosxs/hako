@@ -339,7 +339,7 @@ return view.extend({
 			if (!res.result)
 				return this.showError(_('Unable to switch the config'), res);
 
-			ui.addNotification(null, E('p', res.reloaded ? _('Switched; sing-box was reloaded.') : _('Switched; used when OpenBox starts.')), 'info');
+			ui.addTimeLimitedNotification(null, E('p', res.reloaded ? _('Switched; sing-box was reloaded.') : _('Switched; used when OpenBox starts.')), 5000, 'info');
 
 			// the save button of an open profile follows whether it is in use
 			return this.refresh().then(() => {
@@ -460,9 +460,9 @@ return view.extend({
 					]));
 
 				ui.hideModal();
-				ui.addNotification(null, E('p', res.reloaded
+				ui.addTimeLimitedNotification(null, E('p', res.reloaded
 					? _('%s downloaded; sing-box was reloaded.').format(file)
-					: _('%s downloaded.').format(file)), 'info');
+					: _('%s downloaded.').format(file)), 5000, 'info');
 
 				return this.refresh();
 			});
@@ -502,11 +502,11 @@ return view.extend({
 			if (!res.result)
 				this.showError(_('Unable to update %s').format(name), res);
 			else if (!res.changed)
-				ui.addNotification(null, E('p', _('%s is up to date.').format(name)), 'info');
+				ui.addTimeLimitedNotification(null, E('p', _('%s is up to date.').format(name)), 5000, 'info');
 			else
-				ui.addNotification(null, E('p', res.reloaded
+				ui.addTimeLimitedNotification(null, E('p', res.reloaded
 					? _('%s updated; sing-box was reloaded.').format(name)
-					: _('%s updated.').format(name)), 'info');
+					: _('%s updated.').format(name)), 5000, 'info');
 
 			// an open file without changes shows what was downloaded
 			const editing = this.editing;
@@ -539,7 +539,7 @@ return view.extend({
 
 			editing.saved = content;
 			dom.content(editing.status, '');
-			ui.addNotification(null, E('p', res.reloaded ? _('Saved; sing-box was reloaded.') : _('Saved.')), 'info');
+			ui.addTimeLimitedNotification(null, E('p', res.reloaded ? _('Saved; sing-box was reloaded.') : _('Saved.')), 5000, 'info');
 
 			return this.refresh();
 		});

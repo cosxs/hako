@@ -224,9 +224,10 @@ return view.extend({
 					return window.setTimeout(check, 2000);
 
 				close.disabled = false;
-				ui.addNotification(null, E('p', st.success
-					? _('sing-box installed.')
-					: _('Installation failed, see the output for details.')), st.success ? 'info' : 'danger');
+				if (st.success)
+					ui.addTimeLimitedNotification(null, E('p', _('sing-box installed.')), 5000, 'info');
+				else
+					ui.addNotification(null, E('p', _('Installation failed, see the output for details.')), 'danger');
 
 				return this.refresh();
 			});
