@@ -165,6 +165,47 @@ dns_inbound() {
 	echo "$listen $port"
 }
 
+# tproxy_port: the listen port of the (first) tproxy inbound of the config
+# sing-box runs
+tproxy_port() {
+	jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tproxy"].listen_port' | head -n 1
+}
+
+# wait_for_listen <port> <pid>: wait up to about 10 seconds, half a second
+# apart, until a TCP port is listened on; fails at once when process <pid>
+# exits (1), or when the time is up (2)
+wait_for_listen() {
+	local i=0
+
+	while [ "$i" -lt 20 ]; do
+		kill -0 "$2" 2> /dev/null || return 1
+		netstat -lnt 2> /dev/null | awk -v p="$1" '$4 ~ ":" p "$" { found = 1 } END { exit !found }' && return 0
+		ucode -e 'sleep(500)'
+		i=$((i + 1))
+	done
+
+	return 2
+}
+
+# core_localtime: sing-box (Go) takes no POSIX TZ string such as CST-8, only
+# a zoneinfo name or a TZif file, and OpenWrt has no zoneinfo by default.
+# Write a TZif file holding just one UTC type and the zone of /etc/TZ as its
+# footer, which Go uses for all times, and print its path. Only for sing-box:
+# musl reads no such file, so other programs keep their TZ.
+core_localtime() {
+	local tz z h file="$RUN_DIR/localtime"
+
+	tz=$(cat /etc/TZ 2> /dev/null)
+	[ -n "$tz" ] || return 1
+
+	# version 2 header and data, all counts 0 but one type and 4 chars
+	z='\000\000\000\000'
+	h="TZif2\000\000\000$z$z$z$z$z$z$z\000\000\000\001\000\000\000\004$z\000\000UTC\000"
+	# shellcheck disable=SC2059
+	printf "$h$h\n%s\n" "$tz" > "$file" || return 1
+	echo "$file"
+}
+
 # dnsmasq_dirs: the conf-dir of each dnsmasq instance, as its init script
 # sets it up
 dnsmasq_dirs() {
@@ -290,6 +331,7 @@ firewall_down() {
 	local priority table
 
 	nft delete table inet openbox 2> /dev/null
+	rm -f "$RUN_DIR/firewall.nft"
 
 	if [ -f "$FIREWALL_STATE" ]; then
 		read -r priority table < "$FIREWALL_STATE"

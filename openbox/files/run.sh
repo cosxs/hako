@@ -11,6 +11,8 @@
 . /usr/share/openbox/common.sh
 
 pid=
+port=
+tz=
 tun_route=
 
 # decided once: the config file may be replaced by a reload before this exits
@@ -43,12 +45,28 @@ if [ -n "$tun_route" ]; then
 	core_cleanup
 fi
 
-"$CORE" run -c "$RUN_CONFIG" -D "$RUN_DIR" --disable-color >> "$CORE_LOG" 2>&1 &
+# local time in the core log, for sing-box only: this shell, and dnsmasq
+# restarted from it, keep reading /etc/TZ themselves
+tz=$(core_localtime)
+# shellcheck disable=SC2086
+env ${tz:+TZ=$tz} "$CORE" run -c "$RUN_CONFIG" -D "$RUN_DIR" --disable-color >> "$CORE_LOG" 2>&1 &
 pid=$!
 
 if uses_tproxy || [ -n "$(dns_inbound)" ]; then
 	# let sing-box listen before traffic and queries are sent to it
-	sleep 1
+	if uses_tproxy; then
+		port=$(tproxy_port)
+	else
+		port=$(dns_inbound)
+		port=${port#* }
+	fi
+	# a raw JSON config may leave the port out: nothing to wait for
+	if [ -n "$port" ]; then
+		wait_for_listen "$port" "$pid"
+		if [ $? = 2 ]; then
+			log "sing-box does not listen on port $port yet, going on"
+		fi
+	fi
 	if kill -0 "$pid" 2> /dev/null; then
 		if uses_tproxy; then
 			firewall_up

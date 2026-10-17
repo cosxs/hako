@@ -1,6 +1,6 @@
 'use strict';
 
-import { readfile, writefile, unlink, access, popen, open, stat, lsdir, rename } from 'fs';
+import { readfile, writefile, unlink, access, popen, open, stat, lsdir, rename, mkdtemp, rmdir } from 'fs';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
 import * as socket from 'socket';
@@ -17,8 +17,6 @@ const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
 const LOG_DIR = '/var/log/openbox';
 const LOG_NAMES = [ 'app', 'core' ];
 const LOG_BYTES = 256 * 1024;
-const CHECK_FILE = `${RUN_DIR}/check.json`;
-const CHECK_LOG = `${RUN_DIR}/check.log`;
 // also safe to pass to the shell unquoted
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json$/;
 
@@ -239,16 +237,34 @@ function profile_in_use(name) {
 	return uci.get('openbox', 'main', 'source') == 'profile' && uci.get('openbox', 'main', 'profile') == name;
 }
 
+// a directory of its own for the files of one call, so calls at the same
+// time never read each other's; removed with its files by remove_temp()
+function make_temp() {
+	system(`mkdir -p ${RUN_DIR}`);
+	return mkdtemp(`${RUN_DIR}/check-XXXXXX`);
+}
+
+function remove_temp(dir) {
+	for (let name in lsdir(dir) ?? [])
+		unlink(`${dir}/${name}`);
+	rmdir(dir);
+}
+
 // sing-box check on a config file, with what it printed but without the
-// colors of its log; passes when sing-box is not installed yet
-function check_config(path) {
+// colors of its log; passes when sing-box is not installed yet. The log goes
+// into dir when given (left to the caller), else into a directory of its own
+function check_config(path, dir) {
 	if (!access(CORE, 'x'))
 		return { result: true, output: '' };
 
-	system(`mkdir -p ${RUN_DIR}`);
-	const passed = system(`${CORE} check -c ${path} -D ${RUN_DIR} > ${CHECK_LOG} 2>&1`) == 0;
-	const output = replace(readfile(CHECK_LOG) ?? '', regexp('\x1b\\[[0-9;]*m', 'g'), '');
-	unlink(CHECK_LOG);
+	const temp = dir ?? make_temp();
+	if (!temp)
+		return { result: false, output: 'cannot create a temporary file' };
+
+	const passed = system(`${CORE} check -c ${path} -D ${RUN_DIR} > ${temp}/check.log 2>&1`) == 0;
+	const output = replace(readfile(`${temp}/check.log`) ?? '', regexp('\x1b\\[[0-9;]*m', 'g'), '');
+	if (!dir)
+		remove_temp(temp);
 
 	return { result: passed, output: trim(output) };
 }
@@ -262,10 +278,13 @@ function check_content(content) {
 		return { result: false, error: 'invalid_json', output: `${e}` };
 	}
 
-	system(`mkdir -p ${RUN_DIR}`);
-	writefile(CHECK_FILE, content);
-	const check = check_config(CHECK_FILE);
-	unlink(CHECK_FILE);
+	const temp = make_temp();
+	if (!temp)
+		return { result: false, error: 'check_failed', output: 'cannot create a temporary file' };
+
+	writefile(`${temp}/check.json`, content);
+	const check = check_config(`${temp}/check.json`, temp);
+	remove_temp(temp);
 
 	if (!check.result)
 		check.error = 'check_failed';
@@ -333,7 +352,6 @@ const methods = {
 		}
 	},
 
-	// the outbound mode (clash_mode) of the running sing-box
 	// the outbound modes of the config OpenBox runs, the one chosen in
 	// main.mode (set on sing-box when the settings are applied), and the one
 	// sing-box runs with
@@ -522,10 +540,13 @@ const methods = {
 	// the generator about what it skipped
 	generated: {
 		call: function() {
-			system(`mkdir -p ${RUN_DIR}`);
-			const content = command_output(`ucode ${GENERATOR} 2> ${CHECK_LOG}`);
-			const warnings = trim(readfile(CHECK_LOG) ?? '');
-			unlink(CHECK_LOG);
+			const temp = make_temp();
+			if (!temp)
+				return { error: 'generate_failed', warnings: 'cannot create a temporary file' };
+
+			const content = command_output(`ucode ${GENERATOR} 2> ${temp}/generate.log`);
+			const warnings = trim(readfile(`${temp}/generate.log`) ?? '');
+			remove_temp(temp);
 
 			return content ? { content: content, warnings: warnings } : { error: 'generate_failed', warnings: warnings };
 		}
@@ -592,7 +613,7 @@ const methods = {
 		args: { name: 'name' },
 		call: function(req) {
 			const name = req.args?.name || null;
-			let path = CHECK_FILE;
+			let path, temp;
 
 			if (name) {
 				path = profile_path(name);
@@ -600,14 +621,18 @@ const methods = {
 					return { result: false, error: 'not_found' };
 			}
 			else {
-				system(`mkdir -p ${RUN_DIR}`);
-				if (system(`ucode ${GENERATOR} > ${CHECK_FILE} 2>/dev/null`) != 0)
+				temp = make_temp();
+				path = `${temp}/check.json`;
+				if (!temp || system(`ucode ${GENERATOR} > ${path} 2>/dev/null`) != 0) {
+					if (temp)
+						remove_temp(temp);
 					return { result: false, error: 'generate_failed' };
+				}
 			}
 
-			const check = check_config(path);
-			if (!name)
-				unlink(CHECK_FILE);
+			const check = check_config(path, temp);
+			if (temp)
+				remove_temp(temp);
 
 			if (!check.result) {
 				check.error = 'check_failed';

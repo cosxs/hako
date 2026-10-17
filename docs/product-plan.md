@@ -163,7 +163,7 @@ config experimental 'cache_file'   # → experimental.cache_file，保存出站�
 
 config inbound 'tun'               # → inbounds[]；enabled 即接管总开关，默认开启（TUN）
 	option enabled '1'
-	option type 'tun'              # 目前只支持 tun
+	option type 'tun'              # tun；TProxy 见下面的 'tproxy' 段
 	option tag 'tun-in'
 	option interface_name 'openbox-tun'
 	list   address '172.19.0.1/30'
