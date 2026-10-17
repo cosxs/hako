@@ -278,21 +278,62 @@ uses_tun_route() {
 	[ -n "$(jsonfilter -q -i "$RUN_CONFIG" -e '@.inbounds[@.type="tun" && @.auto_route=true].type')" ]
 }
 
-# core_cleanup: remove what a tun inbound with auto_route sets up. sing-box
-# removes it itself when it stops, but not when it crashes or is killed, and
-# its nftables table then sends traffic nowhere. The priorities and the table
-# are sing-box's defaults (iproute2_rule_index, iproute2_table_index), which
-# OpenBox does not change; priority 1 holds its redirect routes.
+# tun_option <name> <default>: an option of the tun inbound with auto_route in
+# the config sing-box runs, or sing-box's default when it is left out
+tun_option() {
+	local value
+
+	value=$(jsonfilter -q -i "$RUN_CONFIG" -e "@.inbounds[@.type=\"tun\" && @.auto_route=true].$1" | head -n 1)
+	echo "${value:-$2}"
+}
+
+# tun_route_params: the route table, rule priority, input and output marks
+# and fallback rule priority of that tun inbound, for core_cleanup; marks may
+# be written as numbers or hex strings, ip prints them in hex
+tun_route_params() {
+	echo "$(tun_option iproute2_table_index 2022)" \
+		"$(tun_option iproute2_rule_index 9000)" \
+		"$(printf '0x%x' "$(tun_option auto_redirect_input_mark 0x2023)")" \
+		"$(printf '0x%x' "$(tun_option auto_redirect_output_mark 0x2024)")" \
+		"$(tun_option auto_redirect_iproute2_fallback_rule_index 32768)"
+}
+
+# core_cleanup <table> <priority> <input mark> <output mark> <fallback>: remove
+# what a tun inbound with auto_route sets up, as given by tun_route_params.
+# sing-box removes it itself when it stops, but not when it crashes or is
+# killed, and its nftables table then sends traffic nowhere. Only the rules
+# that look like its own are removed, one by one: at priorities <priority> to
+# <priority>+3 those with its marks, table, goto or nop; at <fallback> those
+# looking up its table; and at priority 1 the one auto_redirect adds for its
+# redirect routes, whose table number is random and in no config.
 core_cleanup() {
-	local family priority
+	local table="$1" start="$2" input="$3" output="$4" fallback="$5"
+	local family pref rest
 
 	nft delete table inet sing-box 2> /dev/null
 
 	for family in -4 -6; do
-		for priority in 1 9000 9001 9002 9003 32768; do
-			while ip "$family" rule del pref "$priority" 2> /dev/null; do :; done
+		ip "$family" rule 2> /dev/null | awk -v table="$table" -v start="$start" \
+			-v input="$input" -v output="$output" -v fallback="$fallback" '
+			{
+				pref = $1; sub(/:$/, "", pref); pref += 0
+				rest = $0; sub(/^[^:]*:[ \t]*/, "", rest)
+				line = " " rest " "
+				if (pref >= start && pref <= start + 3 &&
+				    (line ~ " fwmark (" input "|" output ")[ /]" ||
+				     line ~ " lookup " table " " || line ~ / goto / || line ~ / nop /) ||
+				    pref == fallback && line ~ " lookup " table " " ||
+				    pref == 1 && rest ~ /^from all lookup [0-9]+$/ && $NF !~ /^(0|253|254|255)$/)
+					print pref, rest
+			}' | while read -r pref rest; do
+			# shellcheck disable=SC2086
+			ip "$family" rule del pref "$pref" $rest 2> /dev/null
+			# the table of the redirect routes is left with them
+			case "$pref $rest" in
+			"1 from all lookup "*) ip "$family" route flush table "${rest##* }" 2> /dev/null ;;
+			esac
 		done
-		ip "$family" route flush table 2022 2> /dev/null
+		ip "$family" route flush table "$table" 2> /dev/null
 	done
 
 	return 0

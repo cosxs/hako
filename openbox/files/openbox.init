@@ -58,6 +58,7 @@ start_service() {
 		return 1
 	fi
 
+	local config_changed=
 	if prepare_config; then
 		log "start"
 	elif [ -f "$RUN_CONFIG" ]; then
@@ -77,9 +78,13 @@ start_service() {
 
 	set_cron 1
 
+	# a new config makes procd restart the instance, and the runner sets the
+	# outbound mode and the tproxy firewall itself
+	[ -n "$config_changed" ] && return 0
+
 	# a reload that leaves sing-box running: set the outbound mode on it, and
 	# the tproxy firewall again if its rules changed (rule sets are bypassed
-	# except in Global mode); after a restart the runner does both
+	# except in Global mode)
 	apply_mode
 	if [ -f "$FIREWALL_STATE" ] && uses_tproxy &&
 	   ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
@@ -103,7 +108,8 @@ refresh_firewall() {
 }
 
 # writes the config to run into $RUN_CONFIG: generated from UCI, or a raw JSON
-# profile when main.source is "profile"; it must pass "sing-box check" first
+# profile when main.source is "profile"; it must pass "sing-box check" first.
+# Sets config_changed when it differs from the previous one, or there was none.
 prepare_config() {
 	local staged="$RUN_DIR/config.new.json"
 	local source profile
@@ -131,6 +137,9 @@ prepare_config() {
 		return 1
 	fi
 
+	if ! cmp -s "$staged" "$RUN_CONFIG"; then
+		config_changed=1
+	fi
 	mv -f "$staged" "$RUN_CONFIG"
 }
 

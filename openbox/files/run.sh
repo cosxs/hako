@@ -17,7 +17,7 @@ tun_route=
 
 # decided once: the config file may be replaced by a reload before this exits
 if uses_tun_route; then
-	tun_route=1
+	tun_route=$(tun_route_params)
 fi
 
 stop() {
@@ -34,7 +34,8 @@ cleanup() {
 	firewall_down
 	dnsmasq_down
 	if [ -n "$tun_route" ]; then
-		core_cleanup
+		# shellcheck disable=SC2086
+		core_cleanup $tun_route
 	fi
 	flush_dns_cache
 }
@@ -42,7 +43,8 @@ cleanup() {
 trap stop TERM INT
 
 if [ -n "$tun_route" ]; then
-	core_cleanup
+	# shellcheck disable=SC2086
+	core_cleanup $tun_route
 fi
 
 # local time in the core log, for sing-box only: this shell, and dnsmasq
