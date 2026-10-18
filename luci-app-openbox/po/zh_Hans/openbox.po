@@ -429,6 +429,9 @@ msgstr "局域网接口"
 msgid "Last update failed: %s"
 msgstr "上次更新失败：%s"
 
+msgid "Latency test"
+msgstr "延迟测试"
+
 msgid "Latest release from GitHub"
 msgstr "从 GitHub 安装最新版"
 
@@ -864,6 +867,9 @@ msgstr "测速地址"
 msgid "Test interval"
 msgstr "测速间隔"
 
+msgid "Testing…"
+msgstr "测试中…"
+
 msgid "Tests pause after the group has not been used for this long."
 msgstr "策略组闲置超过这个时间后暂停测速。"
 
@@ -914,6 +920,9 @@ msgstr "这条规则有多个条件，是在页面之外设置的。这里可以
 
 msgid "Three numbers, for servers such as Cloudflare WARP."
 msgstr "三个数字，用于 Cloudflare WARP 等服务器。"
+
+msgid "Timeout"
+msgstr "超时"
 
 msgid "Timestamp"
 msgstr "时间戳"
@@ -971,6 +980,9 @@ msgstr "无法切换配置"
 
 msgid "Unable to switch the outbound of %s."
 msgstr "无法切换 %s 的节点。"
+
+msgid "Unable to test the latency of %s."
+msgstr "无法测试 %s 的延迟。"
 
 msgid "Unable to update %s"
 msgstr "无法更新 %s"

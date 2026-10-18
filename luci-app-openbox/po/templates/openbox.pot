@@ -427,6 +427,9 @@ msgstr ""
 msgid "Last update failed: %s"
 msgstr ""
 
+msgid "Latency test"
+msgstr ""
+
 msgid "Latest release from GitHub"
 msgstr ""
 
@@ -862,6 +865,9 @@ msgstr ""
 msgid "Test interval"
 msgstr ""
 
+msgid "Testing…"
+msgstr ""
+
 msgid "Tests pause after the group has not been used for this long."
 msgstr ""
 
@@ -911,6 +917,9 @@ msgid "This rule has several conditions, set outside this page. Its action and c
 msgstr ""
 
 msgid "Three numbers, for servers such as Cloudflare WARP."
+msgstr ""
+
+msgid "Timeout"
 msgstr ""
 
 msgid "Timestamp"
@@ -968,6 +977,9 @@ msgid "Unable to switch the config"
 msgstr ""
 
 msgid "Unable to switch the outbound of %s."
+msgstr ""
+
+msgid "Unable to test the latency of %s."
 msgstr ""
 
 msgid "Unable to update %s"

@@ -18,6 +18,9 @@ const SUBSCRIPTION = '/usr/share/openbox/subscription.sh';
 const SUBSCRIPTION_TIMEOUT = 10;
 // the exit codes of subscription.sh
 const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
+// how long a latency test of a group may take: the members are tested at the
+// same time, and those without an answer by then failed
+const DELAY_TIMEOUT = 5000;
 const CORE_UPLOAD = '/tmp/openbox-core-upload.apk';
 const INSTALL_LOG = `${RUN_DIR}/core-install.log`;
 const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
@@ -424,6 +427,30 @@ const methods = {
 				sprintf('%J', { name: outbound }));
 
 			return { result: resp?.status == 204 };
+		}
+	},
+
+	// tests the latency of the members of a group at once: the delays of
+	// those that answered, by name. sing-box keeps them as the measured
+	// delays, and an auto group may switch to the fastest member
+	delay: {
+		args: { group: 'group' },
+		call: function(req) {
+			const running = running_clash_api();
+			if (running.error)
+				return { result: false, error: running.error };
+
+			const group = req.args?.group;
+			if (type(group) != 'string' || !length(group))
+				return { result: false, error: 'invalid arguments' };
+
+			const resp = clash_request(running.api, 'GET',
+				`/group/${escape_path(group)}/delay?timeout=${DELAY_TIMEOUT}`);
+
+			if (resp?.status != 200)
+				return { result: false, error: resp?.data?.message ?? 'unreachable' };
+
+			return { result: true, delays: resp.data ?? {} };
 		}
 	},
 

@@ -31,7 +31,7 @@
 | 内核 | 从 GitHub 安装最新版，或上传官方 apk；要求 sing-box ≥ 1.14 |
 | 生成器 | 从 UCI 生成 sing-box 配置，写入 `/var/run/openbox/config.json`；界面可查看生成结果 |
 | 节点 | 手动添加、编辑、删除。支持 Shadowsocks、VMess、VLESS（含 Reality）、Trojan、Hysteria2、Hysteria（两者都可端口跳跃）、TUIC、AnyTLS、ShadowTLS、NaiveProxy、Snell（v4/v5、v6）、WireGuard（生成为 endpoint）、SSH、SOCKS、HTTP；每个节点可设前置节点（`detour`），ShadowTLS 即作为其他节点的前置节点使用，不会被“包含全部节点”加入策略组。Tor（需另装 tor）、bridge（三层转发）不做 |
-| 策略组 | 手动选择或自动测速；成员可以是“全部节点”、按名称正则筛选的节点，再加上指定的其他组；手动选择可设默认出站，自动测速可设闲置超时，两者都可设切换时中断现有连接；运行时可切换当前选择 |
+| 策略组 | 手动选择或自动测速；成员可以是“全部节点”、按名称正则筛选的节点，再加上指定的其他组；手动选择可设默认出站，自动测速可设闲置超时，两者都可设切换时中断现有连接；运行时可切换当前选择，并可对组内全部成员测延迟 |
 | 出站模式 | 规则判定 / 全局代理 / 直接连接，运行时切换；全局代理时国内 IP 也走代理 |
 | 透明代理 | 一个总开关，接管局域网和路由器自身的流量。接管方式二选一：TUN（sing-box 的 `auto_route` + `auto_redirect`，规则由 sing-box 设置）或 TProxy（OpenBox 设置 nft 规则和策略路由）；DNS 由 sing-box 应答，本地域名交还 dnsmasq；默认只接管 IPv4，可开启 IPv6 接管 |
 | 访问控制 | 按设备（IP 或 MAC）设置黑名单或白名单 |
@@ -468,7 +468,7 @@ openbox/
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里。出站模式（保存并应用后生效）；策略组列表：名称、类型、当前节点（下拉中显示 sing-box 测得的延迟），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；节点列表：名称、协议、服务器，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。当前节点经 clash API 立即生效，其余（包括出站模式）保存并应用后生效 |
+| 策略 | sing-box 的出站都在这里。出站模式（保存并应用后生效）；策略组列表：名称、类型、当前节点（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，5 秒内无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；节点列表：名称、协议、服务器，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。当前节点经 clash API 立即生效，其余（包括出站模式）保存并应用后生效 |
 | 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |

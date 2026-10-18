@@ -27,6 +27,33 @@ const callSelect = rpc.declare({
 	expect: { '': {} }
 });
 
+const callDelay = rpc.declare({
+	object: 'luci.openbox',
+	method: 'delay',
+	params: [ 'group' ],
+	expect: { '': {} }
+});
+
+// the menu of a group: its members with their delays, like the one of Surge
+const MENU_STYLE = `
+.openbox-now { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.openbox-now-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.openbox-menu { position: fixed; z-index: 2000; box-sizing: border-box; min-width: 220px; max-width: min(360px, calc(100vw - 16px)); max-height: 60vh; overflow: auto; padding: 4px; border: 1px solid var(--border-color-medium, #ccc); border-radius: 8px; background: var(--background-color-high, #fff); color: var(--text-color-high, #222); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); font-size: 13px; }
+.openbox-menu-head { padding: 4px 10px; font-size: 12px; opacity: .6; }
+.openbox-menu-item { display: flex; align-items: center; gap: 8px; box-sizing: border-box; width: 100%; height: auto; min-height: 0; margin: 0; padding: 6px 10px; border: 0; border-radius: 5px; background: none; box-shadow: none; color: inherit; font: inherit; line-height: 1.4; text-align: left; cursor: pointer; }
+div.openbox-menu-item { cursor: default; }
+button.openbox-menu-item:hover:not([disabled]), button.openbox-menu-item:focus-visible { background: var(--primary-color-high, #1f6fd1); color: #fff; outline: none; }
+.openbox-menu-item[disabled] { cursor: default; opacity: .6; }
+.openbox-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-color-medium, #ddd); }
+.openbox-menu-check { flex: none; width: 1em; text-align: center; }
+.openbox-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.openbox-delay { flex: none; padding: 1px 6px; border-radius: 4px; color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.5; }
+.openbox-delay.good { background: #188038; }
+.openbox-delay.fair { background: #b06000; }
+.openbox-delay.bad { background: #c5221f; }
+.openbox-delay.pending { background: none; color: inherit; opacity: .5; }
+`;
+
 const unavailableReasons = {
 	no_clash_api: _('The clash API is not enabled in the current profile, so the outbound mode cannot be changed.')
 };
@@ -86,10 +113,42 @@ return view.extend({
 		return Promise.all([ callMode(), callOutbounds(), uci.load('openbox') ]);
 	},
 
-	handleSelect(group, ev) {
-		return callSelect(group, ev.target.value).then((res) => {
+	handleSelect(group, outbound) {
+		this.closeMenu();
+
+		return callSelect(group, outbound).then((res) => {
 			if (!res.result)
-				ui.addNotification(null, E('p', _('Unable to switch the outbound of %s.').format(group)), 'danger');
+				ui.addNotification(null, E('p', _('Unable to switch the outbound of %s.').format('%h'.format(group))), 'danger');
+
+			return this.refresh();
+		});
+	},
+
+	// tests all members of a group at once; those that do not answer in
+	// time are shown as timed out until they answer again
+	handleTest(group) {
+		if (this.testing[group])
+			return;
+
+		this.testing[group] = true;
+		this.updateCells();
+
+		return callDelay(group).then((res) => {
+			if (!res.result) {
+				ui.addNotification(null, E('p', _('Unable to test the latency of %s.').format('%h'.format(group))), 'danger');
+				return;
+			}
+
+			for (const name of this.runtime.groups?.[group]?.all ?? []) {
+				if (res.delays?.[name] > 0)
+					this.failed.delete(name);
+				else
+					this.failed.add(name);
+			}
+		}).catch(() => {
+			ui.addNotification(null, E('p', _('Unable to test the latency of %s.').format('%h'.format(group))), 'danger');
+		}).then(() => {
+			delete this.testing[group];
 
 			return this.refresh();
 		});
@@ -142,30 +201,161 @@ return view.extend({
 	},
 
 	// the current outbound of a group: a select for selector groups
+	// the delay to show for an outbound: its measured delay, 0 when it did
+	// not answer the last test of a group, null when it was never measured
+	delayState(name) {
+		return this.delayOf(name) ?? (this.failed.has(name) ? 0 : null);
+	},
+
+	// a delay badge, colored like the ones of Surge; empty when unmeasured
+	renderDelay(name, testing) {
+		const delay = this.delayState(name);
+
+		if (testing)
+			return E('span', { 'class': 'openbox-delay pending' }, '…');
+
+		if (delay == null)
+			return '';
+
+		if (delay == 0)
+			return E('span', { 'class': 'openbox-delay bad' }, _('Timeout'));
+
+		const level = (delay < 300) ? 'good' : (delay < 800) ? 'fair' : 'bad';
+
+		return E('span', { 'class': 'openbox-delay ' + level }, '%d ms'.format(delay));
+	},
+
+	// the current outbound of a group, which opens the menu of the group
 	renderNow(tag, group) {
 		if (!group)
 			return E('em', {}, '-');
 
-		if (group.type != 'selector')
-			return E('span', {}, '%h'.format(group.now));
+		return E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button openbox-now',
+			'aria-haspopup': 'menu',
+			'click': (ev) => this.toggleMenu(tag, ev.currentTarget)
+		}, [
+			E('span', { 'class': 'openbox-now-name' }, '%h'.format(group.now)),
+			this.renderDelay(group.now, this.testing[tag]),
+			E('span', { 'aria-hidden': 'true' }, '▾')
+		]);
+	},
 
-		return E('select', {
-			'class': 'cbi-input-select',
-			'change': ui.createHandlerFn(this, 'handleSelect', tag)
-		}, group.all.map((name) => E('option', {
-			'value': name,
-			'selected': name == group.now ? '' : null
-		}, this.delayOf(name) ? '%h (%d ms)'.format(name, this.delayOf(name)) : '%h'.format(name))));
+	// the members of a group with their delays and a latency test; the
+	// members of a manual group are picked here, an auto group picks itself
+	renderMenu() {
+		const tag = this.menu.tag;
+		const group = this.runtime.groups?.[tag];
+		if (!group)
+			return this.closeMenu();
+
+		const testing = this.testing[tag];
+		const selectable = group.type == 'selector';
+
+		// left alone while nothing changed, so a click is never lost to a poll
+		const key = JSON.stringify([ group, testing, group.all.map((name) => this.delayState(name)) ]);
+		if (key == this.menu.key)
+			return;
+
+		this.menu.key = key;
+		dom.content(this.menu.node, [
+			E('div', { 'class': 'openbox-menu-head' }, '%h · %h'.format(tag, GROUP_TYPES[group.type] ?? group.type)),
+			E('button', {
+				'type': 'button',
+				'class': 'openbox-menu-item',
+				'disabled': testing ? '' : null,
+				'click': () => this.handleTest(tag)
+			}, [
+				E('span', { 'class': 'openbox-menu-check' }),
+				E('span', { 'class': 'openbox-menu-name' }, testing ? _('Testing…') : _('Latency test'))
+			]),
+			E('div', { 'class': 'openbox-menu-sep' }),
+			...group.all.map((name) => E(selectable ? 'button' : 'div', {
+				'type': selectable ? 'button' : null,
+				'class': 'openbox-menu-item',
+				'role': selectable ? 'menuitemradio' : null,
+				'aria-checked': selectable ? String(name == group.now) : null,
+				'click': selectable ? () => this.handleSelect(tag, name) : null
+			}, [
+				E('span', { 'class': 'openbox-menu-check' }, (name == group.now) ? '✓' : ''),
+				E('span', { 'class': 'openbox-menu-name' }, '%h'.format(name)),
+				this.renderDelay(name, testing)
+			]))
+		]);
+	},
+
+	// below the current outbound, or above it when there is no room below
+	placeMenu() {
+		const node = this.menu.node;
+		const rect = this.menu.anchor.getBoundingClientRect();
+		const height = node.offsetHeight, width = node.offsetWidth;
+
+		let top = rect.bottom + 4;
+		if (top + height > window.innerHeight - 8)
+			top = Math.max(8, rect.top - height - 4);
+
+		node.style.top = top + 'px';
+		node.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px';
+	},
+
+	toggleMenu(tag, anchor) {
+		const same = this.menu?.tag == tag;
+
+		this.closeMenu();
+		if (same)
+			return;
+
+		const node = E('div', { 'class': 'openbox-menu', 'role': 'menu' });
+		const close = (ev) => {
+			// the button of a group toggles the menu itself
+			if (!node.contains(ev.target) && !ev.target.closest?.('.openbox-now'))
+				this.closeMenu();
+		};
+		const key = (ev) => {
+			if (ev.key == 'Escape')
+				this.closeMenu();
+		};
+		const resize = () => this.closeMenu();
+
+		this.menu = {
+			tag: tag,
+			anchor: anchor,
+			node: node,
+			release: () => {
+				document.removeEventListener('mousedown', close, true);
+				document.removeEventListener('scroll', close, true);
+				document.removeEventListener('keydown', key, true);
+				window.removeEventListener('resize', resize);
+			}
+		};
+
+		document.body.appendChild(node);
+		this.renderMenu();
+		this.placeMenu();
+
+		document.addEventListener('mousedown', close, true);
+		document.addEventListener('scroll', close, true);
+		document.addEventListener('keydown', key, true);
+		window.addEventListener('resize', resize);
+	},
+
+	closeMenu() {
+		if (!this.menu)
+			return;
+
+		this.menu.release();
+		this.menu.node.remove();
+		this.menu = null;
 	},
 
 	updateCell(section_id) {
 		const cell = this.cells[section_id];
 		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
 		const group = this.runtime.groups?.[tag];
-		const key = JSON.stringify([ tag, group, group?.all.map((name) => this.delayOf(name)) ]);
+		const key = JSON.stringify([ tag, group, this.testing[tag], group && this.delayState(group.now) ]);
 
-		// leave an open select alone until the user is done with it
-		if (key != cell.key && document.activeElement?.parentNode != cell.node) {
+		if (key != cell.key) {
 			cell.key = key;
 			dom.content(cell.node, this.renderNow(tag, group));
 		}
@@ -175,11 +365,20 @@ return view.extend({
 		for (const section_id in this.cells)
 			if (this.cells[section_id].node.isConnected)
 				this.updateCell(section_id);
+
+		if (this.menu)
+			this.renderMenu();
 	},
 
 	refresh() {
 		return callOutbounds().then((data) => {
 			this.runtime = data;
+
+			// a measured delay replaces a failed test
+			for (const name of this.failed)
+				if (data.delays?.[name] > 0)
+					this.failed.delete(name);
+
 			this.updateCells();
 		});
 	},
@@ -758,6 +957,11 @@ return view.extend({
 		this.runtime = data[1];
 		// runtime cells of the tables by section name, refilled on every poll
 		this.cells = {};
+		// the groups being tested, and the outbounds that failed their last test
+		this.testing = {};
+		this.failed = new Set();
+		// the open menu of a group
+		this.menu = null;
 
 		const m = new form.Map('openbox');
 
@@ -768,7 +972,7 @@ return view.extend({
 		return m.render().then((mapEl) => {
 			poll.add(() => this.refresh(), 5);
 
-			return E([], [ ...openbox.header(), openbox.profileNotice(), mapEl ]);
+			return E([], [ E('style', {}, MENU_STYLE), ...openbox.header(), openbox.profileNotice(), mapEl ]);
 		});
 	}
 });
