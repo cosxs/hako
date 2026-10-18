@@ -10,7 +10,7 @@
 		"write": {
 			"uci": [ "openbox" ],
 			"ubus": {
-				"luci.openbox": [ "control", "select", "delay", "core_install", "profile_check", "profile_save", "profile_delete", "profile_use", "subscription_save", "subscription_update" ]
+				"luci.openbox": [ "control", "mode_set", "select", "delay", "core_install", "profile_check", "profile_save", "profile_delete", "profile_use", "subscription_save", "subscription_update" ]
 			},
 			"file": {
 				"/tmp/openbox-core-upload.apk": [ "write" ]

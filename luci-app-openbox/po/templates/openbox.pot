@@ -1,6 +1,12 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8"
 
+msgid "%d in total"
+msgstr ""
+
+msgid "%d of %d"
+msgstr ""
+
 msgid "%dd %dh %dm"
 msgstr ""
 
@@ -427,7 +433,13 @@ msgstr ""
 msgid "Last update failed: %s"
 msgstr ""
 
+msgid "Latency"
+msgstr ""
+
 msgid "Latency test"
+msgstr ""
+
+msgid "Latency testing"
 msgstr ""
 
 msgid "Latest release from GitHub"
@@ -637,6 +649,9 @@ msgstr ""
 msgid "Outbound mode"
 msgstr ""
 
+msgid "Outbounds without an answer by then are shown as timed out."
+msgstr ""
+
 msgid "Password"
 msgstr ""
 
@@ -653,6 +668,9 @@ msgid "Plugin log"
 msgstr ""
 
 msgid "Plugin options"
+msgstr ""
+
+msgid "Plugin settings"
 msgstr ""
 
 msgid "Plugin version"
@@ -763,6 +781,9 @@ msgstr ""
 msgid "Saved; sing-box was reloaded."
 msgstr ""
 
+msgid "Search names or servers"
+msgstr ""
+
 msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
 msgstr ""
 
@@ -853,6 +874,9 @@ msgstr ""
 msgid "Takeover mode"
 msgstr ""
 
+msgid "Takes effect after Save & Apply"
+msgstr ""
+
 msgid "Takes over IPv6 as well, and DNS answers IPv6 addresses. Mainland IPv6 addresses stay direct. With RealIP the nodes need to reach IPv6 addresses; with FakeIP they resolve the domains themselves."
 msgstr ""
 
@@ -862,7 +886,13 @@ msgstr ""
 msgid "Test URL"
 msgstr ""
 
+msgid "Test all"
+msgstr ""
+
 msgid "Test interval"
+msgstr ""
+
+msgid "Test timeout"
 msgstr ""
 
 msgid "Testing…"
@@ -875,9 +905,6 @@ msgid "The changes to %s are not saved."
 msgstr ""
 
 msgid "The clash API is not enabled in the current profile, so the outbound mode cannot be changed."
-msgstr ""
-
-msgid "The current outbound of each group takes effect immediately; other changes, the outbound mode included, after Save & Apply."
 msgstr ""
 
 msgid "The current profile defines no other mode. Add route rules with clash_mode to switch modes."
@@ -976,6 +1003,9 @@ msgstr ""
 msgid "Unable to switch the config"
 msgstr ""
 
+msgid "Unable to switch the outbound mode."
+msgstr ""
+
 msgid "Unable to switch the outbound of %s."
 msgstr ""
 
@@ -1031,6 +1061,9 @@ msgid "Uptime"
 msgstr ""
 
 msgid "Use"
+msgstr ""
+
+msgid "Used by the latency tests of groups and nodes, and by auto groups without a test URL of their own."
 msgstr ""
 
 msgid "Used with the IPv6 takeover on."

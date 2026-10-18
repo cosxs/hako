@@ -71,16 +71,21 @@
 
 ```
 config openbox 'main'              # OpenBox 自身的设置
-	option config_version '12'      # 配置格式的版本，升级时由迁移脚本逐级更新（2：加入 mixed 入站；3：固定的路由规则标 hidden；4：local 改为 local 类型，AliDNS 改名 alidns；5：FakeIP 加 IPv6 地址段；6：绕过的 IPv6 地址 fc00::/7 改为 fd00::/8；7：删掉 dnsmasq 服务器，局域网域名改用 local；8：拒绝 QUIC 改按嗅探到的协议；9：开启 find_neighbor；10：TUN 接管也启用 dns_in，供 dnsmasq 转发；11：FakeIP 的 IPv6 地址段 fc00::/18 改为 2001:2::/48；12：FakeIP 应答的 TTL 改为 1 秒）
+	option config_version '13'      # 配置格式的版本，升级时由迁移脚本逐级更新（2：加入 mixed 入站；3：固定的路由规则标 hidden；4：local 改为 local 类型，AliDNS 改名 alidns；5：FakeIP 加 IPv6 地址段；6：绕过的 IPv6 地址 fc00::/7 改为 fd00::/8；7：删掉 dnsmasq 服务器，局域网域名改用 local；8：拒绝 QUIC 改按嗅探到的协议；9：开启 find_neighbor；10：TUN 接管也启用 dns_in，供 dnsmasq 转发；11：FakeIP 的 IPv6 地址段 fc00::/18 改为 2001:2::/48；12：FakeIP 应答的 TTL 改为 1 秒；13：加入插件设置的测速段 latency）
 	option enabled '0'
 	option source 'model'          # model | profile
 	option profile ''              # source 为 profile 时使用的文件
-	# option mode 'Global'         # 出站模式：在策略页选择，保存并应用后由 OpenBox 经 clash API 设到 sing-box；
+	# option mode 'Global'         # 出站模式：在策略页选择后立即写入并重载，由 OpenBox 经 clash API 设到 sing-box；
 	                               # 也决定国内 IP 是否在防火墙层绕过；没有时取 clash_api.default_mode
 
 config openbox 'logs'              # OpenBox 的日志管理
 	option auto_clean '1'          # 自动清理按天保存的旧日志
 	option retention_days '7'      # 保留天数（含当天）
+
+config openbox 'latency'           # 测速，OpenBox 自己的概念；插件设置页「测速」标签，默认为空段
+	# option url ''                # 手动测速（策略组「延迟测试」、节点「测试全部」）的地址，经 clash API 的 url 参数传给 sing-box；
+	                               # 自动测速组没写 url 时，生成器也用它；不写时 sing-box 用 https://www.gstatic.com/generate_204
+	# option timeout '5s'          # 手动测速的超时，sing-box 时长写法（界面按秒填），最多 15 秒；自动测速组的超时由 sing-box 固定
 
 config subscription                # 示例：订阅，OpenBox 自己的概念，生成器不读；配置文件页「订阅…」添加，匿名 section
 	option file 'my.json'          # /etc/openbox/profiles 里的文件名，规则同配置文件名，每个文件至多一个订阅
@@ -391,7 +396,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
    - **IPv6 接管**（接管页的 IPv6 开关）：同时设置 `firewall.ipv6 '1'`、`dns.strategy 'prefer_ipv4'`，并给 TUN 加 IPv6 地址（默认 `fdfe:dcba:9876::1/126`，sing-box 示例值；关闭时去掉 TUN 的 IPv6 地址、改回 `ipv4_only`）。TUN 有了 IPv6 地址，sing-box 自己接管 IPv6 路由和 DNS，规则集的 IPv6 部分（`cn-mainland-ip` 含 3534 条 IPv6）随 `route_exclude_address_set` 生效。TProxy：`firewall.uc` 不再生成拒绝 IPv6 的链，改为 `tproxy ip6` 接管，`bypass6` 集合加上规则集的 IPv6 地址（全局模式除外），并设 `ip -6` 策略路由。FakeIP 用 IPv6 地址段 `2001:2::/48`。RealIP 模式下节点需要能访问 IPv6 目标；FakeIP 模式下由节点解析域名，不受影响。
    - **接口**：启动时按 ubus 状态取局域网接口的设备，接口未就绪时用 network 配置中的 `device`；接口 up 时 hotplug 重新设置规则。
    - 两种方式下，内网地址直连，其余按路由规则和出站模式处理。
-   - **全局代理模式**：国内 IP 也走代理，防火墙层不再绕过规则集（保留地址仍直连）。出站模式在策略页选择，存在 `main.mode`，和其他设置一样保存并应用后生效（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器和 `firewall.uc` 据此决定是否绕过。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，OpenBox 没运行时也能选。
+   - **全局代理模式**：国内 IP 也走代理，防火墙层不再绕过规则集（保留地址仍直连）。出站模式在策略页选择，选中即写入 `main.mode` 并重载 OpenBox，不用保存并应用（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器和 `firewall.uc` 据此决定是否绕过。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，OpenBox 没运行时也能选。
 2. **DNS**：发往外部 53 端口的查询（包括设备写死的 8.8.8.8）都由 sing-box 应答（TUN 由 sing-box 劫持，TProxy 由 OpenBox 重定向到 `dns-in`），sing-box 能看到是哪台设备在查询；问路由器（dnsmasq）的查询由 dnsmasq 转给 `dns-in`（见第 3 点）。本地域名和私有网段的反查转给 dnsmasq，DHCP 主机名照常可用；其余先问国内 DNS，国内 IP 原样返回，其他按 DNS 模式处理：
    - **FakeIP**（默认）：立即返回假地址，连接时由节点解析域名。快、分流准；应答的 TTL 为 1 秒（与 mihomo 的 fake-ip 相同），设备几乎不缓存假地址，停止服务后下一次查询就拿到真实地址。假地址由 sing-box 在本地分配，查询变多几乎没有开销；自带 DNS 缓存的程序（如 Java 默认缓存 30 秒）仍要等它自己的缓存过期。
    - **RealIP**：经代理向远程 DNS 再查一次，返回真实地址。首次访问稍慢，所有应用都能正常使用，停止后不留假地址。
@@ -468,12 +473,13 @@ openbox/
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里。出站模式（保存并应用后生效）；策略组列表：名称、类型、当前节点（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，5 秒内无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；节点列表：名称、协议、服务器，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。当前节点经 clash API 立即生效，其余（包括出站模式）保存并应用后生效 |
+| 策略 | sing-box 的出站都在这里。出站模式（选中立即生效）；策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有搜索框（按名称或服务器筛选）和「测试全部」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。出站模式和当前出站立即生效，其余保存并应用后生效 |
 | 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
 | 配置文件 | 一张表列出「由 OpenBox 生成」和 `/etc/openbox/profiles` 中的 JSON 文件（大小、修改时间、使用中）；生成的配置：使用、查看（只读，附生成器警告）；文件：使用、编辑、下载、删除（使用中的不能删除）。新建从当前生成的配置开始，上传时填文件名（字母、数字、`.`、`-`、`_`，以 `.json` 结尾），同名覆盖。编辑器可「检查」（`sing-box check`）、保存；使用中的文件先检查通过才保存并重载。切换前也要检查通过，运行中则立即重载。「订阅…」填文件名（默认 `sub.json`）、URL 和更新间隔（小时，0 为只手动更新），保存后立即下载（见 3.3.4）；订阅的文件名下显示 URL 和「每 N 小时更新 · 上次时间」或上次失败的原因，多一个「更新」按钮；编辑订阅文件时提示下次更新会覆盖修改。使用配置文件时，接管、策略、路由规则和内核设置页顶部提示这些设置暂不生效 |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
+| 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |
 
 设置放在用户处理那件事时会去找的页面上；很少改、偏技术的 sing-box 全局设置放进「内核设置」。
 
@@ -481,7 +487,7 @@ openbox/
 
 有单位的输入框在框后显示固定单位，只填整数：测速间隔、闲置超时、NTP 同步间隔（分钟），规则集更新间隔（小时），容差（毫秒），日志保留（天）。时长按单位换成 sing-box 的写法保存（填 3 存 `3m`）；UCI 里已有的其他写法（如 `90s`）原样显示和保留。
 
-目前菜单只放已有内容的页面：活动、接管、策略、路由规则、内核设置、配置文件、日志；设备页（访问控制）做好后再加入。服务的启用也在活动页完成（「启用」按钮）。
+目前菜单只放已有内容的页面：活动、接管、策略、路由规则、内核设置、配置文件、日志、插件设置；设备页（访问控制）做好后再加入。服务的启用也在活动页完成（「启用」按钮）。
 
 ## 4. 环境要求
 

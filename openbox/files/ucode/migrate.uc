@@ -144,6 +144,13 @@ const MIGRATIONS = [
 		for (let name in [ 'foreign', 'fallback' ])
 			if (uci.get(CONFIG, name, 'server') == 'fakeip' && uci.get(CONFIG, name, 'rewrite_ttl') == null)
 				uci.set(CONFIG, name, 'rewrite_ttl', '1');
+	},
+
+	// 13: the latency test settings of the plugin settings page, empty for
+	// the defaults
+	(uci) => {
+		if (!uci.get(CONFIG, 'latency'))
+			uci.set(CONFIG, 'latency', 'openbox');
 	}
 ];
 

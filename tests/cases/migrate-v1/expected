@@ -2,7 +2,7 @@
 config openbox 'main'
 	option enabled '1'
 	option source 'model'
-	option config_version '12'
+	option config_version '13'
 
 config log 'log'
 	option level 'warn'
@@ -124,4 +124,6 @@ config dns_server 'alidns'
 	option tag 'alidns'
 	option type 'udp'
 	option server '223.5.5.5'
+
+config openbox 'latency'
 

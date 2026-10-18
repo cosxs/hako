@@ -177,6 +177,7 @@
 			"outbounds": [
 				"Proxy",
 				"Auto",
+				"Auto US",
 				"HK 01",
 				"US 01",
 				"Direct"
@@ -191,6 +192,14 @@
 			"url": "https://www.gstatic.com/generate_204",
 			"interval": "3m",
 			"tolerance": 50
+		},
+		{
+			"type": "urltest",
+			"tag": "Auto US",
+			"outbounds": [
+				"US 01"
+			],
+			"url": "https://cp.cloudflare.com/generate_204"
 		}
 	],
 	"http_clients": [

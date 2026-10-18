@@ -669,9 +669,11 @@ function group_outbound(group) {
 		interrupt_exist_connections: bool(group.interrupt_exist_connections) || null
 	};
 
+	// an auto group without a test URL of its own takes the one of the
+	// plugin settings
 	if (group.type == 'urltest')
 		return merge(outbound, {
-			url: group.url,
+			url: group.url || uci.get(CONFIG, 'latency', 'url'),
 			interval: group.interval,
 			tolerance: number(group.tolerance),
 			idle_timeout: group.idle_timeout

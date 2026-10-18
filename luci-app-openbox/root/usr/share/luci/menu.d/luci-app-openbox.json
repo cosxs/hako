@@ -56,5 +56,11 @@
 			"type": "view",
 			"path": "openbox/logs"
 		}
+	},
+	"admin/services/openbox/settings": {
+		"action": {
+			"type": "view",
+			"path": "openbox/settings"
+		}
 	}
 }

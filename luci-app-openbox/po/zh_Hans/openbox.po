@@ -3,6 +3,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: zh_Hans\n"
 
+msgid "%d in total"
+msgstr "共 %d 个"
+
+msgid "%d of %d"
+msgstr "%d / %d 个"
+
 msgid "%dd %dh %dm"
 msgstr "%d 天 %d 小时 %d 分钟"
 
@@ -172,7 +178,7 @@ msgid "Core version"
 msgstr "内核版本"
 
 msgid "Current outbound"
-msgstr "当前节点"
+msgstr "当前出站"
 
 msgid "DNS"
 msgstr "DNS"
@@ -429,8 +435,14 @@ msgstr "局域网接口"
 msgid "Last update failed: %s"
 msgstr "上次更新失败：%s"
 
+msgid "Latency"
+msgstr "延迟"
+
 msgid "Latency test"
 msgstr "延迟测试"
+
+msgid "Latency testing"
+msgstr "测速"
 
 msgid "Latest release from GitHub"
 msgstr "从 GitHub 安装最新版"
@@ -639,6 +651,9 @@ msgstr "出站"
 msgid "Outbound mode"
 msgstr "出站模式"
 
+msgid "Outbounds without an answer by then are shown as timed out."
+msgstr "超过这个时间没有响应的显示为超时。"
+
 msgid "Password"
 msgstr "密码"
 
@@ -656,6 +671,9 @@ msgstr "插件日志"
 
 msgid "Plugin options"
 msgstr "插件选项"
+
+msgid "Plugin settings"
+msgstr "插件设置"
 
 msgid "Plugin version"
 msgstr "插件版本"
@@ -765,6 +783,9 @@ msgstr "已保存。"
 msgid "Saved; sing-box was reloaded."
 msgstr "已保存，sing-box 已重载。"
 
+msgid "Search names or servers"
+msgstr "搜索名称或服务器"
+
 msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
 msgstr "手动切换前使用的出站，必须是成员之一；留空时使用第一个成员。"
 
@@ -855,6 +876,9 @@ msgstr "接管"
 msgid "Takeover mode"
 msgstr "接管方式"
 
+msgid "Takes effect after Save & Apply"
+msgstr "保存并应用后生效"
+
 msgid "Takes over IPv6 as well, and DNS answers IPv6 addresses. Mainland IPv6 addresses stay direct. With RealIP the nodes need to reach IPv6 addresses; with FakeIP they resolve the domains themselves."
 msgstr "同时接管 IPv6，DNS 也返回 IPv6 地址，国内 IPv6 地址照样直连。RealIP 模式下节点需要能访问 IPv6 地址；FakeIP 模式下由节点自己解析域名，不受此限制。"
 
@@ -864,8 +888,14 @@ msgstr "通过 TUN 或 TProxy 接管局域网设备和路由器自身的流量�
 msgid "Test URL"
 msgstr "测速地址"
 
+msgid "Test all"
+msgstr "测试全部"
+
 msgid "Test interval"
 msgstr "测速间隔"
+
+msgid "Test timeout"
+msgstr "测速超时"
 
 msgid "Testing…"
 msgstr "测试中…"
@@ -878,9 +908,6 @@ msgstr "%s 的修改还没有保存。"
 
 msgid "The clash API is not enabled in the current profile, so the outbound mode cannot be changed."
 msgstr "当前配置未启用 clash API，无法切换出站模式。"
-
-msgid "The current outbound of each group takes effect immediately; other changes, the outbound mode included, after Save & Apply."
-msgstr "策略组的当前节点立即生效；其余修改（包括出站模式）在保存并应用后生效。"
 
 msgid "The current profile defines no other mode. Add route rules with clash_mode to switch modes."
 msgstr "当前配置没有定义其他模式。在路由规则中使用 clash_mode 后即可切换。"
@@ -978,6 +1005,9 @@ msgstr "无法开始安装。"
 msgid "Unable to switch the config"
 msgstr "无法切换配置"
 
+msgid "Unable to switch the outbound mode."
+msgstr "无法切换出站模式。"
+
 msgid "Unable to switch the outbound of %s."
 msgstr "无法切换 %s 的节点。"
 
@@ -1034,6 +1064,9 @@ msgstr "已运行"
 
 msgid "Use"
 msgstr "使用"
+
+msgid "Used by the latency tests of groups and nodes, and by auto groups without a test URL of their own."
+msgstr "策略组的「延迟测试」和节点的「测试全部」使用；自动测速组没有单独设置时也用它。"
 
 msgid "Used with the IPv6 takeover on."
 msgstr "开启 IPv6 接管后生效。"

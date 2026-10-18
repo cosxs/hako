@@ -13,7 +13,8 @@ const PAGES = [
 	[ 'rules', _('Route rules') ],
 	[ 'core', _('Core settings') ],
 	[ 'profiles', _('Profiles') ],
-	[ 'logs', _('Logs') ]
+	[ 'logs', _('Logs') ],
+	[ 'settings', _('Plugin settings') ]
 ];
 
 // sing-box durations ("3m", "1h30m", "1d"): milliseconds per unit

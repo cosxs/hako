@@ -18,9 +18,11 @@ const SUBSCRIPTION = '/usr/share/openbox/subscription.sh';
 const SUBSCRIPTION_TIMEOUT = 10;
 // the exit codes of subscription.sh
 const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
-// how long a latency test of a group may take: the members are tested at the
-// same time, and those without an answer by then failed
+// how long a latency test of a group may take, unless latency.timeout says
+// otherwise: the members are tested at the same time, and those without an
+// answer by then failed. The page gives up on a call after 20 seconds
 const DELAY_TIMEOUT = 5000;
+const DELAY_TIMEOUT_MAX = 15000;
 const CORE_UPLOAD = '/tmp/openbox-core-upload.apk';
 const INSTALL_LOG = `${RUN_DIR}/core-install.log`;
 const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
@@ -183,6 +185,27 @@ function clash_mode(api) {
 		return null;
 
 	return { mode: resp.data?.mode, modes: resp.data?.['mode-list'] ?? [] };
+}
+
+// a sing-box duration such as "5s" or "500ms" in milliseconds, null when it
+// is not one
+function duration_ms(value) {
+	const units = { ms: 1, s: 1000, m: 60000 };
+	let total = 0, rest = value ?? '';
+
+	if (type(rest) != 'string' || !length(rest))
+		return null;
+
+	while (length(rest)) {
+		const part = match(rest, /^([0-9]+)(ms|s|m)/);
+		if (!part)
+			return null;
+
+		total += +part[1] * units[part[2]];
+		rest = substr(rest, length(part[0]));
+	}
+
+	return total;
 }
 
 // percent-encode a path segment, for group and outbound names
@@ -376,6 +399,31 @@ const methods = {
 		}
 	},
 
+	// sets the outbound mode right away: it is kept in main.mode and a
+	// running service is reloaded, which sets it on sing-box and, as the mode
+	// decides what bypasses sing-box, regenerates the config and firewall
+	mode_set: {
+		args: { mode: 'mode' },
+		call: function(req) {
+			const uci = cursor();
+			const source = uci.get('openbox', 'main', 'source') == 'profile' ? 'profile' : 'model';
+			const config = pending_config(source, uci.get('openbox', 'main', 'profile'));
+			const api = clash_api(config);
+			if (!api)
+				return { result: false, error: 'no_clash_api' };
+
+			const wanted = req.args?.mode;
+			const mode = filter(config_modes(config, api), (m) => type(wanted) == 'string' && lc(m) == lc(wanted))[0];
+			if (!mode)
+				return { result: false, error: 'invalid_mode' };
+
+			uci.set('openbox', 'main', 'mode', mode);
+			uci.commit('openbox');
+
+			return { result: true, reloaded: reload_running() };
+		}
+	},
+
 	// the outbounds of the running sing-box: their names, the groups with
 	// their current outbound, and the last measured delay of each
 	outbounds: {
@@ -444,8 +492,16 @@ const methods = {
 			if (type(group) != 'string' || !length(group))
 				return { result: false, error: 'invalid arguments' };
 
-			const resp = clash_request(running.api, 'GET',
-				`/group/${escape_path(group)}/delay?timeout=${DELAY_TIMEOUT}`);
+			// the test URL and timeout of the plugin settings; sing-box tests
+			// an auto group with its own URL
+			const uci = cursor();
+			const url = uci.get('openbox', 'latency', 'url');
+			const timeout = min(duration_ms(uci.get('openbox', 'latency', 'timeout')) || DELAY_TIMEOUT, DELAY_TIMEOUT_MAX);
+			let query = `timeout=${timeout}`;
+			if (url)
+				query += `&url=${escape_path(url)}`;
+
+			const resp = clash_request(running.api, 'GET', `/group/${escape_path(group)}/delay?${query}`);
 
 			if (resp?.status != 200)
 				return { result: false, error: resp?.data?.message ?? 'unreachable' };

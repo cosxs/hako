@@ -27,6 +27,13 @@ const callSelect = rpc.declare({
 	expect: { '': {} }
 });
 
+const callModeSet = rpc.declare({
+	object: 'luci.openbox',
+	method: 'mode_set',
+	params: [ 'mode' ],
+	expect: { '': {} }
+});
+
 const callDelay = rpc.declare({
 	object: 'luci.openbox',
 	method: 'delay',
@@ -172,10 +179,30 @@ return view.extend({
 		return null;
 	},
 
-	// the outbound mode, set on sing-box when the settings are applied
+	// switches the outbound mode right away, like the current outbound of a
+	// group; the widget goes back when it fails
+	handleMode(widget, ev) {
+		const mode = widget.getValue();
+		const previous = this.mode;
+
+		this.mode = mode;
+		this.updateGlobalRow();
+
+		return callModeSet(mode).then((res) => {
+			if (!res.result)
+				throw res.error;
+		}).catch(() => {
+			ui.addNotification(null, E('p', _('Unable to switch the outbound mode.')), 'danger');
+			this.mode = previous;
+			widget.setValue(previous);
+			this.updateGlobalRow();
+		}).then(() => this.refresh());
+	},
+
+	// the outbound mode, set on sing-box as soon as it is picked; kept out of
+	// the form so Save & Apply leaves it alone
 	renderMode(m, state) {
-		const s = m.section(form.NamedSection, 'main', 'openbox', _('Outbound mode'),
-			_('The current outbound of each group takes effect immediately; other changes, the outbound mode included, after Save & Apply.'));
+		const s = m.section(form.NamedSection, 'main', 'openbox', _('Outbound mode'));
 
 		if (!state.available) {
 			const o = s.option(form.DummyValue, '_mode', _('Mode'));
@@ -189,18 +216,49 @@ return view.extend({
 		if (state.mode && !find(state.mode))
 			modes.push(state.mode);
 
-		const o = s.option(form.ListValue, 'mode', _('Mode'));
-		o.widget = 'radio';
-		o.orientation = 'horizontal';
-		modes.forEach((mode) => o.value(mode, openbox.modeNames[mode.toLowerCase()] ?? mode));
-		o.default = state.default;
-		o.cfgvalue = (section_id) => find(uci.get('openbox', section_id, 'mode')) ?? state.default;
+		// the modes of sing-box in a fixed order, those of the profile after them
+		const ORDER = [ 'rule', 'global', 'direct' ];
+		const rank = (mode) => (ORDER.indexOf(mode.toLowerCase()) + ORDER.length + 1) % (ORDER.length + 1);
+		const choices = {};
+		modes.sort((a, b) => rank(a) - rank(b)).forEach((mode) => choices[mode] = openbox.modeNames[mode.toLowerCase()] ?? mode);
+		this.mode = find(state.mode) ?? state.default;
+
+		const o = s.option(form.DummyValue, '_mode', _('Mode'));
+		o.renderWidget = () => {
+			const widget = new ui.Select(this.mode, choices, { widget: 'radio', orientation: 'horizontal', name: 'openbox-mode' });
+			const node = widget.render();
+
+			node.addEventListener('widget-change', ui.createHandlerFn(this, 'handleMode', widget));
+
+			return node;
+		};
 
 		if (modes.length < 2)
 			o.description = _('The current profile defines no other mode. Add route rules with clash_mode to switch modes.');
 	},
 
-	// the current outbound of a group: a select for selector groups
+	// the group the Global mode sends everything to: the outbound of its
+	// route rule, listed first among the groups in that mode only
+	globalGroup() {
+		const rule = uci.sections('openbox', 'route_rule').find((rule) => rule.clash_mode?.toLowerCase() == 'global');
+		const ref = rule?.outbound;
+		if (!ref)
+			return null;
+
+		const sections = uci.sections('openbox', 'outbound');
+
+		return (sections.find((section) => section['.name'] == ref) ?? sections.find((section) => section.tag == ref))?.['.name'] ?? null;
+	},
+
+	updateGlobalRow() {
+		const row = this.globalRow?.isConnected ? this.globalRow : document.getElementById('cbi-openbox-' + this.globalSection);
+		if (!row)
+			return;
+
+		this.globalRow = row;
+		row.style.display = (this.mode?.toLowerCase() == 'global') ? '' : 'none';
+	},
+
 	// the delay to show for an outbound: its measured delay, 0 when it did
 	// not answer the last test of a group, null when it was never measured
 	delayState(name) {
@@ -227,8 +285,13 @@ return view.extend({
 
 	// the current outbound of a group, which opens the menu of the group
 	renderNow(tag, group) {
-		if (!group)
-			return E('em', {}, '-');
+		// a group sing-box does not run yet comes with the next apply
+		if (!group) {
+			if (this.runtime.available)
+				return E('em', {}, _('Takes effect after Save & Apply'));
+
+			return E('em', {}, (this.runtime.reason == 'not_running') ? _('Not running') : '-');
+		}
 
 		return E('button', {
 			'type': 'button',
@@ -353,7 +416,7 @@ return view.extend({
 		const cell = this.cells[section_id];
 		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
 		const group = this.runtime.groups?.[tag];
-		const key = JSON.stringify([ tag, group, this.testing[tag], group && this.delayState(group.now) ]);
+		const key = JSON.stringify([ tag, group, this.testing[tag], group && this.delayState(group.now), this.runtime.available, this.runtime.reason ]);
 
 		if (key != cell.key) {
 			cell.key = key;
@@ -361,10 +424,30 @@ return view.extend({
 		}
 	},
 
+	// the delay of a node, measured by the tests of any group
+	updateDelayCell(section_id) {
+		const cell = this.delayCells[section_id];
+		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
+		const testing = this.testing[this.globalTag()];
+		const key = JSON.stringify([ tag, testing, this.delayState(tag) ]);
+
+		if (key != cell.key) {
+			cell.key = key;
+			dom.content(cell.node, this.renderDelay(tag, testing));
+		}
+	},
+
 	updateCells() {
 		for (const section_id in this.cells)
 			if (this.cells[section_id].node.isConnected)
 				this.updateCell(section_id);
+
+		for (const section_id in this.delayCells)
+			if (this.delayCells[section_id].node.isConnected)
+				this.updateDelayCell(section_id);
+
+		if (this.testAll)
+			this.testAll.disabled = !this.runtime.groups?.[this.globalTag()] || !!this.testing[this.globalTag()];
 
 		if (this.menu)
 			this.renderMenu();
@@ -401,8 +484,45 @@ return view.extend({
 		s.addremove = true;
 		s.sortable = true;
 		s.nodescriptions = true;
-		s.filter = (section_id) => uci.get('openbox', section_id, 'type') in GROUP_TYPES && !openbox.isHidden(section_id);
+		s.filter = (section_id) => uci.get('openbox', section_id, 'type') in GROUP_TYPES &&
+			(!openbox.isHidden(section_id) || section_id == this.globalSection);
 		s.modaltitle = (section_id) => _('Policy groups') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New group'));
+
+		// the group of the Global mode comes first, shown in that mode only,
+		// and is neither edited, removed nor moved here
+		const view = this;
+
+		s.cfgsections = function() {
+			const sections = form.GridSection.prototype.cfgsections.call(this);
+			const index = sections.indexOf(view.globalSection);
+			if (index > 0)
+				sections.unshift(...sections.splice(index, 1));
+
+			return sections;
+		};
+
+		s.renderRowActions = function(section_id) {
+			const td = form.GridSection.prototype.renderRowActions.apply(this, arguments);
+			if (section_id == view.globalSection)
+				td.replaceChildren();
+
+			return td;
+		};
+
+		s.render = function() {
+			return Promise.resolve(form.GridSection.prototype.render.apply(this, arguments)).then((node) => {
+				const row = node.querySelector('[data-sid="%s"]'.format(view.globalSection));
+				if (row) {
+					// nothing is dropped onto it
+					for (const type of [ 'dragover', 'drop' ])
+						row.addEventListener(type, (ev) => ev.stopImmediatePropagation(), true);
+					row.style.display = (view.mode?.toLowerCase() == 'global') ? '' : 'none';
+					view.globalRow = row;
+				}
+
+				return node;
+			});
+		};
 
 		let o = s.option(form.Value, 'tag', _('Name'));
 		o.rmempty = false;
@@ -486,12 +606,76 @@ return view.extend({
 		o.modalonly = true;
 	},
 
+	// the tag of the Global group, which holds every node: testing it tests
+	// them all
+	globalTag() {
+		return this.globalSection ? openbox.label(uci.get('openbox', this.globalSection) ?? {}) : null;
+	},
+
+	// shows the nodes whose name or server holds the search text
+	filterNodes() {
+		const query = this.nodeQuery.value.trim().toLowerCase();
+		let shown = 0, total = 0;
+
+		for (const section_id of this.nodeSection.cfgsections()) {
+			const row = this.nodeTable?.querySelector('[data-sid="%s"]'.format(section_id));
+			if (!row)
+				continue;
+
+			const section = uci.get('openbox', section_id) ?? {};
+			const found = !query || [ openbox.label(section), section.server ?? '' ].join(' ').toLowerCase().includes(query);
+
+			row.style.display = found ? '' : 'none';
+			total++;
+			if (found)
+				shown++;
+		}
+
+		this.nodeCount.textContent = query ? _('%d of %d').format(shown, total) : _('%d in total').format(total);
+	},
+
 	renderNodes(m) {
 		const s = m.section(form.GridSection, 'outbound', _('Nodes'));
 		s.anonymous = true;
 		s.addremove = true;
-		s.sortable = true;
 		s.nodescriptions = true;
+		this.nodeSection = s;
+
+		// a search and a test of all nodes above the table
+		const view = this;
+
+		this.nodeQuery = E('input', {
+			'type': 'search',
+			'class': 'cbi-input-text',
+			'placeholder': _('Search names or servers'),
+			'aria-label': _('Search names or servers'),
+			'input': () => this.filterNodes()
+		});
+		this.testAll = E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button',
+			'click': () => this.handleTest(this.globalTag())
+		}, _('Test all'));
+		this.nodeCount = E('span', { 'style': 'margin-left:auto' });
+
+		s.render = function() {
+			return Promise.resolve(form.GridSection.prototype.render.apply(this, arguments)).then((node) => {
+				const toolbar = E('div', { 'style': 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px' },
+					[ view.nodeQuery, view.testAll, view.nodeCount ]);
+				const title = node.querySelector('h3');
+
+				if (title)
+					title.after(toolbar);
+				else
+					node.prepend(toolbar);
+
+				view.nodeTable = node;
+				view.filterNodes();
+				view.updateCells();
+
+				return node;
+			});
+		};
 		s.filter = (section_id) => !(uci.get('openbox', section_id, 'type') in GROUP_TYPES) && !openbox.isHidden(section_id);
 		s.modaltitle = (section_id) => _('Nodes') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New node'));
 
@@ -951,12 +1135,23 @@ return view.extend({
 
 			return form.ListValue.prototype.load.call(this, section_id);
 		};
+
+		o = s.option(form.DummyValue, '_delay', _('Latency'));
+		o.modalonly = false;
+		o.textvalue = (section_id) => {
+			this.delayCells[section_id] = { node: E('div') };
+			this.updateDelayCell(section_id);
+
+			return this.delayCells[section_id].node;
+		};
 	},
 
 	render(data) {
 		this.runtime = data[1];
 		// runtime cells of the tables by section name, refilled on every poll
 		this.cells = {};
+		this.delayCells = {};
+		this.globalSection = this.globalGroup();
 		// the groups being tested, and the outbounds that failed their last test
 		this.testing = {};
 		this.failed = new Set();
