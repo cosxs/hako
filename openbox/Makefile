@@ -19,8 +19,8 @@ define Package/openbox
 endef
 
 define Package/openbox/description
-  Run sing-box with a configuration generated from UCI, or with a native
-  JSON profile, and route traffic through it.
+  Run sing-box with a configuration generated from the profile in use, and
+  route traffic through it.
 endef
 
 define Package/openbox/conffiles
@@ -43,13 +43,15 @@ define Package/openbox/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/openbox.uci-defaults $(1)/etc/uci-defaults/90-openbox
 
-	$(INSTALL_DIR) $(1)/etc/openbox/profiles
+	$(INSTALL_DIR) $(1)/etc/openbox
 
 	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
 	$(INSTALL_DATA) ./files/openbox.upgrade $(1)/lib/upgrade/keep.d/openbox
 
 	$(INSTALL_DIR) $(1)/usr/share/openbox
 	$(INSTALL_DATA) ./files/common.sh $(1)/usr/share/openbox/common.sh
+	# the template of a new profile, copied to /etc/config/openbox_<name>
+	$(INSTALL_DATA) ./files/profile.conf $(1)/usr/share/openbox/profile.conf
 	$(INSTALL_BIN) ./files/core-install.sh $(1)/usr/share/openbox/core-install.sh
 	$(INSTALL_BIN) ./files/run.sh $(1)/usr/share/openbox/run.sh
 	$(INSTALL_BIN) ./files/subscription.sh $(1)/usr/share/openbox/subscription.sh
@@ -65,6 +67,7 @@ define Package/openbox/install
 	$(INSTALL_DIR) $(1)/usr/share/ucode/openbox
 	$(INSTALL_DATA) ./files/ucode/clash.uc $(1)/usr/share/ucode/openbox/clash.uc
 	$(INSTALL_DATA) ./files/ucode/config.uc $(1)/usr/share/ucode/openbox/config.uc
+	$(INSTALL_DATA) ./files/ucode/profile.uc $(1)/usr/share/ucode/openbox/profile.uc
 
 	# the mainland China IP list from cosxs/cn-mainland-ip, so the bypass works
 	# without downloading anything at start

@@ -1,6 +1,10 @@
 #!/bin/sh
 # bring /etc/config/openbox, which upgrades keep, to the current version
-
 ucode /usr/share/openbox/ucode/migrate.uc
+
+# the first install: the default profile, made from the template, is in use
+if ! ls /etc/config/openbox_* > /dev/null 2>&1; then
+	cp /usr/share/openbox/profile.conf /etc/config/openbox_default
+fi
 
 exit 0

@@ -3,9 +3,10 @@
 #
 # Usage: tests/run.sh [--update] [case...]
 #
-# Each directory in tests/cases holds a UCI file named openbox. A case named
-# migrate-* runs migrate.uc on it and compares the result with "expected";
-# any other runs generate.uc and compares the JSON with "expected.json".
+# Each directory in tests/cases holds the UCI files of a router: openbox, the
+# settings of the device, and openbox_<name>, the profiles. A case named
+# migrate-* runs migrate.uc on them and compares openbox with "expected"; any
+# other runs generate.uc and compares the JSON with "expected.json".
 # Either way the generated config has to pass "sing-box check".
 # --update writes the expected files from the current output instead.
 #
@@ -33,6 +34,10 @@ done
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
+
+# the shared modules, imported as openbox.<name> as they are once installed
+mkdir -p "$TMP/lib"
+ln -s "$SCRIPTS" "$TMP/lib/openbox"
 
 # JSON with sorted keys, so the order of fields does not matter
 normalize() {
@@ -63,7 +68,7 @@ show_diff() {
 # run a script of OpenBox on the UCI files in a directory, with its own
 # directory for uncommitted changes
 openbox() {
-	OPENBOX_CONFDIR="$1" OPENBOX_SAVEDIR="$1/.uci" "$UCODE" "$SCRIPTS/$2"
+	OPENBOX_CONFDIR="$1" OPENBOX_SAVEDIR="$1/.uci" "$UCODE" -L "$TMP/lib/*.uc" "$SCRIPTS/$2"
 }
 
 # generate the config of a UCI directory into a file and check it
@@ -109,7 +114,7 @@ run_migrate() {
 
 	rm -rf "$conf"
 	mkdir -p "$conf/.uci"
-	cp "$dir/openbox" "$conf/openbox"
+	cp "$dir"/openbox* "$conf/"
 	openbox "$conf" migrate.uc || return 1
 
 	if [ "$update" = 1 ]; then

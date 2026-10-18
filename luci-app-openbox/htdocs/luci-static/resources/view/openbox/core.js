@@ -52,7 +52,7 @@ const CUSTOM_RULES_EXAMPLE = JSON.stringify([
 function detourChoices(option) {
 	option.value('', _('Direct (default)'));
 
-	uci.sections('openbox', 'outbound')
+	uci.sections(openbox.profileConfig(), 'outbound')
 		.filter((section) => section.type != 'direct')
 		.forEach((section) => option.value(section['.name'], openbox.label(section)));
 }
@@ -63,11 +63,14 @@ function dependsOnTypes(option, types) {
 
 return view.extend({
 	load() {
-		return uci.load('openbox');
+		return openbox.loadProfile();
 	},
 
 	render() {
-		const m = new form.Map('openbox');
+		// the profile in use; the clash API and the cache file are settings of
+		// the device, in openbox
+		const m = new form.Map(openbox.profileConfig());
+		m.chain('openbox');
 
 		// one section with a tab per sing-box object; each option is stored in
 		// the UCI section that mirrors its object (log, dns, route, ...)
@@ -119,13 +122,13 @@ return view.extend({
 		const ss = o.subsection;
 		// FakeIP is set on the Takeover page, with the DNS mode; local, the
 		// system resolver, is built in for names of the LAN
-		ss.filter = (section_id) => !(uci.get('openbox', section_id, 'type') in { fakeip: 1, local: 1 });
+		ss.filter = (section_id) => !(uci.get(openbox.profileConfig(), section_id, 'type') in { fakeip: 1, local: 1 });
 		// added with a dialog, without a section name to type first
 		ss.anonymous = true;
 		ss.addremove = true;
 		ss.sortable = true;
 		ss.nodescriptions = true;
-		ss.modaltitle = (section_id) => _('DNS servers') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New DNS server'));
+		ss.modaltitle = (section_id) => _('DNS servers') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New DNS server'));
 
 		let so = ss.option(form.Value, 'tag', _('Tag'));
 		so.rmempty = false;
@@ -134,7 +137,7 @@ return view.extend({
 		Object.keys(DNS_TYPES).forEach((type) => so.value(type, DNS_TYPES[type]));
 		so.default = 'udp';
 		so.textvalue = (section_id) => {
-			const type = uci.get('openbox', section_id, 'type');
+			const type = uci.get(openbox.profileConfig(), section_id, 'type');
 			return DNS_TYPES[type] ?? '%h'.format(type ?? '');
 		};
 
@@ -228,28 +231,32 @@ return view.extend({
 		// experimental
 
 		o = s.taboption('experimental', form.Value, 'clash_external_controller', _('Clash API listen address'));
+		o.uciconfig = 'openbox';
 		o.ucisection = 'clash_api';
 		o.ucioption = 'external_controller';
 		o.datatype = 'ipaddrport(1)';
 		o.placeholder = '127.0.0.1:9090';
 
 		o = s.taboption('experimental', form.Value, 'clash_secret', _('Clash API secret'));
+		o.uciconfig = 'openbox';
 		o.ucisection = 'clash_api';
 		o.ucioption = 'secret';
 		o.password = true;
 
 		o = s.taboption('experimental', form.Flag, 'cache_enabled', _('Cache file'));
+		o.uciconfig = 'openbox';
 		o.ucisection = 'cache_file';
 		o.ucioption = 'enabled';
 		o.default = '1';
 		o.rmempty = false;
 
 		o = s.taboption('experimental', form.Value, 'cache_path', _('Cache file path'));
+		o.uciconfig = 'openbox';
 		o.ucisection = 'cache_file';
 		o.ucioption = 'path';
 		o.placeholder = '/etc/openbox/cache.db';
 		o.depends('cache_enabled', '1');
 
-		return m.render().then((node) => E([], [ ...openbox.header(), openbox.profileNotice(), node ]));
+		return m.render().then((node) => E([], [ ...openbox.header(), node ]));
 	}
 });

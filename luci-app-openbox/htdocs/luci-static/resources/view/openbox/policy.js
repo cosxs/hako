@@ -109,7 +109,7 @@ function validateTag(section_id, value) {
 	if (value == 'GLOBAL')
 		return _('GLOBAL is reserved by the clash API.');
 
-	if (uci.sections('openbox', 'outbound').some((section) => section['.name'] != section_id && openbox.label(section) == value))
+	if (uci.sections(openbox.profileConfig(), 'outbound').some((section) => section['.name'] != section_id && openbox.label(section) == value))
 		return _('Another outbound already uses this name.');
 
 	return true;
@@ -117,7 +117,7 @@ function validateTag(section_id, value) {
 
 return view.extend({
 	load() {
-		return Promise.all([ callMode(), callOutbounds(), uci.load('openbox') ]);
+		return Promise.all([ callMode(), callOutbounds(), openbox.loadProfile() ]);
 	},
 
 	handleSelect(group, outbound) {
@@ -203,6 +203,7 @@ return view.extend({
 	// the form so Save & Apply leaves it alone
 	renderMode(m, state) {
 		const s = m.section(form.NamedSection, 'main', 'openbox', _('Outbound mode'));
+		s.uciconfig = 'openbox';
 
 		if (!state.available) {
 			const o = s.option(form.DummyValue, '_mode', _('Mode'));
@@ -240,12 +241,12 @@ return view.extend({
 	// the group the Global mode sends everything to: the outbound of its
 	// route rule, listed first among the groups in that mode only
 	globalGroup() {
-		const rule = uci.sections('openbox', 'route_rule').find((rule) => rule.clash_mode?.toLowerCase() == 'global');
+		const rule = uci.sections(openbox.profileConfig(), 'route_rule').find((rule) => rule.clash_mode?.toLowerCase() == 'global');
 		const ref = rule?.outbound;
 		if (!ref)
 			return null;
 
-		const sections = uci.sections('openbox', 'outbound');
+		const sections = uci.sections(openbox.profileConfig(), 'outbound');
 
 		return (sections.find((section) => section['.name'] == ref) ?? sections.find((section) => section.tag == ref))?.['.name'] ?? null;
 	},
@@ -414,7 +415,7 @@ return view.extend({
 
 	updateCell(section_id) {
 		const cell = this.cells[section_id];
-		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
+		const tag = openbox.label(uci.get(openbox.profileConfig(), section_id) ?? {});
 		const group = this.runtime.groups?.[tag];
 		const key = JSON.stringify([ tag, group, this.testing[tag], group && this.delayState(group.now), this.runtime.available, this.runtime.reason ]);
 
@@ -427,7 +428,7 @@ return view.extend({
 	// the delay of a node, measured by the tests of any group
 	updateDelayCell(section_id) {
 		const cell = this.delayCells[section_id];
-		const tag = openbox.label(uci.get('openbox', section_id) ?? {});
+		const tag = openbox.label(uci.get(openbox.profileConfig(), section_id) ?? {});
 		const testing = this.testing[this.globalTag()];
 		const key = JSON.stringify([ tag, testing, this.delayState(tag) ]);
 
@@ -484,9 +485,9 @@ return view.extend({
 		s.addremove = true;
 		s.sortable = true;
 		s.nodescriptions = true;
-		s.filter = (section_id) => uci.get('openbox', section_id, 'type') in GROUP_TYPES &&
+		s.filter = (section_id) => uci.get(openbox.profileConfig(), section_id, 'type') in GROUP_TYPES &&
 			(!openbox.isHidden(section_id) || section_id == this.globalSection);
-		s.modaltitle = (section_id) => _('Policy groups') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New group'));
+		s.modaltitle = (section_id) => _('Policy groups') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New group'));
 
 		// the group of the Global mode comes first, shown in that mode only,
 		// and is neither edited, removed nor moved here
@@ -531,7 +532,7 @@ return view.extend({
 		o = s.option(form.ListValue, 'type', _('Type'));
 		Object.keys(GROUP_TYPES).forEach((type) => o.value(type, GROUP_TYPES[type]));
 		o.default = 'selector';
-		o.textvalue = (section_id) => GROUP_TYPES[uci.get('openbox', section_id, 'type')];
+		o.textvalue = (section_id) => GROUP_TYPES[uci.get(openbox.profileConfig(), section_id, 'type')];
 
 		this.nowColumn(s);
 
@@ -609,29 +610,7 @@ return view.extend({
 	// the tag of the Global group, which holds every node: testing it tests
 	// them all
 	globalTag() {
-		return this.globalSection ? openbox.label(uci.get('openbox', this.globalSection) ?? {}) : null;
-	},
-
-	// shows the nodes whose name or server holds the search text
-	filterNodes() {
-		const query = this.nodeQuery.value.trim().toLowerCase();
-		let shown = 0, total = 0;
-
-		for (const section_id of this.nodeSection.cfgsections()) {
-			const row = this.nodeTable?.querySelector('[data-sid="%s"]'.format(section_id));
-			if (!row)
-				continue;
-
-			const section = uci.get('openbox', section_id) ?? {};
-			const found = !query || [ openbox.label(section), section.server ?? '' ].join(' ').toLowerCase().includes(query);
-
-			row.style.display = found ? '' : 'none';
-			total++;
-			if (found)
-				shown++;
-		}
-
-		this.nodeCount.textContent = query ? _('%d of %d').format(shown, total) : _('%d in total').format(total);
+		return this.globalSection ? openbox.label(uci.get(openbox.profileConfig(), this.globalSection) ?? {}) : null;
 	},
 
 	renderNodes(m) {
@@ -641,16 +620,9 @@ return view.extend({
 		s.nodescriptions = true;
 		this.nodeSection = s;
 
-		// a search and a test of all nodes above the table
+		// a test of all nodes above the table
 		const view = this;
 
-		this.nodeQuery = E('input', {
-			'type': 'search',
-			'class': 'cbi-input-text',
-			'placeholder': _('Search names or servers'),
-			'aria-label': _('Search names or servers'),
-			'input': () => this.filterNodes()
-		});
 		this.testAll = E('button', {
 			'type': 'button',
 			'class': 'btn cbi-button',
@@ -661,7 +633,7 @@ return view.extend({
 		s.render = function() {
 			return Promise.resolve(form.GridSection.prototype.render.apply(this, arguments)).then((node) => {
 				const toolbar = E('div', { 'style': 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px' },
-					[ view.nodeQuery, view.testAll, view.nodeCount ]);
+					[ view.testAll, view.nodeCount ]);
 				const title = node.querySelector('h3');
 
 				if (title)
@@ -669,15 +641,14 @@ return view.extend({
 				else
 					node.prepend(toolbar);
 
-				view.nodeTable = node;
-				view.filterNodes();
+				view.nodeCount.textContent = _('%d in total').format(s.cfgsections().length);
 				view.updateCells();
 
 				return node;
 			});
 		};
-		s.filter = (section_id) => !(uci.get('openbox', section_id, 'type') in GROUP_TYPES) && !openbox.isHidden(section_id);
-		s.modaltitle = (section_id) => _('Nodes') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New node'));
+		s.filter = (section_id) => !(uci.get(openbox.profileConfig(), section_id, 'type') in GROUP_TYPES) && !openbox.isHidden(section_id);
+		s.modaltitle = (section_id) => _('Nodes') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New node'));
 
 		let o = s.option(form.Value, 'tag', _('Name'));
 		o.rmempty = false;
@@ -687,7 +658,7 @@ return view.extend({
 		Object.keys(NODE_TYPES).forEach((type) => o.value(type, NODE_TYPES[type]));
 		o.default = 'shadowsocks';
 		o.textvalue = (section_id) => {
-			const type = uci.get('openbox', section_id, 'type');
+			const type = uci.get(openbox.profileConfig(), section_id, 'type');
 			return NODE_TYPES[type] ?? '%h'.format(type ?? '-');
 		};
 
@@ -698,8 +669,8 @@ return view.extend({
 		o.rmempty = false;
 		remote(o);
 		o.textvalue = (section_id) => {
-			const server = uci.get('openbox', section_id, 'server');
-			const port = uci.get('openbox', section_id, 'server_port');
+			const server = uci.get(openbox.profileConfig(), section_id, 'server');
+			const port = uci.get(openbox.profileConfig(), section_id, 'server_port');
 
 			return server ? '%h'.format(port ? `${server}:${port}` : server) : '-';
 		};
@@ -1129,7 +1100,7 @@ return view.extend({
 			this.keylist = [];
 			this.vallist = [];
 			this.value('', _('None'));
-			uci.sections('openbox', 'outbound')
+			uci.sections(openbox.profileConfig(), 'outbound')
 				.filter((section) => section['.name'] != section_id && section.type != 'direct' && !openbox.isHidden(section['.name']))
 				.forEach((section) => this.value(section['.name'], openbox.label(section)));
 
@@ -1158,7 +1129,9 @@ return view.extend({
 		// the open menu of a group
 		this.menu = null;
 
-		const m = new form.Map('openbox');
+		// the profile in use; the outbound mode is a setting of the device
+		const m = new form.Map(openbox.profileConfig());
+		m.chain('openbox');
 
 		this.renderMode(m, data[0]);
 		this.renderGroups(m);
@@ -1167,7 +1140,7 @@ return view.extend({
 		return m.render().then((mapEl) => {
 			poll.add(() => this.refresh(), 5);
 
-			return E([], [ E('style', {}, MENU_STYLE), ...openbox.header(), openbox.profileNotice(), mapEl ]);
+			return E([], [ E('style', {}, MENU_STYLE), ...openbox.header(), mapEl ]);
 		});
 	}
 });

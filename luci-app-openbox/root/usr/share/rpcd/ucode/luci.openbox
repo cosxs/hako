@@ -1,23 +1,21 @@
 'use strict';
 
-import { readfile, writefile, unlink, access, popen, open, stat, lsdir, rename, mkdtemp, rmdir } from 'fs';
+import { readfile, writefile, unlink, access, popen, open, stat, lsdir, mkdtemp, rmdir } from 'fs';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
 import { clash_api, clash_request, config_modes } from 'openbox.clash';
 import { dns_inbound } from 'openbox.config';
+import { valid_name, profile_package } from 'openbox.profile';
 
-const PROFILE_DIR = '/etc/openbox/profiles';
+const CONFIG_DIR = '/etc/config';
+// the template of a new profile
+const PROFILE_TEMPLATE = '/usr/share/openbox/profile.conf';
 const GENERATOR = '/usr/share/openbox/ucode/generate.uc';
 const RUN_DIR = '/var/run/openbox';
 const RUN_CONFIG = `${RUN_DIR}/config.json`;
 const CORE = '/usr/bin/sing-box';
 const COMMON = '/usr/share/openbox/common.sh';
 const CORE_INSTALL = '/usr/share/openbox/core-install.sh';
-const SUBSCRIPTION = '/usr/share/openbox/subscription.sh';
-// the page gives up on a call after 20 seconds: leave time for sing-box check
-const SUBSCRIPTION_TIMEOUT = 10;
-// the exit codes of subscription.sh
-const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
 // how long a latency test of a group may take, unless latency.timeout says
 // otherwise: the members are tested at the same time, and those without an
 // answer by then failed. The page gives up on a call after 20 seconds
@@ -29,8 +27,6 @@ const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
 const LOG_DIR = '/var/log/openbox';
 const LOG_NAMES = [ 'app', 'core' ];
 const LOG_BYTES = 256 * 1024;
-// also safe to pass to the shell unquoted
-const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.json$/;
 
 function command_output(cmd) {
 	const proc = popen(cmd);
@@ -116,13 +112,30 @@ function load_json(path) {
 	}
 }
 
-// the config sing-box would run: generated from UCI, or the selected raw JSON profile
-function pending_config(source, profile) {
-	if (source == 'profile')
-		return profile ? load_json(`${PROFILE_DIR}/${profile}`) : null;
+// the profile in use
+function current_profile() {
+	return cursor().get('openbox', 'main', 'profile') || 'default';
+}
+
+// whether the UCI package of a profile exists
+function profile_exists(name) {
+	return valid_name(name) && access(`${CONFIG_DIR}/${profile_package(name)}`) == true;
+}
+
+// the command that generates the config of a profile; the name is checked,
+// so it is safe in the shell
+function generate_command(name) {
+	return `OPENBOX_PROFILE=${name} ucode ${GENERATOR}`;
+}
+
+// the config sing-box would run with a profile, the one in use by default
+function pending_config(name) {
+	name ??= current_profile();
+	if (!profile_exists(name))
+		return null;
 
 	try {
-		return json(command_output(`ucode ${GENERATOR} 2>/dev/null`) ?? '');
+		return json(command_output(`${generate_command(name)} 2>/dev/null`) ?? '');
 	}
 	catch (e) {
 		return null;
@@ -213,53 +226,6 @@ function escape_path(value) {
 	return join('', map(split(value, ''), (c) => match(c, /^[A-Za-z0-9._~-]$/) ? c : sprintf('%%%02X', ord(c))));
 }
 
-function profile_path(name) {
-	return (type(name) == 'string' && match(name, PROFILE_NAME)) ? `${PROFILE_DIR}/${name}` : null;
-}
-
-function profile_in_use(name) {
-	const uci = cursor();
-	return uci.get('openbox', 'main', 'source') == 'profile' && uci.get('openbox', 'main', 'profile') == name;
-}
-
-// the section of the subscription of a profile
-function subscription_section(uci, name) {
-	let found = null;
-
-	uci.foreach('openbox', 'subscription', (section) => {
-		if (section.file == name && !found)
-			found = section['.name'];
-	});
-
-	return found;
-}
-
-// whether the value is a sing-box duration of s, m, h and d parts, or 0
-function valid_interval(value) {
-	return value == '0' || match(value, /^([0-9]+[smhd])+$/) != null;
-}
-
-// runs subscription.sh update; changed and reloaded tell what it did
-function update_subscription(name) {
-	const path = `${PROFILE_DIR}/${name}`;
-	const before = readfile(path);
-	const running = profile_in_use(name) && instance_pid() != null;
-
-	const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} 2>&1`);
-	if (!proc)
-		return { result: false, error: 'update_failed', output: '' };
-
-	const output = trim(proc.read('all') ?? '');
-	const code = proc.close();
-
-	if (code != 0)
-		return { result: false, error: SUBSCRIPTION_ERRORS[code] ?? 'update_failed', output: output };
-
-	const changed = readfile(path) != before;
-
-	return { result: true, output: output, changed: changed, reloaded: changed && running };
-}
-
 // a directory of its own for the files of one call, so calls at the same
 // time never read each other's; removed with its files by remove_temp()
 function make_temp() {
@@ -292,29 +258,6 @@ function check_config(path, dir) {
 	return { result: passed, output: trim(output) };
 }
 
-// checks a config given as text, as it would be saved
-function check_content(content) {
-	try {
-		json(content);
-	}
-	catch (e) {
-		return { result: false, error: 'invalid_json', output: `${e}` };
-	}
-
-	const temp = make_temp();
-	if (!temp)
-		return { result: false, error: 'check_failed', output: 'cannot create a temporary file' };
-
-	writefile(`${temp}/check.json`, content);
-	const check = check_config(`${temp}/check.json`, temp);
-	remove_temp(temp);
-
-	if (!check.result)
-		check.error = 'check_failed';
-
-	return check;
-}
-
 function reload_running() {
 	return instance_pid() != null && system('/etc/init.d/openbox reload >/dev/null 2>&1') == 0;
 }
@@ -327,18 +270,15 @@ const methods = {
 	status: {
 		call: function() {
 			const uci = cursor();
-			const source = uci.get('openbox', 'main', 'source') == 'profile' ? 'profile' : 'model';
-			const profile = uci.get('openbox', 'main', 'profile') || null;
 			const pid = instance_pid();
-			const config = pid ? load_json(RUN_CONFIG) : pending_config(source, profile);
+			const config = pid ? load_json(RUN_CONFIG) : pending_config();
 			const api = clash_api(config);
 
 			return {
 				enabled: uci.get('openbox', 'main', 'enabled') == '1',
 				running: pid != null,
 				uptime: pid ? process_uptime(pid) : null,
-				source: source,
-				profile: profile,
+				profile: current_profile(),
 				version: trim(readfile('/usr/share/openbox/version') ?? '') || null,
 				core: core_info(),
 				takeover: takeover(config),
@@ -381,8 +321,7 @@ const methods = {
 	mode: {
 		call: function() {
 			const uci = cursor();
-			const source = uci.get('openbox', 'main', 'source') == 'profile' ? 'profile' : 'model';
-			const config = pending_config(source, uci.get('openbox', 'main', 'profile'));
+			const config = pending_config();
 			const api = clash_api(config);
 			if (!api)
 				return { available: false, reason: 'no_clash_api' };
@@ -406,8 +345,7 @@ const methods = {
 		args: { mode: 'mode' },
 		call: function(req) {
 			const uci = cursor();
-			const source = uci.get('openbox', 'main', 'source') == 'profile' ? 'profile' : 'model';
-			const config = pending_config(source, uci.get('openbox', 'main', 'profile'));
+			const config = pending_config();
 			const api = clash_api(config);
 			if (!api)
 				return { result: false, error: 'no_clash_api' };
@@ -586,56 +524,57 @@ const methods = {
 		}
 	},
 
-	// the native JSON profiles, and which config is in use
+	// the profiles, each a UCI package openbox_<name>, and the one in use
 	profiles: {
 		call: function() {
-			const uci = cursor();
 			const profiles = [];
 
-			const subscriptions = {};
-			uci.foreach('openbox', 'subscription', (section) => {
-				if (section.file && !subscriptions[section.file])
-					subscriptions[section.file] = {
-						url: section.url,
-						update_interval: section.update_interval,
-						last_update: section.last_update ? +section.last_update : null,
-						last_error: section.last_error
-					};
-			});
-
-			for (let name in lsdir(PROFILE_DIR) ?? []) {
-				const info = stat(`${PROFILE_DIR}/${name}`);
-				if (info?.type == 'file' && match(name, PROFILE_NAME))
-					push(profiles, { name: name, size: info.size, mtime: info.mtime, subscription: subscriptions[name] });
+			for (let file in lsdir(CONFIG_DIR) ?? []) {
+				const name = match(file, /^openbox_(.+)$/)?.[1];
+				if (valid_name(name))
+					push(profiles, { name: name });
 			}
 
 			return {
-				source: uci.get('openbox', 'main', 'source') == 'profile' ? 'profile' : 'model',
-				profile: uci.get('openbox', 'main', 'profile') || null,
+				profile: current_profile(),
 				profiles: sort(profiles, (a, b) => (a.name < b.name) ? -1 : 1)
 			};
 		}
 	},
 
-	profile_read: {
+	// a new profile from the template
+	profile_create: {
 		args: { name: 'name' },
 		call: function(req) {
-			const path = profile_path(req.args?.name);
-			const content = path ? readfile(path) : null;
+			const name = req.args?.name;
+			if (!valid_name(name))
+				return { result: false, error: 'invalid_name' };
 
-			return (content != null) ? { content: content } : { error: 'not_found' };
+			if (profile_exists(name))
+				return { result: false, error: 'exists' };
+
+			const template = readfile(PROFILE_TEMPLATE);
+			if (template == null || !writefile(`${CONFIG_DIR}/${profile_package(name)}`, template))
+				return { result: false, error: 'write_failed' };
+
+			return { result: true };
 		}
 	},
 
-	// the config OpenBox generates from its settings, with the warnings of
-	// the generator about what it skipped
-	generated: {
-		call: function() {
+	// the config a profile makes, with the warnings of the generator about
+	// what it skipped
+	profile_view: {
+		args: { name: 'name' },
+		call: function(req) {
+			const name = req.args?.name || current_profile();
+			if (!profile_exists(name))
+				return { error: 'not_found' };
+
 			const temp = make_temp();
 			if (!temp)
 				return { error: 'generate_failed', warnings: 'cannot create a temporary file' };
 
-			const content = command_output(`ucode ${GENERATOR} 2> ${temp}/generate.log`);
+			const content = command_output(`${generate_command(name)} 2> ${temp}/generate.log`);
 			const warnings = trim(readfile(`${temp}/generate.log`) ?? '');
 			remove_temp(temp);
 
@@ -643,162 +582,42 @@ const methods = {
 		}
 	},
 
-	profile_check: {
-		args: { content: 'content' },
-		call: function(req) {
-			return check_content(req.args?.content);
-		}
-	},
-
-	// the profile in use is only saved when it passes the check, and then
-	// sing-box runs it right away
-	profile_save: {
-		args: { name: 'name', content: 'content' },
-		call: function(req) {
-			const name = req.args?.name;
-			const path = profile_path(name);
-			const content = req.args?.content;
-			if (!path || type(content) != 'string')
-				return { result: false, error: 'invalid_name' };
-
-			const in_use = profile_in_use(name);
-			const check = in_use ? check_content(content) : null;
-
-			if (!in_use) {
-				try {
-					json(content);
-				}
-				catch (e) {
-					return { result: false, error: 'invalid_json', output: `${e}` };
-				}
-			}
-			else if (!check.result) {
-				return check;
-			}
-
-			system(`mkdir -p ${PROFILE_DIR}`);
-			if (!writefile(`${path}.tmp`, content) || !rename(`${path}.tmp`, path))
-				return { result: false, error: 'write_failed' };
-
-			return { result: true, reloaded: in_use ? reload_running() : false };
-		}
-	},
-
-	// a subscription goes with its profile
+	// the profile in use cannot be deleted
 	profile_delete: {
 		args: { name: 'name' },
 		call: function(req) {
 			const name = req.args?.name;
-			const path = profile_path(name);
-			if (!path)
-				return { result: false, error: 'invalid_name' };
-
-			if (profile_in_use(name))
-				return { result: false, error: 'in_use' };
-
-			const uci = cursor();
-			const section = subscription_section(uci, name);
-			if (section) {
-				uci.delete('openbox', section);
-				uci.commit('openbox');
-			}
-
-			return { result: unlink(path) == true || section != null };
-		}
-	},
-
-	// adds or changes the subscription of a profile, then downloads it; a
-	// new one is dropped again when its first download fails
-	subscription_save: {
-		args: { file: 'file', url: 'url', update_interval: 'update_interval' },
-		call: function(req) {
-			const name = req.args?.file;
-			const url = req.args?.url;
-			const interval = req.args?.update_interval ?? '';
-
-			if (!profile_path(name))
-				return { result: false, error: 'invalid_name' };
-
-			if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
-				return { result: false, error: 'invalid_url' };
-
-			if (type(interval) != 'string' || (interval != '' && !valid_interval(interval)))
-				return { result: false, error: 'invalid_interval' };
-
-			const uci = cursor();
-			let section = subscription_section(uci, name);
-			const created = !section;
-
-			// a file of its own is not taken over by a subscription
-			if (created && access(`${PROFILE_DIR}/${name}`))
-				return { result: false, error: 'exists' };
-
-			if (created) {
-				section = uci.add('openbox', 'subscription');
-				uci.set('openbox', section, 'file', name);
-			}
-			uci.set('openbox', section, 'url', url);
-			if (interval == '' || interval == '0')
-				uci.delete('openbox', section, 'update_interval');
-			else
-				uci.set('openbox', section, 'update_interval', interval);
-			uci.commit('openbox');
-
-			const res = update_subscription(name);
-
-			if (!res.result && created && !access(`${PROFILE_DIR}/${name}`)) {
-				const uci = cursor();
-				const section = subscription_section(uci, name);
-				if (section) {
-					uci.delete('openbox', section);
-					uci.commit('openbox');
-				}
-			}
-
-			return res;
-		}
-	},
-
-	subscription_update: {
-		args: { file: 'file' },
-		call: function(req) {
-			const name = req.args?.file;
-			if (!profile_path(name))
-				return { result: false, error: 'invalid_name' };
-
-			if (!subscription_section(cursor(), name))
+			if (!profile_exists(name))
 				return { result: false, error: 'not_found' };
 
-			return update_subscription(name);
+			if (name == current_profile())
+				return { result: false, error: 'in_use' };
+
+			return { result: unlink(`${CONFIG_DIR}/${profile_package(name)}`) == true };
 		}
 	},
 
-	// switches to a profile, or without a name to the generated config; it
-	// must pass the check, and a running service is reloaded with it
+	// switches to a profile; its config must pass the check, and a running
+	// service is reloaded with it
 	profile_use: {
 		args: { name: 'name' },
 		call: function(req) {
-			const name = req.args?.name || null;
-			let path, temp;
+			const name = req.args?.name;
+			if (!profile_exists(name))
+				return { result: false, error: 'not_found' };
 
-			if (name) {
-				path = profile_path(name);
-				if (!path || !access(path))
-					return { result: false, error: 'not_found' };
-			}
-			else {
-				temp = make_temp();
-				path = `${temp}/check.json`;
-				if (!temp || system(`ucode ${GENERATOR} > ${path} 2>/dev/null`) != 0) {
-					if (temp)
-						remove_temp(temp);
-					return { result: false, error: 'generate_failed' };
-				}
+			const temp = make_temp();
+			if (!temp)
+				return { result: false, error: 'generate_failed' };
+
+			const path = `${temp}/check.json`;
+			if (system(`${generate_command(name)} > ${path} 2>/dev/null`) != 0) {
+				remove_temp(temp);
+				return { result: false, error: 'generate_failed' };
 			}
 
 			const check = check_config(path, temp);
-			if (temp)
-				remove_temp(temp);
+			remove_temp(temp);
 
 			if (!check.result) {
 				check.error = 'check_failed';
@@ -806,9 +625,7 @@ const methods = {
 			}
 
 			const uci = cursor();
-			uci.set('openbox', 'main', 'source', name ? 'profile' : 'model');
-			if (name)
-				uci.set('openbox', 'main', 'profile', name);
+			uci.set('openbox', 'main', 'profile', name);
 			uci.commit('openbox');
 
 			return { result: true, reloaded: reload_running() };

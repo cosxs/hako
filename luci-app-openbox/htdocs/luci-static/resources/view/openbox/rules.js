@@ -39,7 +39,7 @@ const MATCH_KEYS = [ ...Object.keys(TYPES), 'clash_mode' ];
 
 // a section of the config by section name or tag, as the generator looks it up
 function lookup(type, name) {
-	return uci.get('openbox', name) ?? uci.sections('openbox', type).find((section) => section.tag == name);
+	return uci.get(openbox.profileConfig(), name) ?? uci.sections(openbox.profileConfig(), type).find((section) => section.tag == name);
 }
 
 // a ListValue whose choices are the sections of a type, stored by section name
@@ -47,7 +47,7 @@ function sectionChoices(option, type, empty) {
 	if (empty)
 		option.value('', empty);
 
-	uci.sections('openbox', type).forEach((section) => option.value(section['.name'], openbox.label(section)));
+	uci.sections(openbox.profileConfig(), type).forEach((section) => option.value(section['.name'], openbox.label(section)));
 }
 
 // show the label of a ListValue choice in a table instead of its value
@@ -89,7 +89,7 @@ const RuleSection = form.GridSection.extend({
 		const added = this.map.addedSection;
 
 		if (first && added)
-			uci.move('openbox', added, first);
+			uci.move(openbox.profileConfig(), added, first);
 
 		return result;
 	}
@@ -97,11 +97,11 @@ const RuleSection = form.GridSection.extend({
 
 return view.extend({
 	load() {
-		return uci.load('openbox');
+		return openbox.loadProfile();
 	},
 
 	render() {
-		const m = new form.Map('openbox');
+		const m = new form.Map(openbox.profileConfig());
 
 		// the rules with the default outbound, and the rule sets they use
 		const s = m.section(form.NamedSection, 'route', 'route');
@@ -111,7 +111,7 @@ return view.extend({
 		this.renderRules(s);
 		this.renderRuleSets(s);
 
-		return m.render().then((node) => E([], [ ...openbox.header(), openbox.profileNotice(), node ]));
+		return m.render().then((node) => E([], [ ...openbox.header(), node ]));
 	},
 
 	renderRules(s) {
@@ -135,7 +135,7 @@ return view.extend({
 		o = rs.option(form.DummyValue, '_type', _('Type'));
 		o.modalonly = false;
 		o.textvalue = (section_id) => {
-			const section = uci.get('openbox', section_id) ?? {};
+			const section = uci.get(openbox.profileConfig(), section_id) ?? {};
 			const type = typeOf(section);
 			const text = (type == 'multiple') ? _('Multiple conditions') : (type ?? '-');
 
@@ -145,7 +145,7 @@ return view.extend({
 		o = rs.option(form.DummyValue, '_value', _('Value'));
 		o.modalonly = false;
 		o.textvalue = (section_id) => {
-			const section = uci.get('openbox', section_id) ?? {};
+			const section = uci.get(openbox.profileConfig(), section_id) ?? {};
 			const type = typeOf(section);
 
 			if (type != 'multiple')
@@ -158,7 +158,7 @@ return view.extend({
 		o = rs.option(form.DummyValue, '_action', _('Action'));
 		o.modalonly = false;
 		o.textvalue = (section_id) => {
-			const section = uci.get('openbox', section_id) ?? {};
+			const section = uci.get(openbox.profileConfig(), section_id) ?? {};
 			const action = section.action ?? 'route';
 
 			if (action == 'reject')
@@ -172,7 +172,7 @@ return view.extend({
 
 		o = rs.option(form.DummyValue, '_comment', _('Comment'));
 		o.modalonly = false;
-		o.textvalue = (section_id) => '%h'.format(uci.get('openbox', section_id, 'comment') ?? '');
+		o.textvalue = (section_id) => '%h'.format(uci.get(openbox.profileConfig(), section_id, 'comment') ?? '');
 
 		// the dialog: the rule (a type and its value), the action, and a
 		// comment
@@ -184,7 +184,7 @@ return view.extend({
 		// the types, and for a rule of several conditions or a type set by
 		// hand that one as well, for this rule only
 		type.load = function(section_id) {
-			const found = typeOf(uci.get('openbox', section_id) ?? {});
+			const found = typeOf(uci.get(openbox.profileConfig(), section_id) ?? {});
 
 			this.keylist = [];
 			this.vallist = [];
@@ -201,9 +201,9 @@ return view.extend({
 			if (!(chosen in TYPES))
 				return;
 
-			MATCH_KEYS.filter((key) => key != chosen).forEach((key) => uci.unset('openbox', section_id, key));
+			MATCH_KEYS.filter((key) => key != chosen).forEach((key) => uci.unset(openbox.profileConfig(), section_id, key));
 			if (TYPES[chosen].kind == 'flag')
-				uci.set('openbox', section_id, chosen, '1');
+				uci.set(openbox.profileConfig(), section_id, chosen, '1');
 		};
 
 		o = rs.option(form.DummyValue, '_multiple', ' ');
@@ -278,7 +278,7 @@ return view.extend({
 		o.value('reject', 'reject');
 		o.modalonly = true;
 		// keep other actions set by hand
-		uci.sections('openbox', 'route_rule').forEach((section) => {
+		uci.sections(openbox.profileConfig(), 'route_rule').forEach((section) => {
 			if (!openbox.isHidden(section['.name']) && section.action && !(section.action in { route: 1, reject: 1 }))
 				o.value(section.action);
 		});
@@ -289,7 +289,7 @@ return view.extend({
 		o.depends('action', '');
 		o.depends('action', 'route');
 		openbox.outboundChoices(o);
-		if (uci.get('openbox', 'proxy'))
+		if (uci.get(openbox.profileConfig(), 'proxy'))
 			o.default = 'proxy';
 
 		o = rs.option(form.ListValue, 'method', _('Reject with'));
@@ -316,7 +316,7 @@ return view.extend({
 		rs.anonymous = true;
 		rs.addremove = true;
 		rs.nodescriptions = true;
-		rs.modaltitle = (section_id) => _('Rule sets') + ' » ' + (uci.get('openbox', section_id, 'tag') || _('New rule set'));
+		rs.modaltitle = (section_id) => _('Rule sets') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New rule set'));
 
 		let so = rs.option(form.Value, 'tag', _('Tag'));
 		so.rmempty = false;
@@ -334,7 +334,7 @@ return view.extend({
 		so.value('binary', _('Binary (.srs)'));
 		so.value('source', _('Source (.json)'));
 		so.textvalue = function(section_id) {
-			return (uci.get('openbox', section_id, 'type') == 'inline') ? '-' : choiceText.call(this, section_id);
+			return (uci.get(openbox.profileConfig(), section_id, 'type') == 'inline') ? '-' : choiceText.call(this, section_id);
 		};
 		so.depends('type', 'remote');
 		so.depends('type', 'local');

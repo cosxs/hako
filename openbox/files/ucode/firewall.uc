@@ -17,14 +17,19 @@
 import { cursor } from 'uci';
 import { connect } from 'ubus';
 import { readfile, unlink } from 'fs';
+import { DEVICE, profile_package, current_profile } from 'openbox.profile';
 
-const CONFIG = 'openbox';
 const CORE = '/usr/bin/sing-box';
 const RUN_CONFIG = ARGV[0];
 const WORK_DIR = ARGV[1] ?? '/tmp';
 
 const uci = cursor();
-uci.load(CONFIG);
+uci.load(DEVICE);
+
+// rule sets belong to the profile in use
+const PROFILE = profile_package(current_profile(uci));
+if (PROFILE)
+	uci.load(PROFILE);
 
 function list(value) {
 	if (type(value) == 'array')
@@ -35,7 +40,7 @@ function list(value) {
 
 // "+" also reads hexadecimal marks such as 0x6f62
 function mark(name) {
-	const value = +(uci.get(CONFIG, 'firewall', name) ?? '');
+	const value = +(uci.get(DEVICE, 'firewall', name) ?? '');
 	return (value > 0) ? sprintf('0x%x', value) : null;
 }
 
@@ -63,7 +68,7 @@ function devices() {
 
 	uci.load('network');
 
-	for (let name in list(uci.get(CONFIG, 'firewall', 'interface'))) {
+	for (let name in list(uci.get(DEVICE, 'firewall', 'interface'))) {
 		const status = ubus.call('network.interface', 'status', { interface: name });
 		const device = status?.l3_device ?? status?.device ?? uci.get('network', name, 'device');
 		if (device)
@@ -80,7 +85,10 @@ function devices() {
 function rule_set(ref) {
 	let found = null;
 
-	uci.foreach(CONFIG, 'rule_set', (section) => {
+	if (!PROFILE)
+		return null;
+
+	uci.foreach(PROFILE, 'rule_set', (section) => {
 		if (!found && (section['.name'] == ref || section.tag == ref))
 			found = section;
 	});
@@ -147,16 +155,16 @@ if (!fwmark || !outputMark || !tproxyPort) {
 }
 
 const lan = devices();
-const ipv6 = uci.get(CONFIG, 'firewall', 'ipv6') == '1';
+const ipv6 = uci.get(DEVICE, 'firewall', 'ipv6') == '1';
 
-let bypass = list(uci.get(CONFIG, 'firewall', 'bypass_address'));
-let bypass6 = list(uci.get(CONFIG, 'firewall', 'bypass_address6'));
+let bypass = list(uci.get(DEVICE, 'firewall', 'bypass_address'));
+let bypass6 = list(uci.get(DEVICE, 'firewall', 'bypass_address6'));
 
 // in Global mode every connection goes through sing-box, so the rule sets do
 // not bypass it; switching the mode keeps it in main.mode
-const mode = uci.get(CONFIG, 'main', 'mode') ?? uci.get(CONFIG, 'clash_api', 'default_mode') ?? '';
+const mode = uci.get(DEVICE, 'main', 'mode') ?? uci.get(DEVICE, 'clash_api', 'default_mode') ?? '';
 if (lc(mode) != 'global') {
-	for (let ref in list(uci.get(CONFIG, 'firewall', 'bypass_rule_set'))) {
+	for (let ref in list(uci.get(DEVICE, 'firewall', 'bypass_rule_set'))) {
 		const cidrs = rule_set_cidrs(ref);
 
 		bypass = [ ...bypass, ...cidrs.ipv4 ];

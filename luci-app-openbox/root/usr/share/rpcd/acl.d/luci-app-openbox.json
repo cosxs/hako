@@ -2,15 +2,15 @@
 	"luci-app-openbox": {
 		"description": "Grant access to OpenBox",
 		"read": {
-			"uci": [ "openbox" ],
+			"uci": [ "openbox", "openbox_*" ],
 			"ubus": {
-				"luci.openbox": [ "status", "mode", "outbounds", "core_latest", "core_install_status", "log_read", "profiles", "profile_read", "generated" ]
+				"luci.openbox": [ "status", "mode", "outbounds", "core_latest", "core_install_status", "log_read", "profiles", "profile_view" ]
 			}
 		},
 		"write": {
-			"uci": [ "openbox" ],
+			"uci": [ "openbox", "openbox_*" ],
 			"ubus": {
-				"luci.openbox": [ "control", "mode_set", "select", "delay", "core_install", "profile_check", "profile_save", "profile_delete", "profile_use", "subscription_save", "subscription_update" ]
+				"luci.openbox": [ "control", "mode_set", "select", "delay", "core_install", "profile_create", "profile_delete", "profile_use" ]
 			},
 			"file": {
 				"/tmp/openbox-core-upload.apk": [ "write" ]

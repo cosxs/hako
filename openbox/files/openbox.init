@@ -111,25 +111,13 @@ refresh_firewall() {
 	firewall_up
 }
 
-# writes the config to run into $RUN_CONFIG: generated from UCI, or a raw JSON
-# profile when main.source is "profile"; it must pass "sing-box check" first.
-# Sets config_changed when it differs from the previous one, or there was none.
+# writes the config to run into $RUN_CONFIG, generated from the profile in
+# use; it must pass "sing-box check" first. Sets config_changed when it
+# differs from the previous one, or there was none.
 prepare_config() {
 	local staged="$RUN_DIR/config.new.json"
-	local source profile
 
-	config_get source main source model
-	config_get profile main profile
-
-	if [ "$source" = profile ]; then
-		if [ -z "$profile" ] || [ ! -f "$PROFILE_DIR/$profile" ]; then
-			log "profile not found: $profile"
-			return 1
-		fi
-
-		cp -f "$PROFILE_DIR/$profile" "$staged"
-		log "using profile: $profile"
-	elif ! ucode "$GENERATOR" > "$staged" 2>> "$APP_LOG"; then
+	if ! ucode "$GENERATOR" > "$staged" 2>> "$APP_LOG"; then
 		log "failed to generate the config"
 		rm -f "$staged"
 		return 1
@@ -163,6 +151,7 @@ service_stopped() {
 	flush_dns_cache
 }
 
+# changes to the device settings and to the profile in use are applied
 service_triggers() {
-	procd_add_reload_trigger openbox
+	procd_add_reload_trigger openbox "openbox_$(uci -q get openbox.main.profile)"
 }

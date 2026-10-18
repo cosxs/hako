@@ -36,7 +36,7 @@
 | 透明代理 | 一个总开关，接管局域网和路由器自身的流量。接管方式二选一：TUN（sing-box 的 `auto_route` + `auto_redirect`，规则由 sing-box 设置）或 TProxy（OpenBox 设置 nft 规则和策略路由）；DNS 由 sing-box 应答，本地域名交还 dnsmasq；默认只接管 IPv4，可开启 IPv6 接管 |
 | 访问控制 | 按设备（IP 或 MAC）设置黑名单或白名单 |
 | 绕过与分流 | 内网和保留地址始终直连；国内 IP 用自带的规则集在防火墙层绕过；DNS 先问国内 DNS，国内 IP 原样返回，其余返回 FakeIP 并由节点解析 |
-| 配置文件 | 管理 `/etc/openbox/profiles/*.json`（新建、上传、编辑、检查、下载、删除），选用时原样运行，不经过生成器；也可以查看生成的配置 |
+| 配置文件 | 本地、订阅、关联三种配置（见 3.1）：本地配置基于内置模板新建，设置页编辑当前配置；订阅是托管配置，不能直接编辑；关联配置的节点同步自订阅，其余可编辑 |
 | 日志 | 日志设置在页面上方：自动清理（默认开启）、保留天数（默认 7 天）、内核日志级别；下方插件日志和内核日志分两个标签，只显示当天的日志并自动刷新，「清空」只清空显示、不删除文件；后台按天保存，每天零点轮转 |
 
 **M1 不做**（之后再定）：分享链接导入、订阅、redirect 接管模式、自定义 JSON 片段（DNS 规则除外）。
@@ -45,20 +45,51 @@
 
 ## 3. 设计
 
-### 3.1 两种配置来源
+### 3.1 配置
 
-| 来源 | UCI | 运行的配置 | 接管方式 |
+> **基线版本**：插件还在开发阶段，只有一台实机（N100），这一版的配置结构作为基线，不为之前的版本写迁移：`main.config_version` 从 `1` 重新开始，`migrate.uc` 的旧步骤全部删掉，实机重装默认配置。此后改动默认值，照 3.3.3 逐级加迁移步骤。
+
+设置分两层，参考 Surge：**设备设置**跟着路由器走，切换配置不受影响；**配置内容**跟着配置走，策略、路由规则和内核设置页编辑的就是当前使用的配置。
+
+| 层级 | 内容 | 存放 |
+| --- | --- | --- |
+| 设备设置 | 启用、当前配置（`main.profile`）、出站模式、接管（TUN / TProxy、DNS 入站、代理端口、绕过）、访问控制、Clash API 与缓存文件、插件设置（测速）、日志保留、订阅 | `/etc/config/openbox` |
+| 配置内容 | 节点、策略组、路由规则、规则集、默认出站等路由设置、DNS、sing-box 日志级别、NTP | 每份配置一个 UCI 包 `/etc/config/openbox_<名称>` |
+
+配置有三种：
+
+| 类型 | 怎么来 | 存放 | 设置页 |
 | --- | --- | --- | --- |
-| 生成（默认） | `option source 'model'` | 由 UCI 生成 | 启用的 `config inbound 'tun'` 或 `'tproxy'`，加上 `'dns_in'` |
-| 原生 JSON | `option source 'profile'`，`option profile 'x.json'` | `/etc/openbox/profiles/x.json` 原样使用 | 读取配置里的入站：`tun`、`tproxy`、`redirect`，以及 tag 为 `dns-in` 的 `direct` |
+| 本地 | 新建时来源选「默认配置」：复制插件内置的模板 `/usr/share/openbox/profile.conf` | `openbox_<名称>` | 全部可编辑 |
+| 订阅 | 新建时来源选「远程订阅」：下载返回完整 sing-box JSON 的 URL，按间隔更新 | 内容在 `/etc/openbox/subscriptions/<名称>.json`；地址、间隔和更新状态在 `openbox` 的 `config subscription '<名称>'` | 不能编辑，查看时提示「订阅配置无法直接编辑，请创建关联配置，以解除部分配置段落的同步。」 |
+| 关联 | 订阅的「创建关联配置」 | `openbox_<名称>`，`profile.subscription` 记下关联的订阅 | 节点全部来自订阅：只读并标「订阅」，不能新增、编辑或删除，只能测试延迟；策略组、规则、DNS 等和本地配置一样可编辑 |
 
-两种来源最后都复制到 `/var/run/openbox/config.json`，经 `sing-box check` 后运行。原来的内置只读配置 `builtin:default.json` 不再需要，由“没有节点时的生成结果”取代。
+- **名称**：小写字母、数字和 `_`，1–32 位，同时是 UCI 包名的一部分；配置和订阅共用一个名称空间。
+- **默认配置**：首次安装由模板创建 `openbox_default` 并设为当前配置。它和其他本地配置一样可以编辑、删除；需要时随时可以再基于内置模板新建。
+- **删除**：使用中的配置不能删除；删除订阅前，先删除关联它的配置。
+- 之前的原生 JSON 配置（`/etc/openbox/profiles/*.json`，上传、粘贴、编辑 JSON）不再支持，界面上的「查看」只显示生成的 JSON。
+
+运行的配置由当前配置和设备设置生成（`generate.uc`），写入 `/var/run/openbox/config.json`，经 `sing-box check` 后运行：
+
+- **本地**：和现在的生成规则相同，只是配置内容读自 `openbox_<名称>`，设备设置读自 `openbox`。
+- **关联**：节点全部取自订阅 JSON 中 `outbounds` 和 `endpoints` 里的节点（`direct`、`block`、`dns`、`selector`、`urltest` 以外的类型），配置包里不存节点；策略组、规则和其余设置读自配置包。「包含全部节点」和节点筛选对订阅节点同样有效。订阅节点的 `domain_resolver` 指向订阅自己的 DNS 服务器时去掉，改用路由的默认解析服务器。
+- **订阅**：原样使用订阅 JSON，只注入设备设置：入站换成接管和代理端口的入站；路由规则最前面加上嗅探、DNS 劫持、内网直连和直连 / 全局模式的固定规则；缺少 Direct、Global 组时补上；`experimental` 换成设备的 Clash API 和缓存文件；去掉日志的 `output`。节点、策略组、规则和 DNS 都用订阅的。
+
+订阅更新后，如果当前使用的正是这个订阅或关联它的配置，就重载（见 3.3.4）。当前使用订阅时，策略、路由规则和内核设置页顶部提示「当前使用订阅配置，这里的设置不影响它」；策略组的当前出站仍可经 clash API 切换和测速。
+
+实现分三步，每步都能单独发布：
+
+1. **配置包**：设备设置和配置内容拆开，`generate.uc` 读当前配置包；`config_version` 重置为 1；配置文件页按设计稿重写本地类型（列表、「使用」和「更多」菜单、新建、查看弹窗）；各设置页改为编辑当前配置包。
+2. **订阅**：订阅改为托管配置，内容移到 `/etc/openbox/subscriptions/`，「使用」时注入设备设置。
+3. **关联**：创建关联配置，生成时取订阅的节点，策略页的节点列表只读（不能新增、编辑、删除，只能测试延迟）。
 
 > **技术验证结论**（OpenWrt 25.12 容器，sing-box 1.14.3）：`tun` 入站的 `auto_route` + `auto_redirect` 能接管局域网设备和路由器自身的流量。TCP 经 nftables 重定向，UDP 经策略路由进入 TUN；sing-box 自建 `inet sing-box` 表，与 fw4 互不影响，重启防火墙不丢接管，停止后清理干净。节点不可用时流量不会泄露为直连。TProxy 由 OpenBox 自建 `inet openbox` 表和策略路由，同样逐项验证通过。
 
-### 3.2 数据模型（`/etc/config/openbox`）
+### 3.2 数据模型（`/etc/config/openbox` 与 `/etc/config/openbox_<名称>`）
 
 原则：**所有配置都来自 UCI**，生成器里不写任何具体的值，只负责翻译和必要的计算。
+
+下面的 section 按 3.1 分在两个包里：类型为 `openbox`（`main`、`logs`、`latency`、`firewall`）、`inbound`、`experimental` 的属于设备设置，在 `openbox`；其余（`log`、`dns`、`dns_server`、`dns_rule`、`ntp`、`route`、`rule_set`、`http_client`、`outbound`、`route_rule`）属于配置，在当前配置的包里。软件包附带的默认值也分两份：`openbox.conf` 是设备设置，`profile.conf` 是新建配置时复制的模板（装到 `/usr/share/openbox/profile.conf`）。设备设置引用的规则集（如 `route_exclude_address_set`、`firewall.bypass_rule_set` 的 `cn_ip`）在当前配置里查找。界面上，接管、插件设置和日志页编辑 `openbox`；策略、路由规则和内核设置页编辑当前配置的包，内核设置的「实验性」（Clash API、缓存文件）和接管页的 DNS 模式、FakeIP 地址段例外，分别写到另一个包。ACL 用 `openbox_*` 放行所有配置包。
 
 命名约定：
 - **能用 sing-box 的就以 sing-box 为准**：section 类型是 sing-box 的顶层键（数组元素用单数，如 `outbound`、`route_rule`），section 名是下一层的键或元素的内部标识，option 沿用 sing-box 字段名，嵌套字段用 `_` 连接（`tls.server_name` → `tls_server_name`）。
@@ -406,11 +437,11 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 
 ### 3.3.3 升级
 
-`/etc/config/openbox` 是配置文件，升级时保留，默认值的改动不会自动出现在老用户的配置里。`main.config_version` 记录配置格式的版本；软件包附带的 uci-defaults 脚本在每次安装或升级时运行 `migrate.uc`，按版本逐级执行迁移步骤（例如补上新增的 section），最后把版本号更新到最新。新安装的配置已是最新版本，不执行任何步骤。改动默认值时，必须同时加一个迁移步骤。
+`/etc/config/openbox` 是配置文件，升级时保留，默认值的改动不会自动出现在老用户的配置里。`main.config_version` 记录配置格式的版本；软件包附带的 uci-defaults 脚本在每次安装或升级时运行 `migrate.uc`，按版本逐级执行迁移步骤（例如补上新增的 section），最后把版本号更新到最新。新安装的配置已是最新版本，不执行任何步骤。改动默认值时，必须同时加一个迁移步骤。基线版本（见 3.1）从版本 1 重新开始，之前的步骤不再保留。
 
 ### 3.3.4 订阅更新
 
-订阅是一个返回完整 sing-box JSON 配置的 URL，下载后就是 `/etc/openbox/profiles` 里的一个普通配置文件，可以「使用」、编辑、下载。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
+订阅是一个返回完整 sing-box JSON 配置的 URL，下载后存为 `/etc/openbox/subscriptions/<名称>.json`，作为托管配置可以「使用」、查看，不能编辑；关联配置从它同步节点（见 3.1）。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
 
 - **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新时 10 秒，LuCI 的调用 20 秒超时）；UA 为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
 - **校验**：必须是 JSON 对象，且通过 `sing-box check`（没装内核时跳过检查）；任何一步失败都不动原文件，原因写进 `last_error`。
@@ -426,11 +457,11 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 LuCI JS 界面（form.Map 直接读写 UCI）
    │ ubus / rpcd
    ▼
-rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点（经 clash API）；配置文件的列表、读写、检查、切换；订阅的保存与更新（经 subscription.sh）
+rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点和延迟（经 clash API）；配置的列表、新建（复制模板）、查看（生成的 JSON）、删除、切换
    │
    ▼
 /etc/init.d/openbox（procd）
-   ├─ generate.uc（source 为 model 时）→ /var/run/openbox/config.json
+   ├─ generate.uc（设备设置 + 当前配置包，OPENBOX_PROFILE 可指定别的配置）→ /var/run/openbox/config.json
    ├─ sing-box check
    ├─ mode.uc（重载时 sing-box 不重启）← 经 clash API 设置出站模式
    └─ run.sh → sing-box run           ← TUN 接管的规则由 sing-box 设置
@@ -447,17 +478,18 @@ openbox/
 ├── openbox/
 │   ├── Makefile
 │   └── files/
-│       ├── openbox.conf        # /etc/config/openbox 默认值
+│       ├── openbox.conf        # /etc/config/openbox 默认值（设备设置）
+│       ├── profile.conf        # 新建配置的模板，复制为 /etc/config/openbox_<名称>
 │       ├── openbox.init
 │       ├── openbox.hotplug     # 接口 up 时刷新 TProxy 规则
-│       ├── openbox.uci-defaults  # 升级时运行 migrate.uc
+│       ├── openbox.uci-defaults  # 升级时运行 migrate.uc；首次安装时由模板创建 openbox_default
 │       ├── run.sh              # procd 运行它，它运行 sing-box 并管理 TProxy 规则
 │       ├── common.sh
 │       ├── core-install.sh
 │       ├── subscription.sh     # 下载、检查并替换订阅的配置文件；cron 每小时执行 due
 │       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
 │       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
-│                               # clash.uc、config.uc 为共享模块，装到 /usr/share/ucode/openbox/
+│                               # clash.uc、config.uc、profile.uc 为共享模块，装到 /usr/share/ucode/openbox/
 ├── luci-app-openbox/
 │   ├── Makefile
 │   ├── htdocs/…/view/openbox/  # 各页面
@@ -473,11 +505,11 @@ openbox/
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里。出站模式（选中立即生效）；策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有搜索框（按名称或服务器筛选）和「测试全部」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。出站模式和当前出站立即生效，其余保存并应用后生效 |
+| 策略 | sing-box 的出站都在这里。出站模式（选中立即生效）；策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「测试全部」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。出站模式和当前出站立即生效，其余保存并应用后生效 |
 | 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
-| 配置文件 | 一张表列出「由 OpenBox 生成」和 `/etc/openbox/profiles` 中的 JSON 文件（大小、修改时间、使用中）；生成的配置：使用、查看（只读，附生成器警告）；文件：使用、编辑、下载、删除（使用中的不能删除）。新建从当前生成的配置开始，上传时填文件名（字母、数字、`.`、`-`、`_`，以 `.json` 结尾），同名覆盖。编辑器可「检查」（`sing-box check`）、保存；使用中的文件先检查通过才保存并重载。切换前也要检查通过，运行中则立即重载。「订阅…」填文件名（默认 `sub.json`）、URL 和更新间隔（小时，0 为只手动更新），保存后立即下载（见 3.3.4）；订阅的文件名下显示 URL 和「每 N 小时更新 · 上次时间」或上次失败的原因，多一个「更新」按钮；编辑订阅文件时提示下次更新会覆盖修改。使用配置文件时，接管、策略、路由规则和内核设置页顶部提示这些设置暂不生效 |
+| 配置文件 | 一张表列出全部配置：名称（点击查看）、类型（本地 / 订阅 / 关联）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单——本地：查看、删除；订阅：查看、更新、创建关联配置、删除；关联：查看、删除（使用中的都不显示删除）。「查看」在弹窗里只读显示生成的 JSON，订阅的弹窗顶部提示不能直接编辑并给出「创建关联配置」。「新建…」弹窗：配置名、来源（默认配置 / 远程订阅），远程订阅再填订阅地址和更新间隔（小时）。「创建关联配置」弹窗：说明和配置名 |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 | 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |
 

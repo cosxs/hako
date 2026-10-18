@@ -1,5 +1,7 @@
 #!/usr/bin/ucode
-// Generate the sing-box configuration from /etc/config/openbox and print it as JSON.
+// Generate the sing-box configuration of a profile and print it as JSON: what
+// sing-box runs comes from the profile, the UCI package openbox_<name>, and
+// how it takes over traffic from the settings of the device in openbox.
 //
 // Naming follows sing-box wherever sing-box has the field: a section type is a
 // top-level key, a section name the key below it, options are sing-box fields,
@@ -10,12 +12,25 @@
 'use strict';
 
 import { cursor } from 'uci';
-
-const CONFIG = 'openbox';
+import { DEVICE, profile_package, current_profile } from 'openbox.profile';
 
 // OPENBOX_CONFDIR and OPENBOX_SAVEDIR point the tests at their own config
 const uci = cursor(getenv('OPENBOX_CONFDIR'), getenv('OPENBOX_SAVEDIR'));
-uci.load(CONFIG);
+uci.load(DEVICE);
+
+const PROFILE = profile_package(current_profile(uci));
+if (!PROFILE || !uci.load(PROFILE)) {
+	warn(`openbox: profile '${current_profile(uci)}' not found\n`);
+	exit(1);
+}
+
+// the device keeps the takeover, its firewall and the clash API; everything
+// else belongs to the profile
+const DEVICE_TYPES = [ 'openbox', 'inbound', 'experimental' ];
+
+function package_of(sectionType) {
+	return (sectionType in DEVICE_TYPES) ? DEVICE : PROFILE;
+}
 
 function bool(value) {
 	return value in [ '1', 'true', 'yes', 'on' ];
@@ -225,7 +240,7 @@ function convert(section, fields, where, refs) {
 }
 
 function mirror(sectionType, name, fields, refs) {
-	const section = uci.get_all(CONFIG, name);
+	const section = uci.get_all(package_of(sectionType), name);
 	if (!section || section['.type'] != sectionType)
 		return null;
 
@@ -237,7 +252,7 @@ function mirror(sectionType, name, fields, refs) {
 const GROUP_TYPES = [ 'selector', 'urltest' ];
 
 const sections = [];
-uci.foreach(CONFIG, 'outbound', (section) => {
+uci.foreach(PROFILE, 'outbound', (section) => {
 	if (section.enabled != '0')
 		push(sections, section);
 });
@@ -585,7 +600,7 @@ function resolve_detour(ref) {
 
 // dns servers, which nodes may resolve their server with
 const dnsServers = [];
-uci.foreach(CONFIG, 'dns_server', (section) => {
+uci.foreach(PROFILE, 'dns_server', (section) => {
 	if (section.enabled != '0')
 		push(dnsServers, section);
 });
@@ -673,7 +688,7 @@ function group_outbound(group) {
 	// plugin settings
 	if (group.type == 'urltest')
 		return merge(outbound, {
-			url: group.url || uci.get(CONFIG, 'latency', 'url'),
+			url: group.url || uci.get(DEVICE, 'latency', 'url'),
 			interval: group.interval,
 			tolerance: number(group.tolerance),
 			idle_timeout: group.idle_timeout
@@ -736,7 +751,7 @@ const dnsServerObjects = filter(map(dnsServers, dns_server), (server) => server 
 
 function enabled_sections(sectionType) {
 	const result = [];
-	uci.foreach(CONFIG, sectionType, (section) => {
+	uci.foreach(package_of(sectionType), sectionType, (section) => {
 		if (section.enabled != '0')
 			push(result, section);
 	});
@@ -805,7 +820,7 @@ for (let inbound in inbounds) {
 
 // in Global mode every connection goes through sing-box, so nothing bypasses
 // it in the firewall; switching the mode keeps it in main.mode
-const mode = uci.get(CONFIG, 'main', 'mode') ?? uci.get(CONFIG, 'clash_api', 'default_mode') ?? '';
+const mode = uci.get(DEVICE, 'main', 'mode') ?? uci.get(DEVICE, 'clash_api', 'default_mode') ?? '';
 if (lc(mode) == 'global')
 	for (let inbound in inbounds)
 		delete inbound.route_exclude_address_set;
@@ -816,7 +831,7 @@ function default_mark() {
 	for (let inbound in inbounds) {
 		if (inbound.type == 'tproxy') {
 			// "+" also reads hexadecimal such as 0x6f63
-			const mark = +(uci.get(CONFIG, 'firewall', 'output_mark') ?? '');
+			const mark = +(uci.get(DEVICE, 'firewall', 'output_mark') ?? '');
 			return (mark > 0) ? mark : null;
 		}
 	}
@@ -839,7 +854,7 @@ const dnsRules = elements('dns_rule', DNS_RULE_FIELDS, (rule) =>
 // is; they go in front of the split between mainland and foreign answers,
 // which starts with the evaluate action, behind the rules for LAN names
 const customRules = (() => {
-	const text = uci.get(CONFIG, 'dns', 'custom_rules');
+	const text = uci.get(PROFILE, 'dns', 'custom_rules');
 	if (!text)
 		return [];
 
