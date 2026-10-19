@@ -26,10 +26,10 @@ let version = +(current ?? '1');
 
 // a config without a version is from the first release
 if (uci.get(CONFIG, 'main') && (current == null || version < latest)) {
-	for (; version < latest; version++)
-		MIGRATIONS[version - 1](uci);
+  for (; version < latest; version++)
+    MIGRATIONS[version - 1](uci);
 
-	uci.set(CONFIG, 'main', 'config_version', `${latest}`);
-	uci.save(CONFIG);
-	uci.commit(CONFIG);
+  uci.set(CONFIG, 'main', 'config_version', `${latest}`);
+  uci.save(CONFIG);
+  uci.commit(CONFIG);
 }

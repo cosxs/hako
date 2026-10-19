@@ -1,66 +1,66 @@
 {
-	"admin/services/openbox": {
-		"title": "OpenBox",
-		"order": 60,
-		"action": {
-			"type": "view",
-			"path": "openbox/activity"
-		},
-		"depends": {
-			"acl": [
-				"luci-app-openbox"
-			],
-			"uci": {
-				"openbox": true
-			}
-		}
-	},
-	"admin/services/openbox/activity": {
-		"action": {
-			"type": "view",
-			"path": "openbox/activity"
-		}
-	},
-	"admin/services/openbox/takeover": {
-		"action": {
-			"type": "view",
-			"path": "openbox/takeover"
-		}
-	},
-	"admin/services/openbox/policy": {
-		"action": {
-			"type": "view",
-			"path": "openbox/policy"
-		}
-	},
-	"admin/services/openbox/rules": {
-		"action": {
-			"type": "view",
-			"path": "openbox/rules"
-		}
-	},
-	"admin/services/openbox/core": {
-		"action": {
-			"type": "view",
-			"path": "openbox/core"
-		}
-	},
-	"admin/services/openbox/profiles": {
-		"action": {
-			"type": "view",
-			"path": "openbox/profiles"
-		}
-	},
-	"admin/services/openbox/logs": {
-		"action": {
-			"type": "view",
-			"path": "openbox/logs"
-		}
-	},
-	"admin/services/openbox/settings": {
-		"action": {
-			"type": "view",
-			"path": "openbox/settings"
-		}
-	}
+  "admin/services/openbox": {
+    "title": "OpenBox",
+    "order": 60,
+    "action": {
+      "type": "view",
+      "path": "openbox/activity"
+    },
+    "depends": {
+      "acl": [
+        "luci-app-openbox"
+      ],
+      "uci": {
+        "openbox": true
+      }
+    }
+  },
+  "admin/services/openbox/activity": {
+    "action": {
+      "type": "view",
+      "path": "openbox/activity"
+    }
+  },
+  "admin/services/openbox/takeover": {
+    "action": {
+      "type": "view",
+      "path": "openbox/takeover"
+    }
+  },
+  "admin/services/openbox/policy": {
+    "action": {
+      "type": "view",
+      "path": "openbox/policy"
+    }
+  },
+  "admin/services/openbox/rules": {
+    "action": {
+      "type": "view",
+      "path": "openbox/rules"
+    }
+  },
+  "admin/services/openbox/core": {
+    "action": {
+      "type": "view",
+      "path": "openbox/core"
+    }
+  },
+  "admin/services/openbox/profiles": {
+    "action": {
+      "type": "view",
+      "path": "openbox/profiles"
+    }
+  },
+  "admin/services/openbox/logs": {
+    "action": {
+      "type": "view",
+      "path": "openbox/logs"
+    }
+  },
+  "admin/services/openbox/settings": {
+    "action": {
+      "type": "view",
+      "path": "openbox/settings"
+    }
+  }
 }

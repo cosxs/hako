@@ -30,13 +30,13 @@
 | 运行 | procd 托管 sing-box，崩溃后自动拉起；启动前执行 `sing-box check`，不通过就不启动；重载失败时保留旧配置继续运行 |
 | 内核 | 从 GitHub 安装最新版，或上传官方 apk；要求 sing-box ≥ 1.14 |
 | 生成器 | 从 UCI 生成 sing-box 配置，写入 `/var/run/openbox/config.json`；界面可查看生成结果 |
-| 节点 | 手动添加、编辑、删除。支持 Shadowsocks、VMess、VLESS（含 Reality）、Trojan、Hysteria2、Hysteria（两者都可端口跳跃）、TUIC、AnyTLS、ShadowTLS、NaiveProxy、Snell（v4/v5、v6）、WireGuard（生成为 endpoint）、SSH、SOCKS、HTTP；每个节点可设前置节点（`detour`），ShadowTLS 即作为其他节点的前置节点使用，不会被“包含全部节点”加入策略组。Tor（需另装 tor）、bridge（三层转发）不做 |
-| 策略组 | 手动选择或自动测速；成员可以是“全部节点”、按名称正则筛选的节点，再加上指定的其他组；手动选择可设默认出站，自动测速可设闲置超时，两者都可设切换时中断现有连接；运行时可切换当前选择，并可对组内全部成员测延迟 |
+| 节点 | 手动添加、编辑、删除。支持 Shadowsocks、VMess、VLESS（含 Reality）、Trojan、Hysteria2（可端口跳跃）、TUIC、AnyTLS、NaiveProxy、Snell（v4/v5、v6）、SSH、SOCKS、HTTP；每个节点可在弹窗的「拨号」页用 JSON 填写 sing-box 拨号字段，前置节点（`detour`）也写在这里；Hysteria v1、ShadowTLS（只是给其他节点包一层 TLS 的前置，不单独使用；订阅里的 ShadowTLS 节点照常保留，Global 不会把它加入）、WireGuard（sing-box 1.11 起只能作为 endpoint）、Tor（需另装 tor）、bridge（三层转发）不做；订阅里的 WireGuard 等 endpoint 节点照常使用 |
+| 策略组 | 手动选择或自动测速；成员逐个添加节点和组，可拖动排序，不提供“全部节点”“全部策略组”；手动选择可设默认出站，自动测速可设闲置超时，两者都可设切换时中断现有连接；运行时可切换当前选择，并可对组内全部成员测延迟 |
 | 出站模式 | 规则判定 / 全局代理 / 直接连接，运行时切换；全局代理时国内 IP 也走代理 |
 | 透明代理 | 一个总开关，接管局域网和路由器自身的流量。接管方式二选一：TUN（sing-box 的 `auto_route` + `auto_redirect`，规则由 sing-box 设置）或 TProxy（OpenBox 设置 nft 规则和策略路由）；DNS 由 sing-box 应答，本地域名交还 dnsmasq；默认只接管 IPv4，可开启 IPv6 接管 |
 | 访问控制 | 按设备（IP 或 MAC）设置黑名单或白名单 |
 | 绕过与分流 | 内网和保留地址始终直连；国内 IP 用自带的规则集在防火墙层绕过；DNS 先问国内 DNS，国内 IP 原样返回，其余返回 FakeIP 并由节点解析 |
-| 配置文件 | 本地、订阅、关联三种配置（见 3.1）：本地配置基于内置模板新建，设置页编辑当前配置；订阅是托管配置，不能直接编辑；关联配置的节点同步自订阅，其余可编辑 |
+| 配置文件 | 本地、订阅两种配置（见 3.1）：都基于内置模板新建，设置页编辑当前配置；订阅配置的节点来自订阅，只读，其余可编辑 |
 | 日志 | 日志设置在页面上方：自动清理（默认开启）、保留天数（默认 7 天）、内核日志级别；下方插件日志和内核日志分两个标签，只显示当天的日志并自动刷新，「清空」只清空显示、不删除文件；后台按天保存，每天零点轮转 |
 
 **M1 不做**（之后再定）：分享链接导入、订阅、redirect 接管模式、自定义 JSON 片段（DNS 规则除外）。
@@ -53,330 +53,341 @@
 
 | 层级 | 内容 | 存放 |
 | --- | --- | --- |
-| 设备设置 | 启用、当前配置（`main.profile`）、出站模式、接管（TUN / TProxy、DNS 入站、代理端口、绕过）、访问控制、Clash API 与缓存文件、插件设置（测速）、日志保留、订阅 | `/etc/config/openbox` |
-| 配置内容 | 节点、策略组、路由规则、规则集、默认出站等路由设置、DNS、sing-box 日志级别、NTP | 每份配置一个 UCI 包 `/etc/config/openbox_<名称>` |
+| 设备设置 | 启用、当前配置（`main.profile`）、出站模式、接管（TUN / TProxy、DNS 入站、代理端口、绕过）、访问控制、Clash API 与缓存文件、插件设置（测速）、日志保留 | `/etc/config/openbox` |
+| 配置内容 | 节点、策略组、路由规则、规则集、默认出站等路由设置、DNS、sing-box 日志级别、NTP | 每份配置一个 UCI 包 `/etc/config/openbox_<标识>` |
 
-配置有三种：
+配置有两种，都是一个配置包，设置页都能编辑：
 
-| 类型 | 怎么来 | 存放 | 设置页 |
-| --- | --- | --- | --- |
-| 本地 | 新建时来源选「默认配置」：复制插件内置的模板 `/usr/share/openbox/profile.conf` | `openbox_<名称>` | 全部可编辑 |
-| 订阅 | 新建时来源选「远程订阅」：下载返回完整 sing-box JSON 的 URL，按间隔更新 | 内容在 `/etc/openbox/subscriptions/<名称>.json`；地址、间隔和更新状态在 `openbox` 的 `config subscription '<名称>'` | 不能编辑，查看时提示「订阅配置无法直接编辑，请创建关联配置，以解除部分配置段落的同步。」 |
-| 关联 | 订阅的「创建关联配置」 | `openbox_<名称>`，`profile.subscription` 记下关联的订阅 | 节点全部来自订阅：只读并标「订阅」，不能新增、编辑或删除，只能测试延迟；策略组、规则、DNS 等和本地配置一样可编辑 |
+| 类型 | 怎么来 | 节点 |
+| --- | --- | --- |
+| 本地 | 新建时来源选「默认配置」：复制插件内置的模板 `/usr/share/openbox/template/openbox_template` | 在策略页增删改 |
+| 订阅 | 新建时来源选「远程订阅」：同样复制模板，再在包里的 `config profile 'profile'` 记下 `url`、`update_interval`、`user_agent` | 全部来自订阅，随订阅更新；策略页只读列出，不能新增、编辑或删除，只能测试延迟 |
 
-- **名称**：小写字母、数字和 `_`，1–32 位，同时是 UCI 包名的一部分；配置和订阅共用一个名称空间。
+订阅只提供节点：订阅返回完整的 sing-box JSON，下载到 `/etc/openbox/subscriptions/<标识>.json`，生成时只取其中的节点，策略组、规则、DNS 等全部用配置包自己的，所以不会和设备设置冲突。新建后订阅的节点只自动出现在 Global 里，要在 Proxy 等策略组里使用，需在组的出站标签里逐个添加（按名字引用）。
+
+- **配置名与标识**：配置名可以是任意文字（去掉首尾空格后不能为空，也不能和已有的重名），只用来显示，存在包里 `config profile 'profile'` 的 `title`。内部标识在新建时自动取当前的毫秒时间戳（13 位，被占用时加 1），用作包名 `openbox_<标识>` 和订阅文件名，`main.profile` 记的也是它；没有 `title` 时显示标识（如 `default`）。
 - **默认配置**：首次安装由模板创建 `openbox_default` 并设为当前配置。它和其他本地配置一样可以编辑、删除；需要时随时可以再基于内置模板新建。
-- **删除**：使用中的配置不能删除；删除订阅前，先删除关联它的配置。
+- **删除**：使用中的配置不能删除；删除订阅配置时，下载的内容一起删掉。
 - 之前的原生 JSON 配置（`/etc/openbox/profiles/*.json`，上传、粘贴、编辑 JSON）不再支持，界面上的「查看」只显示生成的 JSON。
 
-运行的配置由当前配置和设备设置生成（`generate.uc`），写入 `/var/run/openbox/config.json`，经 `sing-box check` 后运行：
+运行的配置由当前配置和设备设置生成（`generate.uc`），写入 `/var/run/openbox/config.json`，经 `sing-box check` 后运行。配置包有 `profile.url` 时，生成器把订阅 JSON 中 `outbounds` 和 `endpoints` 里的节点（`direct`、`block`、`dns`、`selector`、`urltest` 以外的类型）追加进来：
 
-- **本地**：和现在的生成规则相同，只是配置内容读自 `openbox_<名称>`，设备设置读自 `openbox`。
-- **关联**：节点全部取自订阅 JSON 中 `outbounds` 和 `endpoints` 里的节点（`direct`、`block`、`dns`、`selector`、`urltest` 以外的类型），配置包里不存节点；策略组、规则和其余设置读自配置包。「包含全部节点」和节点筛选对订阅节点同样有效。订阅节点的 `domain_resolver` 指向订阅自己的 DNS 服务器时去掉，改用路由的默认解析服务器。
-- **订阅**：原样使用订阅 JSON，只注入设备设置：入站换成接管和代理端口的入站；路由规则最前面加上嗅探、DNS 劫持、内网直连和直连 / 全局模式的固定规则；缺少 Direct、Global 组时补上；`experimental` 换成设备的 Clash API 和缓存文件；去掉日志的 `output`。节点、策略组、规则和 DNS 都用订阅的。
+- 与配置包里出站重名的订阅节点跳过并给出警告。
+- 策略组的成员和路由规则可以按名字引用它们；Global 自动包含它们。
+- 订阅节点的 `detour` 只保留指向其他订阅节点的；`domain_resolver` 指向配置里没有的 DNS 服务器（多半是订阅自己的）时去掉，改用路由的默认解析服务器。
 
-订阅更新后，如果当前使用的正是这个订阅或关联它的配置，就重载（见 3.3.4）。当前使用订阅时，策略、路由规则和内核设置页顶部提示「当前使用订阅配置，这里的设置不影响它」；策略组的当前出站仍可经 clash API 切换和测速。
+订阅更新后，如果当前使用的正是这份配置，就重载（见 3.3.4）。
 
-实现分三步，每步都能单独发布：
+实现分两步，每步都能单独发布：
 
-1. **配置包**：设备设置和配置内容拆开，`generate.uc` 读当前配置包；`config_version` 重置为 1；配置文件页按设计稿重写本地类型（列表、「使用」和「更多」菜单、新建、查看弹窗）；各设置页改为编辑当前配置包。
-2. **订阅**：订阅改为托管配置，内容移到 `/etc/openbox/subscriptions/`，「使用」时注入设备设置。
-3. **关联**：创建关联配置，生成时取订阅的节点，策略页的节点列表只读（不能新增、编辑、删除，只能测试延迟）。
+1. **配置包**：设备设置和配置内容拆开，`generate.uc` 读当前配置包；`config_version` 重置为 1；配置文件页按设计稿重写（列表、「使用」和「更多」菜单、新建、查看弹窗）；各设置页改为编辑当前配置包。
+2. **订阅**：新建时可选「远程订阅」，订阅只提供节点，可自定义 User-Agent；策略页的订阅节点只读、可测延迟。
 
 > **技术验证结论**（OpenWrt 25.12 容器，sing-box 1.14.3）：`tun` 入站的 `auto_route` + `auto_redirect` 能接管局域网设备和路由器自身的流量。TCP 经 nftables 重定向，UDP 经策略路由进入 TUN；sing-box 自建 `inet sing-box` 表，与 fw4 互不影响，重启防火墙不丢接管，停止后清理干净。节点不可用时流量不会泄露为直连。TProxy 由 OpenBox 自建 `inet openbox` 表和策略路由，同样逐项验证通过。
 
-### 3.2 数据模型（`/etc/config/openbox` 与 `/etc/config/openbox_<名称>`）
+### 3.2 数据模型（`/etc/config/openbox` 与 `/etc/config/openbox_<标识>`）
 
 原则：**所有配置都来自 UCI**，生成器里不写任何具体的值，只负责翻译和必要的计算。
 
-下面的 section 按 3.1 分在两个包里：类型为 `openbox`（`main`、`logs`、`latency`、`firewall`）、`inbound`、`experimental` 的属于设备设置，在 `openbox`；其余（`log`、`dns`、`dns_server`、`dns_rule`、`ntp`、`route`、`rule_set`、`http_client`、`outbound`、`route_rule`）属于配置，在当前配置的包里。软件包附带的默认值也分两份：`openbox.conf` 是设备设置，`profile.conf` 是新建配置时复制的模板（装到 `/usr/share/openbox/profile.conf`）。设备设置引用的规则集（如 `route_exclude_address_set`、`firewall.bypass_rule_set` 的 `cn_ip`）在当前配置里查找。界面上，接管、插件设置和日志页编辑 `openbox`；策略、路由规则和内核设置页编辑当前配置的包，内核设置的「实验性」（Clash API、缓存文件）和接管页的 DNS 模式、FakeIP 地址段例外，分别写到另一个包。ACL 用 `openbox_*` 放行所有配置包。
+下面的 section 按 3.1 分在两个包里：类型为 `openbox`（`main`、`logs`、`latency`、`firewall`）、`inbound`、`experimental` 的属于设备设置，在 `openbox`；其余（`log`、`dns`、`dns_server`、`dns_rule`、`ntp`、`route`、`rule_set`、`http_client`、`outbound`、`route_rule`）属于配置，在当前配置的包里。软件包附带的默认值也分两份：`openbox.conf` 是设备设置，`template/openbox_template` 是新建配置时复制的模板（装到 `/usr/share/openbox/template/`，这个目录本身可以当 UCI 目录读）。设备设置引用的规则集（如 `route_exclude_address_set`、`firewall.bypass_rule_set` 的 `cn_ip`）在当前配置里查找。界面上，接管、插件设置和日志页编辑 `openbox`；策略、路由规则和内核设置页编辑当前配置的包，内核设置的「实验性」（Clash API、缓存文件）和接管页的 DNS 模式、FakeIP 地址段例外，分别写到另一个包。ACL 用 `openbox_*` 放行所有配置包。
 
 命名约定：
 - **能用 sing-box 的就以 sing-box 为准**：section 类型是 sing-box 的顶层键（数组元素用单数，如 `outbound`、`route_rule`），section 名是下一层的键或元素的内部标识，option 沿用 sing-box 字段名，嵌套字段用 `_` 连接（`tls.server_name` → `tls_server_name`）。
-- **OpenBox 自己加的概念参考 mihomo 命名**：`include_all_proxies`、`include_all_groups`、`filter`、`exclude_filter`、`hidden`。
-- 引用（`outbounds`、`default`、`final`、`outbound`、`detour`、`server`、`domain_resolver`、`default_domain_resolver`、`rule_set`、`route_exclude_address_set`、`http_client`）可以写 section 名或 tag，先按 section 名查找。
-- 拨号字段 `detour` 不能指向 direct 类型的出站（sing-box 会报错），生成时忽略并给出警告；留空就是直连。
+- **OpenBox 自己加的概念参考 mihomo 命名**：`hidden`。
+- 引用（`outbounds`、`default`、`final`、`outbound`、`detour`、`server`、`domain_resolver`、`default_domain_resolver`、`rule_set`、`route_exclude_address_set`、`http_client`）可以写 section 名或 tag，先按 section 名查找；节点 `dial_fields` 里的 JSON 原样使用，只能写 tag。
+- DNS 服务器等 UCI 里的 `detour` 不能指向 direct 类型的出站（sing-box 会报错），生成时忽略并给出警告；留空就是直连。
 - 生成器按字段类型表转换布尔、数字和列表；表中没有的 option 会被跳过并给出警告。
 
 下面是软件包附带的默认值，加上若干示例：
 
 ```
 config openbox 'main'              # OpenBox 自身的设置
-	option config_version '13'      # 配置格式的版本，升级时由迁移脚本逐级更新（2：加入 mixed 入站；3：固定的路由规则标 hidden；4：local 改为 local 类型，AliDNS 改名 alidns；5：FakeIP 加 IPv6 地址段；6：绕过的 IPv6 地址 fc00::/7 改为 fd00::/8；7：删掉 dnsmasq 服务器，局域网域名改用 local；8：拒绝 QUIC 改按嗅探到的协议；9：开启 find_neighbor；10：TUN 接管也启用 dns_in，供 dnsmasq 转发；11：FakeIP 的 IPv6 地址段 fc00::/18 改为 2001:2::/48；12：FakeIP 应答的 TTL 改为 1 秒；13：加入插件设置的测速段 latency）
-	option enabled '0'
-	option source 'model'          # model | profile
-	option profile ''              # source 为 profile 时使用的文件
-	# option mode 'Global'         # 出站模式：在策略页选择后立即写入并重载，由 OpenBox 经 clash API 设到 sing-box；
-	                               # 也决定国内 IP 是否在防火墙层绕过；没有时取 clash_api.default_mode
+    option config_version '13'      # 配置格式的版本，升级时由迁移脚本逐级更新（2：加入 mixed 入站；3：固定的路由规则标 hidden；4：local 改为 local 类型，AliDNS 改名 alidns；5：FakeIP 加 IPv6 地址段；6：绕过的 IPv6 地址 fc00::/7 改为 fd00::/8；7：删掉 dnsmasq 服务器，局域网域名改用 local；8：拒绝 QUIC 改按嗅探到的协议；9：开启 find_neighbor；10：TUN 接管也启用 dns_in，供 dnsmasq 转发；11：FakeIP 的 IPv6 地址段 fc00::/18 改为 2001:2::/48；12：FakeIP 应答的 TTL 改为 1 秒；13：加入插件设置的测速段 latency）
+    option enabled '0'
+    option source 'model'          # model | profile
+    option profile ''              # source 为 profile 时使用的文件
+    # option mode 'Global'         # 出站模式：在活动页选择后立即写入并重载，由 OpenBox 经 clash API 设到 sing-box；
+                                   # 也决定国内 IP 是否在防火墙层绕过；没有时取 clash_api.default_mode
 
 config openbox 'logs'              # OpenBox 的日志管理
-	option auto_clean '1'          # 自动清理按天保存的旧日志
-	option retention_days '7'      # 保留天数（含当天）
+    option auto_clean '1'          # 自动清理按天保存的旧日志
+    option retention_days '7'      # 保留天数（含当天）
 
 config openbox 'latency'           # 测速，OpenBox 自己的概念；插件设置页「测速」标签，默认为空段
-	# option url ''                # 手动测速（策略组「延迟测试」、节点「测试全部」）的地址，经 clash API 的 url 参数传给 sing-box；
-	                               # 自动测速组没写 url 时，生成器也用它；不写时 sing-box 用 https://www.gstatic.com/generate_204
-	# option timeout '5s'          # 手动测速的超时，sing-box 时长写法（界面按秒填），最多 15 秒；自动测速组的超时由 sing-box 固定
+    # option url ''                # 手动测速（策略组「延迟测试」、节点「延迟测试」）的地址，经 clash API 的 url 参数传给 sing-box；
+                                   # 自动测速组没写 url 时，生成器也用它；不写时 sing-box 用 https://www.gstatic.com/generate_204
+    # option timeout '5s'          # 手动测速的超时，sing-box 时长写法（界面按秒填），最多 15 秒；自动测速组的超时由 sing-box 固定
 
-config subscription                # 示例：订阅，OpenBox 自己的概念，生成器不读；配置文件页「订阅…」添加，匿名 section
-	option file 'my.json'          # /etc/openbox/profiles 里的文件名，规则同配置文件名，每个文件至多一个订阅
-	option url 'https://example.com/sing-box.json'  # 返回完整的 sing-box JSON 配置（http / https）
-	option update_interval '24h'   # sing-box 时长写法（界面按小时填）；不写或 '0' 时只手动更新
-	option last_update '1792230866'  # 由 subscription.sh 写入：最近一次成功更新的时间（epoch）
-	# option last_error ''         # 由 subscription.sh 写入：最近一次失败的原因，成功后删除
+config profile 'profile'           # 示例：配置包里的这一段（在 openbox_<标识> 里，不在 openbox 里），OpenBox 自己的概念，生成器只读 url
+    option title '机场 A'           # 配置名，任意文字，只用来显示
+    option url 'https://example.com/sing-box.json'  # 订阅配置才有：返回完整的 sing-box JSON 配置（http / https），只取其中的节点
+    option update_interval '24h'   # sing-box 时长写法（界面按小时填）；不写或 '0' 时只手动更新
+    option user_agent ''           # 不写时为 sing-box/<内核版本> OpenBox/<插件版本>
+    option last_update '1792230866'  # 由 subscription.sh 写入：最近一次成功更新的时间（epoch）
+    # option last_error ''         # 由 subscription.sh 写入：最近一次失败的原因，成功后删除
 
 config log 'log'                   # → log
-	option level 'warn'            # info 及更低级别会为每个连接记录日志
-	option timestamp '1'
+    option level 'warn'            # info 及更低级别会为每个连接记录日志
+    option timestamp '1'
 
 config dns 'dns'                   # → dns
-	option final 'remote'          # 规则都没命中时用的 DNS 服务器
-	option strategy 'ipv4_only'    # 只解析 IPv4；开启 IPv6 接管时为 prefer_ipv4
-	option optimistic '1'          # 乐观缓存：过期先返回旧结果，后台刷新
-	# option custom_rules '[...]'  # OpenBox：sing-box 原生 DNS 规则的 JSON 数组，原样插到下面局域网域名规则之后、
-	                               # 国内外分流（evaluate 开始）之前；内核设置 → DNS 里编辑，不经字段转换，官方字段都能用
+    option final 'remote'          # 规则都没命中时用的 DNS 服务器
+    option strategy 'ipv4_only'    # 只解析 IPv4；开启 IPv6 接管时为 prefer_ipv4
+    option optimistic '1'          # 乐观缓存：过期先返回旧结果，后台刷新
+    # option custom_rules '[...]'  # OpenBox：sing-box 原生 DNS 规则的 JSON 数组，原样插到下面局域网域名规则之后、
+                                   # 国内外分流（evaluate 开始）之前；内核设置 → DNS 里编辑，不经字段转换，官方字段都能用
 
 config dns_server 'local'          # → dns.servers[]；系统解析（OpenWrt 上经 /etc/resolv.conf 交给 dnsmasq），解析局域网域名
-	option tag 'local'
-	option type 'local'            # local | udp | tcp | tls | quic | https | h3 | fakeip；界面列表不显示 local 和 fakeip，
-	                               # 其余按官方文档显示为 UDP、TCP、TLS、QUIC、HTTPS、HTTP/3
+    option tag 'local'
+    option type 'local'            # local | udp | tcp | tls | quic | https | h3 | fakeip；界面列表不显示 local 和 fakeip，
+                                   # 其余按官方文档显示为 UDP、TCP、TLS、QUIC、HTTPS、HTTP/3
 
 config dns_server 'alidns'         # 国内 DNS（阿里 DNS），直连
-	option tag 'alidns'
-	option type 'udp'
-	option server '223.5.5.5'      # 其余字段：server_port、path、tls_server_name、
-	                               # detour（出站）、domain_resolver（DNS 服务器）
+    option tag 'alidns'
+    option type 'udp'
+    option server '223.5.5.5'      # 其余字段：server_port、path、tls_server_name、
+                                   # detour（出站）、domain_resolver（DNS 服务器）
 
 config dns_server 'fakeip'         # 在「接管」页随 DNS 模式设置，内核设置的 DNS 服务器列表里不显示
-	option tag 'fakeip'
-	option type 'fakeip'
-	option inet4_range '198.18.0.0/15'
-	option inet6_range '2001:2::/48' # 基准测试地址段（RFC 5180），与 IPv4 的 198.18.0.0/15 对应；不用 sing-box 示例的 fc00::/18：dnsmasq 的重绑定保护会丢弃 fc00::/7 的应答；dns.strategy 为 ipv4_only 时用不到
+    option tag 'fakeip'
+    option type 'fakeip'
+    option inet4_range '198.18.0.0/15'
+    option inet6_range '2001:2::/48' # 基准测试地址段（RFC 5180），与 IPv4 的 198.18.0.0/15 对应；不用 sing-box 示例的 fc00::/18：dnsmasq 的重绑定保护会丢弃 fc00::/7 的应答；dns.strategy 为 ipv4_only 时用不到
 
 config dns_server 'remote'         # 经代理的 DoH，兜底
-	option tag 'remote'
-	option type 'https'
-	option server '1.1.1.1'
-	option detour 'proxy'
+    option tag 'remote'
+    option type 'https'
+    option server '1.1.1.1'
+    option detour 'proxy'
 
 config dns_rule                    # → dns.rules[]，按顺序生成
-	list   domain_suffix 'lan'     # 本地域名和私有网段的反查经系统解析（local）交给 dnsmasq
-	list   domain_suffix '10.in-addr.arpa'
-	list   domain_suffix '168.192.in-addr.arpa'
-	list   domain_regex '\.(1[6-9]|2[0-9]|3[01])\.172\.in-addr\.arpa$'
-	option server 'local'
+    list   domain_suffix 'lan'     # 本地域名和私有网段的反查经系统解析（local）交给 dnsmasq
+    list   domain_suffix '10.in-addr.arpa'
+    list   domain_suffix '168.192.in-addr.arpa'
+    list   domain_regex '\.(1[6-9]|2[0-9]|3[01])\.172\.in-addr\.arpa$'
+    option server 'local'
 
 config dns_rule                    # 先问国内 DNS，最多等 2 秒
-	option action 'evaluate'
-	option server 'alidns'
-	option timeout '2s'
+    option action 'evaluate'
+    option server 'alidns'
+    option timeout '2s'
 
 config dns_rule                    # 答案是国内 IP：原样返回
-	option match_response '1'
-	list   rule_set 'cn_ip'
-	option action 'respond'
+    option match_response '1'
+    list   rule_set 'cn_ip'
+    option action 'respond'
 
 config dns_rule 'foreign'          # 其余有地址的 A/AAAA：返回 FakeIP（DNS 模式为 RealIP 时 server 是 remote）
-	option match_response '1'
-	option response_rcode 'NOERROR'
-	option ip_accept_any '1'
-	list   query_type 'A'
-	list   query_type 'AAAA'
-	option server 'fakeip'
-	option rewrite_ttl '1'         # 仅 FakeIP：设备几乎不缓存假地址，停止后下一次查询即拿到真实地址；RealIP 时不设，保留真实 TTL
+    option match_response '1'
+    option response_rcode 'NOERROR'
+    option ip_accept_any '1'
+    list   query_type 'A'
+    list   query_type 'AAAA'
+    option server 'fakeip'
+    option rewrite_ttl '1'         # 仅 FakeIP：设备几乎不缓存假地址，停止后下一次查询即拿到真实地址；RealIP 时不设，保留真实 TTL
 
 # 另有三条：其余 NOERROR、NXDOMAIN 原样返回；
 # 'fallback'：国内 DNS 无响应时，A/AAAA 交给与 'foreign' 相同的服务器
 
 config ntp 'ntp'                   # → ntp；系统已有 sysntpd，默认关闭
-	option enabled '0'
-	option server 'ntp.aliyun.com'
-	option server_port '123'       # sing-box 默认值
-	option interval '30m'          # sing-box 默认值；其余字段：detour、domain_resolver
+    option enabled '0'
+    option server 'ntp.aliyun.com'
+    option server_port '123'       # sing-box 默认值
+    option interval '30m'          # sing-box 默认值；其余字段：detour、domain_resolver
 
 config experimental 'clash_api'    # → experimental.clash_api；删除此 section 即关闭
-	option external_controller '127.0.0.1:9090'
-	option secret ''
-	option default_mode 'Rule'     # 固定为 Rule，界面不提供；实际模式由策略页的出站模式（main.mode）决定
+    option external_controller '127.0.0.1:9090'
+    option secret ''
+    option default_mode 'Rule'     # 固定为 Rule，界面不提供；实际模式由活动页的出站模式（main.mode）决定
 
 config experimental 'cache_file'   # → experimental.cache_file，保存出站模式、各组的选择与 FakeIP 映射
-	option enabled '1'
-	option path '/etc/openbox/cache.db'
-	option store_fakeip '1'
+    option enabled '1'
+    option path '/etc/openbox/cache.db'
+    option store_fakeip '1'
 
 config inbound 'tun'               # → inbounds[]；enabled 即接管总开关，默认开启（TUN）
-	option enabled '1'
-	option type 'tun'              # tun；TProxy 见下面的 'tproxy' 段
-	option tag 'tun-in'
-	option interface_name 'openbox-tun'
-	list   address '172.19.0.1/30'
-	option auto_route '1'
-	option auto_redirect '1'
-	list   route_exclude_address '10.0.0.0/8'     # 保留地址，与 TProxy 默认值相同（IPv4 10 项 + IPv6 4 项）
-	list   route_exclude_address 'fd00::/8'   # 实际在用的 ULA
-	list   route_exclude_address_set 'cn_ip'  # 国内 IP 在防火墙层绕过
+    option enabled '1'
+    option type 'tun'              # tun；TProxy 见下面的 'tproxy' 段
+    option tag 'tun-in'
+    option interface_name 'openbox-tun'
+    list   address '172.19.0.1/30'
+    option auto_route '1'
+    option auto_redirect '1'
+    list   route_exclude_address '10.0.0.0/8'     # 保留地址，与 TProxy 默认值相同（IPv4 10 项 + IPv6 4 项）
+    list   route_exclude_address 'fd00::/8'   # 实际在用的 ULA
+    list   route_exclude_address_set 'cn_ip'  # 国内 IP 在防火墙层绕过
 
 config route 'route'               # → route
-	option final 'proxy'
-	option default_domain_resolver 'alidns'  # 解析节点域名用的 DNS 服务器，必须直连
-	option auto_detect_interface '1'        # 出站绑定物理网卡，接管时避免回环
-	option find_neighbor '1'                # 日志显示局域网设备的 MAC 和主机名（内核设置 → 日志 →「显示设备」）
-	# list dhcp_lease_files ''              # 默认不写：sing-box 自动探测 /tmp/dhcp.leases（OpenWrt 的 dnsmasq）等租约文件
-	# option default_http_client ''         # 远程规则集默认的下载方式
+    option final 'final'           # 规则都没命中的流量走 Final 组
+    option default_domain_resolver 'alidns'  # 解析节点域名用的 DNS 服务器，必须直连
+    option auto_detect_interface '1'        # 出站绑定物理网卡，接管时避免回环
+    option find_neighbor '1'                # 日志显示局域网设备的 MAC 和主机名（内核设置 → 日志 →「显示设备」）
+    # list dhcp_lease_files ''              # 默认不写：sing-box 自动探测 /tmp/dhcp.leases（OpenWrt 的 dnsmasq）等租约文件
+    # option default_http_client ''         # 远程规则集默认的下载方式
 
 config rule_set 'cn_ip'            # → route.rule_set[]
-	option tag 'cn-mainland-ip'
-	option type 'local'            # local | remote | inline；随软件包附带，启动时不用下载
-	option format 'binary'         # 可留空：按 path / url 的扩展名（.srs / .json）判断
-	option path '/usr/share/openbox/rule-set/cn-mainland-ip.srs'
-	# remote：url、http_client、update_interval、initial_path（还没下载时先用的本地文件）
-	# inline：option rules '[...]'  # sing-box 无头规则的 JSON 数组，原样写入；TProxy 的绕过也能用
+    option tag 'cn-mainland-ip'
+    option type 'local'            # local | remote | inline；随软件包附带，启动时不用下载
+    option format 'binary'         # 可留空：按 path / url 的扩展名（.srs / .json）判断
+    option path '/usr/share/openbox/rule-set/cn-mainland-ip.srs'
+    # remote：url、http_client、update_interval、initial_path（还没下载时先用的本地文件）
+    # inline：option rules '[...]'  # sing-box 无头规则的 JSON 数组，原样写入；TProxy 的绕过也能用
 
 config inbound 'tproxy'            # TProxy 接管时启用，'tun' 关闭
-	option enabled '0'
-	option type 'tproxy'
-	option tag 'tproxy-in'
-	option listen '::'
-	option listen_port '7893'
+    option enabled '0'
+    option type 'tproxy'
+    option tag 'tproxy-in'
+    option listen '::'
+    option listen_port '7893'
 
 config inbound 'dns_in'            # 接管时启用（TUN 和 TProxy）：dnsmasq 的查询转发到这里；TProxy 时 53 端口的查询也被重定向到这里
-	option enabled '1'
-	option type 'direct'
-	option tag 'dns-in'
-	option listen '::'
-	option listen_port '1053'
+    option enabled '1'
+    option type 'direct'
+    option tag 'dns-in'
+    option listen '::'
+    option listen_port '1053'
 
 config inbound 'mixed'             # 代理端口：局域网设备手动设置的 HTTP / SOCKS5 代理，与接管互相独立，默认关闭
-	option enabled '0'
-	option type 'mixed'
-	option tag 'mixed-in'
-	option listen '::'               # 防火墙的 WAN 区域默认拒绝入站，外网连不进来
-	option listen_port '7890'
-	# option username ''           # 用户名和密码都填时生成 users，否则不需要密码
-	# option password ''
+    option enabled '0'
+    option type 'mixed'
+    option tag 'mixed-in'
+    option listen '::'               # 防火墙的 WAN 区域默认拒绝入站，外网连不进来
+    option listen_port '7890'
+    # option username ''           # 用户名和密码都填时生成 users，否则不需要密码
+    # option password ''
 
 config openbox 'firewall'          # OpenBox 为 TProxy 设置的防火墙与策略路由（TUN 不用）
-	option ipv6 '0'                # OpenBox：TProxy 是否接管 IPv6；接管页的 IPv6 开关同时改它、dns.strategy 和 TUN 的 IPv6 地址
-	list   interface 'lan'         # 从这些接口进入的流量被接管
-	list   bypass_address '10.0.0.0/8'   # 保留地址，共 10 项
-	list   bypass_address6 'fd00::/8'    # 绕过的 IPv6 地址（共 4 项）；不接管 IPv6 时其余 TCP/UDP 拒绝；fd00::/8 是实际在用的 ULA
-	list   bypass_rule_set 'cn_ip'  # 本地规则集，反编译后放入 nft 集合
-	option mark '0x6f62'           # 要交给 TProxy 的包
-	option output_mark '0x6f63'    # sing-box 自己的连接（生成为 route.default_mark）
-	option route_table '233'
-	option rule_priority '1100'
+    option ipv6 '0'                # OpenBox：TProxy 是否接管 IPv6；接管页的 IPv6 开关同时改它、dns.strategy 和 TUN 的 IPv6 地址
+    list   interface 'lan'         # 从这些接口进入的流量被接管
+    list   bypass_address '10.0.0.0/8'   # 保留地址，共 10 项
+    list   bypass_address6 'fd00::/8'    # 绕过的 IPv6 地址（共 4 项）；不接管 IPv6 时其余 TCP/UDP 拒绝；fd00::/8 是实际在用的 ULA
+    list   bypass_rule_set 'cn_ip'  # 本地规则集，反编译后放入 nft 集合
+    option mark '0x6f62'           # 要交给 TProxy 的包
+    option output_mark '0x6f63'    # sing-box 自己的连接（生成为 route.default_mark）
+    option route_table '233'
+    option rule_priority '1100'
 
 config http_client 'via_proxy'     # 示例 → http_clients[]，供远程规则集下载
-	option tag 'via-proxy'
-	option detour 'proxy'
+    option tag 'via-proxy'
+    option detour 'proxy'
 
 config outbound 'direct'           # → outbounds[]
-	option tag 'Direct'
-	option type 'direct'
-	option hidden '1'              # mihomo：不在策略页的策略组、节点列表中显示，仍可在各处选用
+    option tag 'Direct'
+    option type 'direct'
+    option hidden '1'              # mihomo：不在策略页的策略组、节点列表中显示，仍可在各处选用
 
 config outbound 'hk01'             # 节点示例
-	option tag '香港 01'
-	option type 'vless'            # direct | shadowsocks | vmess | vless | trojan | hysteria2 | hysteria | tuic | anytls
-	                               # | shadowtls | naive | snell | wireguard | ssh | socks | http
-	option server 'example.com'
-	option server_port '443'
-	option uuid '…'
-	option tls_enabled '1'         # 其余字段：password、method、flow、tls_server_name、
-	…                              # tls_insecure、tls_alpn、tls_utls_fingerprint、
-	                               # tls_reality_enabled/public_key/short_id、
-	                               # tls_disable_sni、tls_min_version/max_version、tls_certificate（PEM 每行一项 list）、
-	                               # tls_certificate_public_key_sha256、tls_ech_enabled/config、tls_fragment、tls_record_fragment；
-	                               # transport_type（ws | httpupgrade | grpc | http | quic）/path/host/service_name/method、
-	                               # transport_max_early_data/early_data_header_name（ws）；transport_host 是 list，
-	                               # http 全部输出，ws、httpupgrade 取第一项（旧的单值 option 照常读取）；
-	                               # obfs_type/password，gecko 另有 obfs_min_packet_size/max_packet_size；
-	                               # snell：version、psk、reuse、obfs_mode/host（v4）、mode（v6）；
-	                               # socks：version、username、udp_over_tcp；http：username、path；
-	                               # vmess：uuid、security、alter_id、packet_encoding，可用 tls 与 transport；vless 也有 packet_encoding；
-	                               # vmess、vless、trojan、shadowsocks：multiplex_enabled/protocol/max_connections/
-	                               # min_streams/max_streams/padding；shadowsocks：plugin、plugin_opts、udp_over_tcp
-	                               # （与 multiplex 同时设置时忽略并警告）；
-	                               # hysteria：auth_str、obfs、up_mbps、down_mbps；hysteria 与 hysteria2 另有
-	                               # server_ports、hop_interval（设置后不输出 server_port）；hysteria2 另有 hop_interval_max、
-	                               # bbr_profile、disable_chrome_parrot；
-	                               # tuic：uuid、password、congestion_control、udp_relay_mode、zero_rtt_handshake；
-	                               # anytls：password；shadowtls：version、password；naive：username、password、quic；
-	                               # ssh：user、password、private_key_path、private_key_passphrase、host_key；
-	                               # wireguard → endpoints[]：private_key、address、mtu，服务器即唯一的 peer，
-	                               # peer_public_key、peer_pre_shared_key、peer_allowed_ips（留空为全部）、
-	                               # peer_reserved（如 "1,2,3"）、peer_persistent_keepalive_interval；
-	                               # vmess、hysteria、tuic、snell、socks 另有 network；
-	                               # 所有节点可设 detour（前置节点，节点或策略组）及拨号字段 connect_timeout、tcp_fast_open、
-	                               # tcp_multi_path、udp_fragment、bind_interface、domain_resolver（DNS 服务器）。
-	                               # 以上字段生成器都支持，节点编辑弹窗只提供常用的；下面这些界面不提供，需要时手改 UCI：
-	                               # tls_disable_sni、tls_min_version/max_version、tls_certificate、tls_certificate_public_key_sha256、
-	                               # tls_ech_enabled/config、tls_fragment、tls_record_fragment；multiplex_max_connections/min_streams/
-	                               # max_streams/padding；hysteria2 的 hop_interval_max、obfs_min_packet_size/max_packet_size、bbr_profile、
-	                               # disable_chrome_parrot；拨号字段 connect_timeout、tcp_fast_open、tcp_multi_path、udp_fragment、
-	                               # bind_interface、domain_resolver
+    option tag '香港 01'
+    option type 'vless'            # direct | shadowsocks | vmess | vless | trojan | hysteria2 | hysteria | tuic | anytls
+                                   # | naive | snell | ssh | socks | http
+    option server 'example.com'
+    option server_port '443'
+    option uuid '…'
+    option tls_enabled '1'         # 其余字段：password、method、flow、tls_server_name、
+    …                              # tls_insecure、tls_utls_fingerprint、
+                                   # tls_reality_enabled/public_key/short_id；tls_fields（弹窗 TLS 页的「高级编辑」）是
+                                   # sing-box TLS 字段组成的 JSON 对象，原样合并进 tls，覆盖上面的同名字段，TLS 未启用时不用；
+                                   # 弹窗里 TLS 页的字段和它双向同步（改字段写进 JSON，改 JSON 回填字段），以 JSON 为准；
+                                   # JSON 里总显示 "enabled": true，不能写成 false（固定 TLS 的协议 sing-box 报 TLS required，
+                                   # 可选 TLS 的协议用「启用 TLS」关闭）；
+                                   # transport_type（ws | httpupgrade | grpc | http | quic）/path/host/service_name/method、
+                                   # transport_host（httpupgrade、http）是 list，http 全部输出，httpupgrade 取第一项
+                                   # （旧的单值 option 照常读取）；
+                                   # transport_headers（ws、httpupgrade、http）是 list，每项 "名称: 值"，同名多项生成值的数组；
+                                   # ws 没有 host 字段，Host 写在 transport_headers 里，不提供前置数据（early data）；
+                                   # hysteria2：obfs_type/password，gecko 另有 obfs_min_packet_size/max_packet_size；hop_interval_max、
+                                   # bbr_profile、brutal_debug、disable_chrome_parrot；realm_server_url 有值时经 Hysteria Realm 连接，
+                                   # 不输出 server、server_port、server_ports，另有 realm_token、realm_realm_id、realm_stun_servers（list）、
+                                   # realm_ip_version、realm_port_mapping_enabled/timeout/lifetime、realm_http_client（http_client 配置段）；
+                                   # snell：version（必填，4 即 v4/v5，或 6）、psk、userkey、reuse、obfs_mode/host（v4）、mode（v6）；
+                                   # socks：version、username、udp_over_tcp；http：username、path、headers（同 transport_headers 的 list）；
+                                   # vmess：uuid、security、alter_id、global_padding、authenticated_length、packet_encoding，可用 tls 与 transport；vless 也有 packet_encoding；
+                                   # shadowsocks：plugin、plugin_opts、udp_over_tcp；shadowsocks、trojan、anytls 的 password 必填；
+                                   # hysteria2 另有 server_ports、hop_interval（设置后不输出 server_port）；
+                                   # tuic：uuid、password、congestion_control、udp_relay_mode、udp_over_stream（与 udp_relay_mode 互斥，
+                                   # 弹窗里只在中继模式为默认时显示）、zero_rtt_handshake、heartbeat；
+                                   # hysteria、hysteria2、tuic 另有 QUIC 字段（弹窗的「QUIC」页）：initial_packet_size、
+                                   # disable_path_mtu_discovery、idle_timeout、keep_alive_period、stream_receive_window、
+                                   # connection_receive_window、max_concurrent_streams（窗口写 6MB 或 64 MB 这样的大小，纯数字按字节数输出）；
+                                   # anytls：password（必填）、idle_session_check_interval、idle_session_timeout、min_idle_session、
+                                   # client_metadata；naive：username、password、insecure_concurrency、extra_headers（同 transport_headers 的 list）、
+                                   # stream_receive_window、udp_over_tcp、quic，开启 quic 后另有 quic_congestion_control、
+                                   # quic_session_receive_window（两个窗口写 6MB 这样的大小，纯数字按字节数输出）；
+                                   # ssh：user、password、private_key（PEM 文本，按行输出为数组）、private_key_path、
+                                   # private_key_passphrase、host_key、host_key_algorithms、client_version、cipher、mac、
+                                   # kex_algorithm（后五项除 client_version 外都是 list）；
+                                   # shadowsocks、vmess、vless、trojan、hysteria2、hysteria、tuic、snell、socks 另有 network；
+                                   # shadowsocks、vmess、vless、trojan 另有多路复用（弹窗的「多路复用」页）：multiplex_enabled/protocol/
+                                   # max_connections/min_streams/max_streams/padding、multiplex_brutal_enabled/up_mbps/down_mbps
+                                   # （max_streams 与另两个上限互斥，弹窗里填了最大连接数或最小流数就不显示最大流数）；
+                                   # 节点的拨号字段只写在 dial_fields 里：这个 JSON 对象（任意 sing-box 拨号字段，
+                                   # 出站和 DNS 服务器按 tag 引用，如前置节点 detour）原样合并进节点；
+                                   # 不是 JSON 对象时跳过并警告。
+                                   # 生成器只读节点编辑弹窗里有的字段，两边保持一致；弹窗里没有的 sing-box 字段不支持。
 
 config outbound 'proxy'            # 策略组也是 outbound
-	option tag 'Proxy'
-	option type 'selector'         # selector | urltest
-	option include_all_proxies '1' # mihomo：包含全部节点（不含 direct 类型）
-	list   outbounds 'direct'      # sing-box：明确列出的成员
-	option default ''              # sing-box：selector 的默认出站，必须是成员，否则忽略并警告；留空用第一个成员
-	option interrupt_exist_connections '0'  # sing-box：当前出站改变时中断现有连接（两种组都可用）
+    option tag 'Proxy'
+    option type 'selector'         # selector | urltest
+    list   outbounds 'hk'          # sing-box：成员，按列出的顺序；订阅节点按名字引用
+    list   outbounds 'direct'
+    option default ''              # sing-box：selector 的默认出站，必须是成员，否则忽略并警告；留空用第一个成员
+    option interrupt_exist_connections '0'  # sing-box：当前出站改变时中断现有连接（两种组都可用）
+
+config outbound 'final'            # 规则都没命中的流量走这个组（route.final），同 Surge 的 FINAL
+    option tag 'Final'
+    option type 'selector'
+    list   outbounds 'proxy'
+    list   outbounds 'direct'
 
 config outbound 'global'           # 全局模式使用的组
-	option tag 'Global'
-	option type 'selector'
-	option hidden '1'
-	option include_all_groups '1'  # 包含其他所有未设置 include_all_groups 的组
-	option include_all_proxies '1'
-	list   outbounds 'direct'
+    option tag 'Global'
+    option type 'selector'
+    option hidden '1'              # 隐藏的组自动包含全部节点、Direct 和所有未隐藏的组；组不会包含隐藏的组，所以不会形成循环
 
-config outbound 'hk'               # 示例：自动测速，只取名称含“香港”的节点
-	option tag '香港'
-	option type 'urltest'
-	option include_all_proxies '1'
-	option filter '香港'           # mihomo：筛选 include_all_proxies 带入的节点
-	option exclude_filter ''       # mihomo：排除匹配的节点
-	option interval '3m'
-	option idle_timeout ''         # sing-box：闲置超过这个时间后暂停测速，默认 30m
+config outbound 'hk'               # 示例：在列出的节点中自动测速
+    option tag '香港'
+    option type 'urltest'
+    list   outbounds 'hk01'
+    list   outbounds 'hk02'
+    option interval '3m'
+    option idle_timeout ''         # sing-box：闲置超过这个时间后暂停测速，默认 30m
 
 config route_rule                  # → route.rules[]，按顺序生成
-	option action 'sniff'          # 嗅探协议和域名
-	option hidden '1'              # 前 5 条是固定规则，路由规则页不显示，新规则和拖动都排在它们后面
+    option action 'sniff'          # 嗅探协议和域名
+    option hidden '1'              # 前 5 条是固定规则，路由规则页不显示，新规则和拖动都排在它们后面
 
 config route_rule
-	list   protocol 'dns'
-	option action 'hijack-dns'     # DNS 交给 sing-box 的 DNS 模块
-	option hidden '1'
+    list   protocol 'dns'
+    option action 'hijack-dns'     # DNS 交给 sing-box 的 DNS 模块
+    option hidden '1'
 
 config route_rule
-	option ip_is_private '1'
-	option outbound 'direct'
-	option hidden '1'
+    option ip_is_private '1'
+    option outbound 'direct'
+    option hidden '1'
 
 config route_rule
-	option clash_mode 'Direct'
-	option outbound 'direct'
-	option hidden '1'
+    option clash_mode 'Direct'
+    option outbound 'direct'
+    option hidden '1'
 
 config route_rule
-	option clash_mode 'Global'
-	option outbound 'global'
-	option hidden '1'
+    option clash_mode 'Global'
+    option outbound 'global'
+    option hidden '1'
 
 config route_rule                  # 拒绝 DoT/DoQ，防止绕开 DNS 劫持
-	list   port '853'
-	option action 'reject'
+    list   port '853'
+    option action 'reject'
 
 config route_rule                  # 拒绝 QUIC（按嗅探到的协议），应用回退到 TCP
-	list   protocol 'quic'
-	option action 'reject'
-	# option comment ''            # OpenBox：注释，只在路由规则页显示，不生成
+    list   protocol 'quic'
+    option action 'reject'
+    # option comment ''            # OpenBox：注释，只在路由规则页显示，不生成
 
 config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sing-box 的流量）
-	list   rule_set 'cn_ip'
-	option outbound 'direct'
+    list   rule_set 'cn_ip'
+    option outbound 'direct'
 ```
 
 规则：
@@ -392,7 +403,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 | 部分 | 生成内容 |
 | --- | --- |
 | 日志 | `config log 'log'` |
-| 出站 | 每个启用的 `outbound` 一个出站。策略组的成员顺序：`outbounds` 中的组 → `include_all_groups` 的组 → `include_all_proxies` 带入并经 `filter` / `exclude_filter` 筛选的节点 → `outbounds` 中的节点 |
+| 出站 | 每个启用的 `outbound` 一个出站。策略组的成员就是 `outbounds` 列出的，按列出的顺序（即弹窗里拖动排好的顺序）；隐藏的组（全局模式的 Global）再自动带上没列出的全部节点（含订阅节点）、Direct 和所有未隐藏的组。不提供「包含全部节点 / 全部策略组」。防环：列出的组若已直接或经其他组包含本组（隐藏的组算作包含所有未隐藏的组），就丢弃这个引用并警告（页面保存时已拦截，这里是保底，防导入或手改 UCI 造成的循环），例如 Proxy、Final 互相列出时两边都丢弃对方；`sing-box check` 查不出组的循环，要到启动时才报 circular outbound dependency 而无法启动 |
 | 入站 | 启用的 `config inbound`：`tun`，或 `tproxy` 加 `direct`（DNS）；另有可单独启用的 `mixed`（代理端口，`username` / `password` 生成为 `users`）；启用 TProxy 时 `route.default_mark` 取 `firewall.output_mark`。都关闭时不生成入站，sing-box 只提供出站模式和组切换 |
 | 路由规则 | `config route_rule` 按顺序生成；默认动作 `route` 必须有有效的 `outbound`，否则跳过并警告；`hidden` 只用于界面，不生成；`final` 取 `route.final` 指向的节点或组 |
 | 规则集 | `config rule_set` → `route.rule_set`；`config http_client` → `http_clients`，供远程规则集下载 |
@@ -401,7 +412,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 | NTP | `config ntp 'ntp'`；默认关闭，路由器时钟不可靠时再开启 |
 | 缓存文件 | 存在 `config experimental 'cache_file'` 时生成；默认放在闪存上，路由器重启和系统升级后仍保留出站模式、各组的选择和 FakeIP 映射 |
 
-默认配置（没有节点）生成的结果：`Direct`、只含 `Direct` 的 `Proxy`、包含 `Proxy` 和 `Direct` 的 `Global`；DNS 分流和路由规则；国内 IP 规则集；clash API 和缓存文件。接管默认开启（TUN），开启 OpenBox 后即接管流量；关闭接管时不生成入站。
+默认配置（没有节点）生成的结果：`Direct`、只含 `Direct` 的 `Proxy`、含 `Proxy` 和 `Direct` 的 `Final`（`route.final` 指向它）、包含 `Proxy`、`Final` 和 `Direct` 的 `Global`；DNS 分流和路由规则；国内 IP 规则集；clash API 和缓存文件。接管默认开启（TUN），开启 OpenBox 后即接管流量；关闭接管时不生成入站。
 
 生成器只在一个地方适配 sing-box 的版本差异。将来 sing-box 改格式时，只需改生成器，用户的 UCI 不受影响。
 
@@ -427,7 +438,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
    - **IPv6 接管**（接管页的 IPv6 开关）：同时设置 `firewall.ipv6 '1'`、`dns.strategy 'prefer_ipv4'`，并给 TUN 加 IPv6 地址（默认 `fdfe:dcba:9876::1/126`，sing-box 示例值；关闭时去掉 TUN 的 IPv6 地址、改回 `ipv4_only`）。TUN 有了 IPv6 地址，sing-box 自己接管 IPv6 路由和 DNS，规则集的 IPv6 部分（`cn-mainland-ip` 含 3534 条 IPv6）随 `route_exclude_address_set` 生效。TProxy：`firewall.uc` 不再生成拒绝 IPv6 的链，改为 `tproxy ip6` 接管，`bypass6` 集合加上规则集的 IPv6 地址（全局模式除外），并设 `ip -6` 策略路由。FakeIP 用 IPv6 地址段 `2001:2::/48`。RealIP 模式下节点需要能访问 IPv6 目标；FakeIP 模式下由节点解析域名，不受影响。
    - **接口**：启动时按 ubus 状态取局域网接口的设备，接口未就绪时用 network 配置中的 `device`；接口 up 时 hotplug 重新设置规则。
    - 两种方式下，内网地址直连，其余按路由规则和出站模式处理。
-   - **全局代理模式**：国内 IP 也走代理，防火墙层不再绕过规则集（保留地址仍直连）。出站模式在策略页选择，选中即写入 `main.mode` 并重载 OpenBox，不用保存并应用（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器和 `firewall.uc` 据此决定是否绕过。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，OpenBox 没运行时也能选。
+   - **全局代理模式**：国内 IP 也走代理，防火墙层不再绕过规则集（保留地址仍直连）。出站模式在活动页选择，选中即写入 `main.mode` 并重载 OpenBox，不用保存并应用（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器和 `firewall.uc` 据此决定是否绕过。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，OpenBox 没运行时也能选。
 2. **DNS**：发往外部 53 端口的查询（包括设备写死的 8.8.8.8）都由 sing-box 应答（TUN 由 sing-box 劫持，TProxy 由 OpenBox 重定向到 `dns-in`），sing-box 能看到是哪台设备在查询；问路由器（dnsmasq）的查询由 dnsmasq 转给 `dns-in`（见第 3 点）。本地域名和私有网段的反查转给 dnsmasq，DHCP 主机名照常可用；其余先问国内 DNS，国内 IP 原样返回，其他按 DNS 模式处理：
    - **FakeIP**（默认）：立即返回假地址，连接时由节点解析域名。快、分流准；应答的 TTL 为 1 秒（与 mihomo 的 fake-ip 相同），设备几乎不缓存假地址，停止服务后下一次查询就拿到真实地址。假地址由 sing-box 在本地分配，查询变多几乎没有开销；自带 DNS 缓存的程序（如 Java 默认缓存 30 秒）仍要等它自己的缓存过期。
    - **RealIP**：经代理向远程 DNS 再查一次，返回真实地址。首次访问稍慢，所有应用都能正常使用，停止后不留假地址。
@@ -441,12 +452,12 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 
 ### 3.3.4 订阅更新
 
-订阅是一个返回完整 sing-box JSON 配置的 URL，下载后存为 `/etc/openbox/subscriptions/<名称>.json`，作为托管配置可以「使用」、查看，不能编辑；关联配置从它同步节点（见 3.1）。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
+订阅是一个返回完整 sing-box JSON 配置的 URL，记在订阅配置的包里（`config profile 'profile'` 的 `url`、`update_interval`、`user_agent`，以及由脚本写入的 `last_update`、`last_error`），下载后存为 `/etc/openbox/subscriptions/<标识>.json`，生成时只取其中的节点（见 3.1）。新建时立即下载，第一次下载失败就不保留这份配置。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
 
-- **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新时 10 秒，LuCI 的调用 20 秒超时）；UA 为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
+- **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新时 10 秒，LuCI 的调用 20 秒超时）；UA 用配置里的 `user_agent`，不写时为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
 - **校验**：必须是 JSON 对象，且通过 `sing-box check`（没装内核时跳过检查）；任何一步失败都不动原文件，原因写进 `last_error`。
 - **替换**：内容与原文件相同时不写闪存、不重载；否则先复制到同目录的临时文件，再改名原子替换。成功后写 `last_update`、删掉 `last_error`。
-- **使用中则重载**：这个文件正是 `main.source 'profile'` 且 `main.profile` 所指的，并且服务在运行，就执行 `/etc/init.d/openbox reload`。
+- **使用中则重载**：`main.profile` 正是这份配置，并且服务在运行，就执行 `/etc/init.d/openbox reload`。
 - **定时**：服务运行期间，`/etc/crontabs/root` 里带 `#openbox` 标记的一行每小时（第 30 分）执行 `subscription.sh due`，与日志轮转一起随服务启停写入、删除；所以 **OpenBox 停止时订阅不会自动更新**。距 `last_update` 达到 `update_interval`（留 5 分钟余量，避免每小时的检查刚好差几秒）或从未更新过的才下载。
 - 同一时间只有一次更新（`flock`）；页面上手动更新时如果正有更新在进行，提示稍后再试。输出同时写进插件日志 `app.log`。下载失败不影响正在运行的服务。
 - 在配置文件页添加订阅时先下载一次；第一次就失败的新订阅不保存。已有同名的普通文件时报错，不会把它变成订阅。删除文件时一并删除它的订阅。
@@ -479,20 +490,22 @@ openbox/
 │   ├── Makefile
 │   └── files/
 │       ├── openbox.conf        # /etc/config/openbox 默认值（设备设置）
-│       ├── profile.conf        # 新建配置的模板，复制为 /etc/config/openbox_<名称>
+│       ├── template/openbox_template  # 新建配置的模板，复制为 /etc/config/openbox_<标识>
 │       ├── openbox.init
 │       ├── openbox.hotplug     # 接口 up 时刷新 TProxy 规则
 │       ├── openbox.uci-defaults  # 升级时运行 migrate.uc；首次安装时由模板创建 openbox_default
 │       ├── run.sh              # procd 运行它，它运行 sing-box 并管理 TProxy 规则
 │       ├── common.sh
 │       ├── core-install.sh
-│       ├── subscription.sh     # 下载、检查并替换订阅的配置文件；cron 每小时执行 due
+│       ├── subscription.sh     # 下载、检查并替换订阅的内容（subscriptions/<标识>.json）；cron 每小时执行 due
 │       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
 │       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
 │                               # clash.uc、config.uc、profile.uc 为共享模块，装到 /usr/share/ucode/openbox/
 ├── luci-app-openbox/
 │   ├── Makefile
 │   ├── htdocs/…/view/openbox/  # 各页面
+│   ├── htdocs/…/openbox/       # ui.js：各页面共用；policy/：策略页节点弹窗，common.js 放协议常量与校验，
+│   │                           # general、tls、transport、multiplex、quic、dial 各对应弹窗的一个标签页
 │   ├── root/usr/share/rpcd/    # ACL、ucode 插件
 │   └── po/
 ├── docs/
@@ -503,13 +516,13 @@ openbox/
 
 | 页面 | 内容 |
 | --- | --- |
-| 活动 | 运行状态、配置来源、接管方式、出站模式、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
+| 活动 | 运行状态、配置来源、接管方式、出站模式（单选切换，选中立即生效；配置里只有一种模式时只显示名称，未启用 clash API 时不显示）、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里。出站模式（选中立即生效）；策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、成员、包含全部节点及筛选、包含全部策略组、默认出站、自动测速参数和闲置超时、中断现有连接）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「测试全部」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）。出站模式和当前出站立即生效，其余保存并应用后生效 |
+| 策略 | sing-box 的出站都在这里，只有策略组和节点，「添加」按钮在各自的子标题下。策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、出站标签、默认出站、自动测速参数和闲置超时、中断现有连接；出站标签用 LuCI 原生的动态列表，可拖动排序，生成时按这个顺序，下拉框按节点（含订阅节点）、Direct、策略组排列；保存时提示循环引用并拦截：列出的组若已直接或经其他组包含本组，列表标红并提示「在策略组中发现了循环引用：<组名>」（参考 Surge），不能保存，判断与生成器的防环一致，默认出站也不列出这样的成员）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「延迟测试」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）；订阅配置的节点列表改为只读列出订阅的节点（经 `subscription_nodes`），只能测试延迟。当前出站立即生效，其余保存并应用后生效 |
 | 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
-| 配置文件 | 一张表列出全部配置：名称（点击查看）、类型（本地 / 订阅 / 关联）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单——本地：查看、删除；订阅：查看、更新、创建关联配置、删除；关联：查看、删除（使用中的都不显示删除）。「查看」在弹窗里只读显示生成的 JSON，订阅的弹窗顶部提示不能直接编辑并给出「创建关联配置」。「新建…」弹窗：配置名、来源（默认配置 / 远程订阅），远程订阅再填订阅地址和更新间隔（小时）。「创建关联配置」弹窗：说明和配置名 |
+| 配置文件 | 一张表列出全部配置：配置名（点击查看；订阅上次更新失败时下面一行红字写原因）、类型（本地 / 订阅）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单——本地：查看、删除；订阅：查看、更新、删除（使用中的不显示删除）。「查看」在弹窗里只读显示生成的 JSON（两个空格缩进）。「新建…」弹窗：配置名、来源（默认配置 / 远程订阅），远程订阅再填订阅地址、更新间隔（小时）和 User-Agent |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 | 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |
 

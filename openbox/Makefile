@@ -51,7 +51,8 @@ define Package/openbox/install
 	$(INSTALL_DIR) $(1)/usr/share/openbox
 	$(INSTALL_DATA) ./files/common.sh $(1)/usr/share/openbox/common.sh
 	# the template of a new profile, copied to /etc/config/openbox_<name>
-	$(INSTALL_DATA) ./files/profile.conf $(1)/usr/share/openbox/profile.conf
+	$(INSTALL_DIR) $(1)/usr/share/openbox/template
+	$(INSTALL_DATA) ./files/template/openbox_template $(1)/usr/share/openbox/template/openbox_template
 	$(INSTALL_BIN) ./files/core-install.sh $(1)/usr/share/openbox/core-install.sh
 	$(INSTALL_BIN) ./files/run.sh $(1)/usr/share/openbox/run.sh
 	$(INSTALL_BIN) ./files/subscription.sh $(1)/usr/share/openbox/subscription.sh

@@ -16,13 +16,22 @@ msgstr ""
 msgid "%s (inverted)"
 msgstr ""
 
-msgid "0 uses the AEAD protocol; servers of the legacy protocol need 1."
+msgid "%s is up to date."
+msgstr ""
+
+msgid "%s updated."
+msgstr ""
+
+msgid "%s updated; sing-box was reloaded."
 msgstr ""
 
 msgid "0-RTT handshake"
 msgstr ""
 
-msgid "A key file on the router, in place of or together with the password."
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
+msgstr ""
+
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
 msgstr ""
 
 msgid "A local file used at start while the rule set has not been downloaded yet."
@@ -34,9 +43,6 @@ msgstr ""
 msgid "A profile with this name exists."
 msgstr ""
 
-msgid "A regular expression matched against node names."
-msgstr ""
-
 msgid "Action"
 msgstr ""
 
@@ -46,10 +52,7 @@ msgstr ""
 msgid "Address"
 msgstr ""
 
-msgid "All IPv4 and IPv6 addresses if empty."
-msgstr ""
-
-msgid "Allowed IPs"
+msgid "Advanced editing"
 msgstr ""
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
@@ -61,13 +64,25 @@ msgstr ""
 msgid "Another outbound already uses this name."
 msgstr ""
 
-msgid "Any host key is accepted if empty."
+msgid "Another update is running; try again later."
+msgstr ""
+
+msgid "Authenticated length"
 msgstr ""
 
 msgid "Auto by latency"
 msgstr ""
 
+msgid "BBR profile"
+msgstr ""
+
+msgid "Basic"
+msgstr ""
+
 msgid "Binary (.srs)"
+msgstr ""
+
+msgid "Brutal debug logs"
 msgstr ""
 
 msgid "By the extension"
@@ -94,6 +109,12 @@ msgstr ""
 msgid "Checking the latest release…"
 msgstr ""
 
+msgid "Ciphers"
+msgstr ""
+
+msgid "Circular reference found in policy group: %s"
+msgstr ""
+
 msgid "Clash API listen address"
 msgstr ""
 
@@ -106,13 +127,19 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
+msgid "Client metadata"
+msgstr ""
+
+msgid "Client version"
+msgstr ""
+
 msgid "Close"
 msgstr ""
 
-msgid "Closes the connections of the previous outbound when the outbound in use changes."
+msgid "Comment"
 msgstr ""
 
-msgid "Comment"
+msgid "Concurrent connections"
 msgstr ""
 
 msgid "Configuration"
@@ -121,13 +148,19 @@ msgstr ""
 msgid "Congestion control"
 msgstr ""
 
+msgid "Connection receive window"
+msgstr ""
+
 msgid "Connection reuse"
 msgstr ""
 
-msgid "Connects to the server through this node or group."
+msgid "Continue"
 msgstr ""
 
-msgid "Continue"
+msgid "Copied."
+msgstr ""
+
+msgid "Copy"
 msgstr ""
 
 msgid "Core log"
@@ -190,13 +223,22 @@ msgstr ""
 msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
 msgstr ""
 
-msgid "Detour"
+msgid "Dial"
+msgstr ""
+
+msgid "Dial fields"
 msgstr ""
 
 msgid "Direct (default)"
 msgstr ""
 
 msgid "Direct connection"
+msgstr ""
+
+msgid "Disable Chrome parrot"
+msgstr ""
+
+msgid "Disable path MTU discovery"
 msgstr ""
 
 msgid "Disabled"
@@ -208,13 +250,10 @@ msgstr ""
 msgid "Download bandwidth"
 msgstr ""
 
+msgid "Download failed."
+msgstr ""
+
 msgid "Download via"
-msgstr ""
-
-msgid "Early data"
-msgstr ""
-
-msgid "Early data header"
 msgstr ""
 
 msgid "Enable"
@@ -226,10 +265,25 @@ msgstr ""
 msgid "Enable TLS"
 msgstr ""
 
+msgid "Enable multiplexing"
+msgstr ""
+
 msgid "Encryption method"
 msgstr ""
 
+msgid "Expecting Name: value"
+msgstr ""
+
+msgid "Expecting a JSON object"
+msgstr ""
+
+msgid "Expecting a name."
+msgstr ""
+
 msgid "Expecting a range such as 1000:2000"
+msgstr ""
+
+msgid "Expecting a size such as 6MB"
 msgstr ""
 
 msgid "Expecting a whole number"
@@ -241,7 +295,7 @@ msgstr ""
 msgid "Expecting an array of rules"
 msgstr ""
 
-msgid "Expecting three numbers such as 0,0,0"
+msgid "Expecting an http:// or https:// URL."
 msgstr ""
 
 msgid "Experimental"
@@ -271,10 +325,16 @@ msgstr ""
 msgid "GLOBAL is reserved by the clash API."
 msgstr ""
 
+msgid "Global padding"
+msgstr ""
+
 msgid "Global proxy"
 msgstr ""
 
 msgid "HTTP and SOCKS5 :%d"
+msgstr ""
+
+msgid "HTTP client"
 msgstr ""
 
 msgid "HTTP method"
@@ -283,16 +343,28 @@ msgstr ""
 msgid "HTTP obfuscation"
 msgstr ""
 
-msgid "Hop interval"
+msgid "Headers"
 msgstr ""
 
-msgid "Hops between ports of these ranges, such as 20000:30000, in place of the port."
+msgid "Heartbeat interval"
+msgstr ""
+
+msgid "Hop interval"
 msgstr ""
 
 msgid "Host"
 msgstr ""
 
+msgid "Host key algorithms"
+msgstr ""
+
 msgid "Host keys"
+msgstr ""
+
+msgid "IP version"
+msgstr ""
+
+msgid "IPv4 and IPv6"
 msgstr ""
 
 msgid "IPv4 only"
@@ -304,19 +376,22 @@ msgstr ""
 msgid "IPv6 only"
 msgstr ""
 
+msgid "Idle session check interval"
+msgstr ""
+
+msgid "Idle session timeout"
+msgstr ""
+
 msgid "Idle timeout"
 msgstr ""
 
 msgid "In use"
 msgstr ""
 
-msgid "Include all groups"
-msgstr ""
-
-msgid "Include all nodes"
-msgstr ""
-
 msgid "Initial file"
+msgstr ""
+
+msgid "Initial packet size"
 msgstr ""
 
 msgid "Inline"
@@ -343,6 +418,12 @@ msgstr ""
 msgid "Invalid JSON: %s"
 msgstr ""
 
+msgid "Invalid User-Agent."
+msgstr ""
+
+msgid "Invalid update interval."
+msgstr ""
+
 msgid "Invert"
 msgstr ""
 
@@ -352,13 +433,19 @@ msgstr ""
 msgid "Keep logs for"
 msgstr ""
 
-msgid "Keepalive interval"
+msgid "Keepalive period"
+msgstr ""
+
+msgid "Key exchange algorithms"
 msgstr ""
 
 msgid "LAN devices can use the router as an HTTP or SOCKS5 proxy at this port, with or without the takeover."
 msgstr ""
 
 msgid "LAN interfaces"
+msgstr ""
+
+msgid "Last update failed: %s"
 msgstr ""
 
 msgid "Latency"
@@ -373,9 +460,6 @@ msgstr ""
 msgid "Latest release from GitHub"
 msgstr ""
 
-msgid "Leave empty to disable obfuscation."
-msgstr ""
-
 msgid "Leave empty to use the proxy without a password."
 msgstr ""
 
@@ -386,9 +470,6 @@ msgid "Lists of domains or addresses for route rules. DNS rules and the takeover
 msgstr ""
 
 msgid "Local"
-msgstr ""
-
-msgid "Local addresses"
 msgstr ""
 
 msgid "Local file"
@@ -406,7 +487,7 @@ msgstr ""
 msgid "Logs connections with the MAC address and host name of the LAN device."
 msgstr ""
 
-msgid "Lowercase letters, digits and underscores, up to 32."
+msgid "MAC algorithms"
 msgstr ""
 
 msgid "MTU"
@@ -475,10 +556,28 @@ msgstr ""
 msgid "Matches the user of the proxy port."
 msgstr ""
 
-msgid "Members"
+msgid "Maximum concurrent streams"
 msgstr ""
 
-msgid "Mode"
+msgid "Maximum connections"
+msgstr ""
+
+msgid "Maximum hop interval"
+msgstr ""
+
+msgid "Maximum packet size"
+msgstr ""
+
+msgid "Maximum streams"
+msgstr ""
+
+msgid "Minimum idle sessions"
+msgstr ""
+
+msgid "Minimum packet size"
+msgstr ""
+
+msgid "Minimum streams"
 msgstr ""
 
 msgid "More"
@@ -487,16 +586,10 @@ msgstr ""
 msgid "Multiple conditions"
 msgstr ""
 
-msgid "Multiplex protocol"
-msgstr ""
-
-msgid "Multiplexing"
+msgid "Multiplex"
 msgstr ""
 
 msgid "Name"
-msgstr ""
-
-msgid "Needs multiplexing on the server as well."
 msgstr ""
 
 msgid "Network protocols"
@@ -521,12 +614,6 @@ msgid "New…"
 msgstr ""
 
 msgid "Node domain resolver"
-msgstr ""
-
-msgid "Node exclusion"
-msgstr ""
-
-msgid "Node filter"
 msgstr ""
 
 msgid "Nodes"
@@ -571,16 +658,19 @@ msgstr ""
 msgid "Outbound mode"
 msgstr ""
 
+msgid "Outbound tags"
+msgstr ""
+
 msgid "Outbounds without an answer by then are shown as timed out."
+msgstr ""
+
+msgid "Padding"
 msgstr ""
 
 msgid "Password"
 msgstr ""
 
 msgid "Path"
-msgstr ""
-
-msgid "Peer public key"
 msgstr ""
 
 msgid "Plugin"
@@ -607,6 +697,15 @@ msgstr ""
 msgid "Port"
 msgstr ""
 
+msgid "Port mapping"
+msgstr ""
+
+msgid "Port mapping lifetime"
+msgstr ""
+
+msgid "Port mapping timeout"
+msgstr ""
+
 msgid "Port ranges"
 msgstr ""
 
@@ -631,6 +730,9 @@ msgstr ""
 msgid "Profile name"
 msgstr ""
 
+msgid "Profile source"
+msgstr ""
+
 msgid "Profiles"
 msgstr ""
 
@@ -649,6 +751,15 @@ msgstr ""
 msgid "Reality short ID"
 msgstr ""
 
+msgid "Realm ID"
+msgstr ""
+
+msgid "Realm server URL"
+msgstr ""
+
+msgid "Realm token"
+msgstr ""
+
 msgid "Redirect (%s)"
 msgstr ""
 
@@ -661,7 +772,7 @@ msgstr ""
 msgid "Remote"
 msgstr ""
 
-msgid "Reserved bytes"
+msgid "Remote subscription"
 msgstr ""
 
 msgid "Resolve strategy"
@@ -694,22 +805,13 @@ msgstr ""
 msgid "SOCKS version"
 msgstr ""
 
-msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
-msgstr ""
-
-msgid "Sends up to this much data with the handshake, such as 2048."
+msgid "STUN servers"
 msgstr ""
 
 msgid "Server"
 msgstr ""
 
-msgid "Set this node as the detour of a Shadowsocks or other node, which then connects through it."
-msgstr ""
-
-msgid "ShadowTLS version"
-msgstr ""
-
-msgid "Shadowsocks ignores it while multiplexing is on."
+msgid "Session receive window"
 msgstr ""
 
 msgid "Show devices"
@@ -721,7 +823,7 @@ msgstr ""
 msgid "Snell version"
 msgstr ""
 
-msgid "Source"
+msgid "Some providers answer in the format the User-Agent asks for; the default names sing-box and OpenBox."
 msgstr ""
 
 msgid "Source (.json)"
@@ -734,6 +836,15 @@ msgid "Status"
 msgstr ""
 
 msgid "Stop"
+msgstr ""
+
+msgid "Stream receive window"
+msgstr ""
+
+msgid "Subscription"
+msgstr ""
+
+msgid "Subscription URL"
 msgstr ""
 
 msgid "Switched; sing-box was reloaded."
@@ -790,9 +901,6 @@ msgstr ""
 msgid "Test URL"
 msgstr ""
 
-msgid "Test all"
-msgstr ""
-
 msgid "Test interval"
 msgstr ""
 
@@ -802,13 +910,10 @@ msgstr ""
 msgid "Testing…"
 msgstr ""
 
-msgid "Tests pause after the group has not been used for this long."
+msgid "The download is not a JSON config."
 msgstr ""
 
-msgid "The clash API is not enabled in the current profile, so the outbound mode cannot be changed."
-msgstr ""
-
-msgid "The current profile defines no other mode. Add route rules with clash_mode to switch modes."
+msgid "The nodes follow the subscription of this profile; only their latency is tested here."
 msgstr ""
 
 msgid "The profile and its nodes, groups and rules are deleted."
@@ -820,16 +925,19 @@ msgstr ""
 msgid "The profile in use cannot be deleted."
 msgstr ""
 
+msgid "The profile, its groups and rules, and what its subscription downloaded are deleted."
+msgstr ""
+
 msgid "The rule applies when the condition does not match."
 msgstr ""
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
 msgstr ""
 
-msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
+msgid "This protocol always uses TLS."
 msgstr ""
 
-msgid "Three numbers, for servers such as Cloudflare WARP."
+msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
 msgstr ""
 
 msgid "Timeout"
@@ -850,7 +958,13 @@ msgstr ""
 msgid "Traffic that matches no rule uses this outbound."
 msgstr ""
 
+msgid "Transport"
+msgstr ""
+
 msgid "Transport protocol"
+msgstr ""
+
+msgid "Turn TLS off with Enable TLS."
 msgstr ""
 
 msgid "Type"
@@ -866,6 +980,9 @@ msgid "UDP relay mode"
 msgstr ""
 
 msgid "URL"
+msgstr ""
+
+msgid "Unable to copy; select the URL and copy it by hand."
 msgstr ""
 
 msgid "Unable to delete %s"
@@ -886,6 +1003,9 @@ msgstr ""
 msgid "Unable to test the latency of %s."
 msgstr ""
 
+msgid "Unable to update %s"
+msgstr ""
+
 msgid "Unable to use %s"
 msgstr ""
 
@@ -893,6 +1013,12 @@ msgid "Unable to write the profile."
 msgstr ""
 
 msgid "Unknown error"
+msgstr ""
+
+msgid "Update"
+msgstr ""
+
+msgid "Update failed."
 msgstr ""
 
 msgid "Update interval"
@@ -919,10 +1045,13 @@ msgstr ""
 msgid "Used with the IPv6 takeover on."
 msgstr ""
 
-msgid "Username"
+msgid "User key"
 msgstr ""
 
-msgid "Uses QUIC instead of HTTP/2."
+msgid "User-Agent"
+msgstr ""
+
+msgid "Username"
 msgstr ""
 
 msgid "Value"
@@ -934,13 +1063,7 @@ msgstr ""
 msgid "View"
 msgstr ""
 
-msgid "View logs"
-msgstr ""
-
 msgid "View: %s"
-msgstr ""
-
-msgid "WebSocket and HTTPUpgrade use the first one."
 msgstr ""
 
 msgid "While OpenBox runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
@@ -950,9 +1073,6 @@ msgid "With the IPv6 takeover off, IPv6 TCP and UDP connections to other address
 msgstr ""
 
 msgid "XTLS flow"
-msgstr ""
-
-msgid "Xray servers use Sec-WebSocket-Protocol; the data goes in the path if empty."
 msgstr ""
 
 msgid "bytes"
@@ -977,6 +1097,9 @@ msgid "minutes"
 msgstr ""
 
 msgid "ms"
+msgstr ""
+
+msgid "non-empty value"
 msgstr ""
 
 msgid "seconds"

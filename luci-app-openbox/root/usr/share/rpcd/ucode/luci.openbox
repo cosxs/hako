@@ -5,17 +5,22 @@ import { connect } from 'ubus';
 import { cursor } from 'uci';
 import { clash_api, clash_request, config_modes } from 'openbox.clash';
 import { dns_inbound } from 'openbox.config';
-import { valid_name, profile_package } from 'openbox.profile';
+import { SUBSCRIPTION_DIR, valid_name, profile_package } from 'openbox.profile';
 
 const CONFIG_DIR = '/etc/config';
 // the template of a new profile
-const PROFILE_TEMPLATE = '/usr/share/openbox/profile.conf';
+const PROFILE_TEMPLATE = '/usr/share/openbox/template/openbox_template';
 const GENERATOR = '/usr/share/openbox/ucode/generate.uc';
 const RUN_DIR = '/var/run/openbox';
 const RUN_CONFIG = `${RUN_DIR}/config.json`;
 const CORE = '/usr/bin/sing-box';
 const COMMON = '/usr/share/openbox/common.sh';
 const CORE_INSTALL = '/usr/share/openbox/core-install.sh';
+const SUBSCRIPTION = '/usr/share/openbox/subscription.sh';
+// the page gives up on a call after 20 seconds: leave time for sing-box check
+const SUBSCRIPTION_TIMEOUT = 10;
+// the exit codes of subscription.sh
+const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
 // how long a latency test of a group may take, unless latency.timeout says
 // otherwise: the members are tested at the same time, and those without an
 // answer by then failed. The page gives up on a call after 20 seconds
@@ -29,622 +34,775 @@ const LOG_NAMES = [ 'app', 'core' ];
 const LOG_BYTES = 256 * 1024;
 
 function command_output(cmd) {
-	const proc = popen(cmd);
-	if (!proc)
-		return null;
+  const proc = popen(cmd);
+  if (!proc)
+    return null;
 
-	const out = proc.read('all');
-	proc.close();
+  const out = proc.read('all');
+  proc.close();
 
-	return out;
+  return out;
 }
 
 // the oldest sing-box OpenBox supports, CORE_MIN_VERSION of common.sh
 function core_min_version() {
-	return match(readfile(COMMON) ?? '', /\nCORE_MIN_VERSION="([^"]+)"/)?.[1];
+  return match(readfile(COMMON) ?? '', /\nCORE_MIN_VERSION="([^"]+)"/)?.[1];
 }
 
 // whether version A >= B, comparing the numeric x.y.z parts as common.sh does
 function version_ge(a, b) {
-	const x = split(a, '.'), y = split(b, '.');
+  const x = split(a, '.'), y = split(b, '.');
 
-	for (let i = 0; i < 3; i++) {
-		const m = int(x[i] ?? 0) || 0, n = int(y[i] ?? 0) || 0;
-		if (m != n)
-			return m > n;
-	}
+  for (let i = 0; i < 3; i++) {
+    const m = int(x[i] ?? 0) || 0, n = int(y[i] ?? 0) || 0;
+    if (m != n)
+      return m > n;
+  }
 
-	return true;
+  return true;
 }
 
 function core_info() {
-	const min_version = core_min_version();
+  const min_version = core_min_version();
 
-	if (!access(CORE, 'x'))
-		return { installed: false, min_version: min_version };
+  if (!access(CORE, 'x'))
+    return { installed: false, min_version: min_version };
 
-	const out = command_output(`${CORE} version 2>/dev/null`) ?? '';
-	const version = match(out, /sing-box version (\S+)/)?.[1];
-	const tags = match(out, /Tags: (\S+)/)?.[1];
+  const out = command_output(`${CORE} version 2>/dev/null`) ?? '';
+  const version = match(out, /sing-box version (\S+)/)?.[1];
+  const tags = match(out, /Tags: (\S+)/)?.[1];
 
-	return {
-		installed: true,
-		version: version,
-		min_version: min_version,
-		supported: version ? version_ge(version, min_version) : false,
-		tags: tags ? split(tags, ',') : [],
-		// the service of the sing-box package runs or starts at boot
-		service_active: system('. /usr/share/openbox/common.sh; core_service_active') == 0
-	};
+  return {
+    installed: true,
+    version: version,
+    min_version: min_version,
+    supported: version ? version_ge(version, min_version) : false,
+    tags: tags ? split(tags, ',') : [],
+    // the service of the sing-box package runs or starts at boot
+    service_active: system('. /usr/share/openbox/common.sh; core_service_active') == 0
+  };
 }
 
 function instance_pid() {
-	const ubus = connect();
-	const services = ubus.call('service', 'list', { name: 'openbox' });
-	ubus.disconnect();
+  const ubus = connect();
+  const services = ubus.call('service', 'list', { name: 'openbox' });
+  ubus.disconnect();
 
-	for (let name, instance in services?.openbox?.instances ?? {})
-		if (instance.running)
-			return instance.pid;
+  for (let name, instance in services?.openbox?.instances ?? {})
+    if (instance.running)
+      return instance.pid;
 
-	return null;
+  return null;
 }
 
 // seconds since the process started, from /proc/<pid>/stat field 22 (in USER_HZ ticks)
 function process_uptime(pid) {
-	const stat = readfile(`/proc/${pid}/stat`);
-	const uptime = readfile('/proc/uptime');
-	if (!stat || !uptime)
-		return null;
+  const stat = readfile(`/proc/${pid}/stat`);
+  const uptime = readfile('/proc/uptime');
+  if (!stat || !uptime)
+    return null;
 
-	const fields = split(substr(stat, rindex(stat, ')') + 2), ' ');
-	const started = +fields[19] / 100;
+  const fields = split(substr(stat, rindex(stat, ')') + 2), ' ');
+  const started = +fields[19] / 100;
 
-	return int(+split(uptime, ' ')[0] - started);
+  return int(+split(uptime, ' ')[0] - started);
 }
 
 function load_json(path) {
-	try {
-		return json(readfile(path) ?? '');
-	}
-	catch (e) {
-		return null;
-	}
+  try {
+    return json(readfile(path) ?? '');
+  }
+  catch (e) {
+    return null;
+  }
 }
 
 // the profile in use
 function current_profile() {
-	return cursor().get('openbox', 'main', 'profile') || 'default';
+  return cursor().get('openbox', 'main', 'profile') || 'default';
 }
 
-// whether the UCI package of a profile exists
+// what a profile is: 'subscription' when its nodes come from a
+// subscription, else 'local'; null when there is none
+function profile_kind(name) {
+  if (!valid_name(name) || !access(`${CONFIG_DIR}/${profile_package(name)}`))
+    return null;
+
+  const uci = cursor();
+  uci.load(profile_package(name));
+
+  return uci.get(profile_package(name), 'profile', 'url') ? 'subscription' : 'local';
+}
+
 function profile_exists(name) {
-	return valid_name(name) && access(`${CONFIG_DIR}/${profile_package(name)}`) == true;
+  return profile_kind(name) != null;
+}
+
+// the identifier of a new profile: the time it is made, in milliseconds,
+// one more while that is taken
+function new_profile_id() {
+  const t0 = clock();
+  const now = t0[0] * 1000 + int(t0[1] / 1000000);
+
+  for (let t = now; t < now + 1000; t++)
+    if (!profile_exists(`${t}`))
+      return `${t}`;
+
+  return null;
+}
+
+// the profiles; the title is what the page shows, any text, and the name
+// is the identifier. A profile from a subscription has its url and update
+// state as well
+function list_profiles() {
+  const profiles = [];
+  const uci = cursor();
+
+  for (let file in lsdir(CONFIG_DIR) ?? []) {
+    const name = match(file, /^openbox_(.+)$/)?.[1];
+    if (!valid_name(name))
+      continue;
+
+    uci.load(file);
+    const info = uci.get_all(file, 'profile') ?? {};
+
+    push(profiles, {
+      name: name,
+      title: info.title || name,
+      type: info.url ? 'subscription' : 'local',
+      url: info.url,
+      update_interval: info.update_interval,
+      user_agent: info.user_agent,
+      last_update: info.last_update ? +info.last_update : null,
+      last_error: info.last_error
+    });
+  }
+
+  return sort(profiles, (a, b) => (a.title < b.title) ? -1 : (a.title > b.title) ? 1 : 0);
+}
+
+// the title of a new profile: some text, and not the one of another
+function check_title(title) {
+  if (type(title) != 'string' || !length(trim(title)))
+    return 'invalid_title';
+
+  if (length(filter(list_profiles(), (profile) => profile.title == trim(title))))
+    return 'exists';
+
+  return null;
+}
+
+// a new profile from the template with its title, and these options in its
+// profile section: { name } or { error }
+function create_profile(title, options) {
+  const error = check_title(title);
+  if (error)
+    return { error: error };
+
+  const name = new_profile_id();
+  const pkg = name ? profile_package(name) : null;
+  const template = readfile(PROFILE_TEMPLATE);
+  if (!pkg || template == null || !writefile(`${CONFIG_DIR}/${pkg}`, template))
+    return { error: 'write_failed' };
+
+  const uci = cursor();
+  uci.load(pkg);
+  uci.set(pkg, 'profile', 'profile');
+  uci.set(pkg, 'profile', 'title', trim(title));
+  for (let key, value in options ?? {})
+    if (value != null && value != '')
+      uci.set(pkg, 'profile', key, value);
+  uci.commit(pkg);
+
+  return { name: name };
+}
+
+// whether the value is a sing-box duration of s, m, h and d parts
+function valid_interval(value) {
+  return match(value, /^([0-9]+[smhd])+$/) != null;
+}
+
+// runs subscription.sh update; changed and reloaded tell what it did
+function update_subscription(name) {
+  const path = `${SUBSCRIPTION_DIR}/${name}.json`;
+  const before = readfile(path);
+  const running = name == current_profile() && instance_pid() != null;
+
+  const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} 2>&1`);
+  if (!proc)
+    return { result: false, error: 'update_failed', output: '' };
+
+  const output = trim(proc.read('all') ?? '');
+  const code = proc.close();
+
+  if (code != 0)
+    return { result: false, error: SUBSCRIPTION_ERRORS[code] ?? 'update_failed', output: output };
+
+  const changed = readfile(path) != before;
+
+  return { result: true, output: output, changed: changed, reloaded: changed && running };
 }
 
 // the command that generates the config of a profile; the name is checked,
 // so it is safe in the shell
 function generate_command(name) {
-	return `OPENBOX_PROFILE=${name} ucode ${GENERATOR}`;
+  return `OPENBOX_PROFILE=${name} ucode ${GENERATOR}`;
 }
 
 // the config sing-box would run with a profile, the one in use by default
 function pending_config(name) {
-	name ??= current_profile();
-	if (!profile_exists(name))
-		return null;
+  name ??= current_profile();
+  if (!profile_exists(name))
+    return null;
 
-	try {
-		return json(command_output(`${generate_command(name)} 2>/dev/null`) ?? '');
-	}
-	catch (e) {
-		return null;
-	}
+  try {
+    return json(command_output(`${generate_command(name)} 2>/dev/null`) ?? '');
+  }
+  catch (e) {
+    return null;
+  }
 }
 
 // how traffic is taken over, derived from the inbounds of the profile
 function takeover(config) {
-	const result = { tun: null, tproxy: null, redirect: null, dns: null, mixed: null };
+  const result = { tun: null, tproxy: null, redirect: null, dns: null, mixed: null };
 
-	for (let inbound in config?.inbounds ?? []) {
-		switch (inbound.type) {
-		case 'tun':
-			if (!result.tun)
-				result.tun = inbound.tag ?? inbound.type;
+  for (let inbound in config?.inbounds ?? []) {
+    switch (inbound.type) {
+    case 'tun':
+      if (!result.tun)
+        result.tun = inbound.tag ?? inbound.type;
 
-			// sing-box hijacks DNS itself when it sets up the routes
-			if (inbound.auto_route && inbound.dns_mode != 'disabled' && !result.dns)
-				result.dns = { tag: inbound.tag ?? inbound.type };
-			break;
+      // sing-box hijacks DNS itself when it sets up the routes
+      if (inbound.auto_route && inbound.dns_mode != 'disabled' && !result.dns)
+        result.dns = { tag: inbound.tag ?? inbound.type };
+      break;
 
-		case 'tproxy':
-		case 'redirect':
-			if (!result[inbound.type])
-				result[inbound.type] = inbound.tag ?? inbound.type;
-			break;
+    case 'tproxy':
+    case 'redirect':
+      if (!result[inbound.type])
+        result[inbound.type] = inbound.tag ?? inbound.type;
+      break;
 
-		// a proxy port for devices set up by hand, beside the takeover
-		case 'mixed':
-			if (!result.mixed)
-				result.mixed = { tag: inbound.tag ?? inbound.type, port: inbound.listen_port };
-			break;
+    // a proxy port for devices set up by hand, beside the takeover
+    case 'mixed':
+      if (!result.mixed)
+        result.mixed = { tag: inbound.tag ?? inbound.type, port: inbound.listen_port };
+      break;
 
-		}
-	}
+    }
+  }
 
-	// the dns inbound comes before the DNS hijack of tun
-	const dns = dns_inbound(config);
-	if (dns)
-		result.dns = { tag: dns.tag, port: dns.port };
+  // the dns inbound comes before the DNS hijack of tun
+  const dns = dns_inbound(config);
+  if (dns)
+    result.dns = { tag: dns.tag, port: dns.port };
 
-	return result;
+  return result;
 }
 
 // the clash API of the running sing-box, or why it is not available
 function running_clash_api() {
-	if (!instance_pid())
-		return { error: 'not_running' };
+  if (!instance_pid())
+    return { error: 'not_running' };
 
-	const api = clash_api(load_json(RUN_CONFIG));
-	if (!api)
-		return { error: 'no_clash_api' };
+  const api = clash_api(load_json(RUN_CONFIG));
+  if (!api)
+    return { error: 'no_clash_api' };
 
-	return { api: api };
+  return { api: api };
 }
 
 function clash_mode(api) {
-	const resp = clash_request(api, 'GET', '/configs');
-	if (resp?.status != 200)
-		return null;
+  const resp = clash_request(api, 'GET', '/configs');
+  if (resp?.status != 200)
+    return null;
 
-	return { mode: resp.data?.mode, modes: resp.data?.['mode-list'] ?? [] };
+  return { mode: resp.data?.mode, modes: resp.data?.['mode-list'] ?? [] };
 }
 
 // a sing-box duration such as "5s" or "500ms" in milliseconds, null when it
 // is not one
 function duration_ms(value) {
-	const units = { ms: 1, s: 1000, m: 60000 };
-	let total = 0, rest = value ?? '';
+  const units = { ms: 1, s: 1000, m: 60000 };
+  let total = 0, rest = value ?? '';
 
-	if (type(rest) != 'string' || !length(rest))
-		return null;
+  if (type(rest) != 'string' || !length(rest))
+    return null;
 
-	while (length(rest)) {
-		const part = match(rest, /^([0-9]+)(ms|s|m)/);
-		if (!part)
-			return null;
+  while (length(rest)) {
+    const part = match(rest, /^([0-9]+)(ms|s|m)/);
+    if (!part)
+      return null;
 
-		total += +part[1] * units[part[2]];
-		rest = substr(rest, length(part[0]));
-	}
+    total += +part[1] * units[part[2]];
+    rest = substr(rest, length(part[0]));
+  }
 
-	return total;
+  return total;
 }
 
 // percent-encode a path segment, for group and outbound names
 function escape_path(value) {
-	return join('', map(split(value, ''), (c) => match(c, /^[A-Za-z0-9._~-]$/) ? c : sprintf('%%%02X', ord(c))));
+  return join('', map(split(value, ''), (c) => match(c, /^[A-Za-z0-9._~-]$/) ? c : sprintf('%%%02X', ord(c))));
 }
 
 // a directory of its own for the files of one call, so calls at the same
 // time never read each other's; removed with its files by remove_temp()
 function make_temp() {
-	system(`mkdir -p ${RUN_DIR}`);
-	return mkdtemp(`${RUN_DIR}/check-XXXXXX`);
+  system(`mkdir -p ${RUN_DIR}`);
+  return mkdtemp(`${RUN_DIR}/check-XXXXXX`);
 }
 
 function remove_temp(dir) {
-	for (let name in lsdir(dir) ?? [])
-		unlink(`${dir}/${name}`);
-	rmdir(dir);
+  for (let name in lsdir(dir) ?? [])
+    unlink(`${dir}/${name}`);
+  rmdir(dir);
 }
 
 // sing-box check on a config file, with what it printed but without the
 // colors of its log; passes when sing-box is not installed yet. The log goes
 // into dir when given (left to the caller), else into a directory of its own
 function check_config(path, dir) {
-	if (!access(CORE, 'x'))
-		return { result: true, output: '' };
+  if (!access(CORE, 'x'))
+    return { result: true, output: '' };
 
-	const temp = dir ?? make_temp();
-	if (!temp)
-		return { result: false, output: 'cannot create a temporary file' };
+  const temp = dir ?? make_temp();
+  if (!temp)
+    return { result: false, output: 'cannot create a temporary file' };
 
-	const passed = system(`${CORE} check -c ${path} -D ${RUN_DIR} > ${temp}/check.log 2>&1`) == 0;
-	const output = replace(readfile(`${temp}/check.log`) ?? '', regexp('\x1b\\[[0-9;]*m', 'g'), '');
-	if (!dir)
-		remove_temp(temp);
+  const passed = system(`${CORE} check -c ${path} -D ${RUN_DIR} > ${temp}/check.log 2>&1`) == 0;
+  const output = replace(readfile(`${temp}/check.log`) ?? '', regexp('\x1b\\[[0-9;]*m', 'g'), '');
+  if (!dir)
+    remove_temp(temp);
 
-	return { result: passed, output: trim(output) };
+  return { result: passed, output: trim(output) };
 }
 
 function reload_running() {
-	return instance_pid() != null && system('/etc/init.d/openbox reload >/dev/null 2>&1') == 0;
+  return instance_pid() != null && system('/etc/init.d/openbox reload >/dev/null 2>&1') == 0;
 }
 
 function install_running() {
-	return access(INSTALL_LOG) && !access(INSTALL_EXIT);
+  return access(INSTALL_LOG) && !access(INSTALL_EXIT);
 }
 
 const methods = {
-	status: {
-		call: function() {
-			const uci = cursor();
-			const pid = instance_pid();
-			const config = pid ? load_json(RUN_CONFIG) : pending_config();
-			const api = clash_api(config);
-
-			return {
-				enabled: uci.get('openbox', 'main', 'enabled') == '1',
-				running: pid != null,
-				uptime: pid ? process_uptime(pid) : null,
-				profile: current_profile(),
-				version: trim(readfile('/usr/share/openbox/version') ?? '') || null,
-				core: core_info(),
-				takeover: takeover(config),
-				clash_api: api ? {
-					mode: (pid ? clash_mode(api)?.mode : null) ?? api.default_mode
-				} : null
-			};
-		}
-	},
-
-	control: {
-		args: { action: 'action' },
-		call: function(req) {
-			const action = req.args?.action;
-
-			// takeover: stop and disable the service of the sing-box package,
-			// then enable and start OpenBox as below
-			if (action == 'takeover')
-				system('/etc/init.d/openbox takeover_core >/dev/null 2>&1');
-
-			// enable: turn the service on in UCI, then start it
-			if (action in [ 'enable', 'takeover' ]) {
-				const uci = cursor();
-				uci.set('openbox', 'main', 'enabled', '1');
-				uci.commit('openbox');
-
-				return { result: system('/etc/init.d/openbox start >/dev/null 2>&1') == 0 };
-			}
-
-			if (!(action in [ 'start', 'stop', 'restart', 'reload' ]))
-				return { result: false, error: 'invalid action' };
-
-			return { result: system(`/etc/init.d/openbox ${action} >/dev/null 2>&1`) == 0 };
-		}
-	},
-
-	// the outbound modes of the config OpenBox runs, the one chosen in
-	// main.mode (set on sing-box when the settings are applied), and the one
-	// sing-box runs with
-	mode: {
-		call: function() {
-			const uci = cursor();
-			const config = pending_config();
-			const api = clash_api(config);
-			if (!api)
-				return { available: false, reason: 'no_clash_api' };
-
-			const running = running_clash_api();
-
-			return {
-				available: true,
-				modes: config_modes(config, api),
-				default: api.default_mode,
-				mode: uci.get('openbox', 'main', 'mode') ?? null,
-				running: running.api ? clash_mode(running.api)?.mode : null
-			};
-		}
-	},
-
-	// sets the outbound mode right away: it is kept in main.mode and a
-	// running service is reloaded, which sets it on sing-box and, as the mode
-	// decides what bypasses sing-box, regenerates the config and firewall
-	mode_set: {
-		args: { mode: 'mode' },
-		call: function(req) {
-			const uci = cursor();
-			const config = pending_config();
-			const api = clash_api(config);
-			if (!api)
-				return { result: false, error: 'no_clash_api' };
-
-			const wanted = req.args?.mode;
-			const mode = filter(config_modes(config, api), (m) => type(wanted) == 'string' && lc(m) == lc(wanted))[0];
-			if (!mode)
-				return { result: false, error: 'invalid_mode' };
-
-			uci.set('openbox', 'main', 'mode', mode);
-			uci.commit('openbox');
-
-			return { result: true, reloaded: reload_running() };
-		}
-	},
-
-	// the outbounds of the running sing-box: their names, the groups with
-	// their current outbound, and the last measured delay of each
-	outbounds: {
-		call: function() {
-			const running = running_clash_api();
-			if (running.error)
-				return { available: false, reason: running.error };
-
-			const resp = clash_request(running.api, 'GET', '/proxies');
-			if (resp?.status != 200)
-				return { available: false, reason: 'unreachable' };
-
-			const names = [], groups = {}, delays = {};
-
-			for (let name, proxy in resp.data?.proxies ?? {}) {
-				// GLOBAL is added by the clash API itself
-				if (name == 'GLOBAL')
-					continue;
-
-				const history = proxy.history ?? [];
-				const delay = length(history) ? history[length(history) - 1].delay : 0;
-
-				push(names, name);
-
-				if (delay > 0)
-					delays[name] = delay;
-
-				if (type(proxy.all) == 'array')
-					groups[name] = { type: lc(proxy.type), now: proxy.now, all: proxy.all };
-			}
-
-			return { available: true, names: names, groups: groups, delays: delays };
-		}
-	},
-
-	// switch the outbound of a selector group
-	select: {
-		args: { group: 'group', outbound: 'outbound' },
-		call: function(req) {
-			const running = running_clash_api();
-			if (running.error)
-				return { result: false, error: running.error };
-
-			const group = req.args?.group, outbound = req.args?.outbound;
-			if (!group || !outbound)
-				return { result: false, error: 'invalid arguments' };
-
-			const resp = clash_request(running.api, 'PUT', `/proxies/${escape_path(group)}`,
-				sprintf('%J', { name: outbound }));
-
-			return { result: resp?.status == 204 };
-		}
-	},
-
-	// tests the latency of the members of a group at once: the delays of
-	// those that answered, by name. sing-box keeps them as the measured
-	// delays, and an auto group may switch to the fastest member
-	delay: {
-		args: { group: 'group' },
-		call: function(req) {
-			const running = running_clash_api();
-			if (running.error)
-				return { result: false, error: running.error };
-
-			const group = req.args?.group;
-			if (type(group) != 'string' || !length(group))
-				return { result: false, error: 'invalid arguments' };
-
-			// the test URL and timeout of the plugin settings; sing-box tests
-			// an auto group with its own URL
-			const uci = cursor();
-			const url = uci.get('openbox', 'latency', 'url');
-			const timeout = min(duration_ms(uci.get('openbox', 'latency', 'timeout')) || DELAY_TIMEOUT, DELAY_TIMEOUT_MAX);
-			let query = `timeout=${timeout}`;
-			if (url)
-				query += `&url=${escape_path(url)}`;
-
-			const resp = clash_request(running.api, 'GET', `/group/${escape_path(group)}/delay?${query}`);
-
-			if (resp?.status != 200)
-				return { result: false, error: resp?.data?.message ?? 'unreachable' };
-
-			return { result: true, delays: resp.data ?? {} };
-		}
-	},
-
-	log_read: {
-		args: { name: 'name', offset: 0 },
-		call: function(req) {
-			const name = req.args?.name;
-			if (!(name in LOG_NAMES))
-				return { error: 'invalid log' };
-
-			const path = `${LOG_DIR}/${name}.log`;
-			const size = stat(path)?.size ?? 0;
-
-			// a log smaller than the offset was rotated or emptied: start over
-			let offset = +(req.args?.offset ?? 0);
-			if (offset > size)
-				offset = 0;
-
-			const start = (size - offset > LOG_BYTES) ? size - LOG_BYTES : offset;
-			let content = '';
-
-			if (size > start) {
-				const file = open(path);
-				if (file) {
-					file.seek(start);
-					content = file.read('all') ?? '';
-					file.close();
-				}
-
-				// skip the partial first line when starting mid-file
-				if (start > offset)
-					content = substr(content, index(content, '\n') + 1);
-			}
-
-			return { content: content, size: size };
-		}
-	},
-
-	// the latest GitHub release for this device
-	core_latest: {
-		call: function() {
-			const out = trim(command_output(`${CORE_INSTALL} latest 2>&1`) ?? '');
-
-			try {
-				return json(out);
-			}
-			catch (e) {
-				return { error: out };
-			}
-		}
-	},
-
-	// installs the core from the latest GitHub release or the uploaded apk in the
-	// background; progress is read with core_install_status
-	core_install: {
-		args: { source: 'source' },
-		call: function(req) {
-			const source = req.args?.source;
-			let cmd;
-
-			if (source == 'github')
-				cmd = `${CORE_INSTALL} github`;
-			else if (source == 'upload')
-				cmd = `${CORE_INSTALL} upload ${CORE_UPLOAD}`;
-			else
-				return { result: false, error: 'invalid source' };
-
-			if (install_running())
-				return { result: false, error: 'busy' };
-
-			system(`mkdir -p ${RUN_DIR}`);
-			unlink(INSTALL_EXIT);
-			writefile(INSTALL_LOG, '');
-			system(`( ${cmd} >> ${INSTALL_LOG} 2>&1; echo $? > ${INSTALL_EXIT} ) </dev/null >/dev/null 2>&1 &`);
-
-			return { result: true };
-		}
-	},
-
-	// the profiles, each a UCI package openbox_<name>, and the one in use
-	profiles: {
-		call: function() {
-			const profiles = [];
-
-			for (let file in lsdir(CONFIG_DIR) ?? []) {
-				const name = match(file, /^openbox_(.+)$/)?.[1];
-				if (valid_name(name))
-					push(profiles, { name: name });
-			}
-
-			return {
-				profile: current_profile(),
-				profiles: sort(profiles, (a, b) => (a.name < b.name) ? -1 : 1)
-			};
-		}
-	},
-
-	// a new profile from the template
-	profile_create: {
-		args: { name: 'name' },
-		call: function(req) {
-			const name = req.args?.name;
-			if (!valid_name(name))
-				return { result: false, error: 'invalid_name' };
-
-			if (profile_exists(name))
-				return { result: false, error: 'exists' };
-
-			const template = readfile(PROFILE_TEMPLATE);
-			if (template == null || !writefile(`${CONFIG_DIR}/${profile_package(name)}`, template))
-				return { result: false, error: 'write_failed' };
-
-			return { result: true };
-		}
-	},
-
-	// the config a profile makes, with the warnings of the generator about
-	// what it skipped
-	profile_view: {
-		args: { name: 'name' },
-		call: function(req) {
-			const name = req.args?.name || current_profile();
-			if (!profile_exists(name))
-				return { error: 'not_found' };
-
-			const temp = make_temp();
-			if (!temp)
-				return { error: 'generate_failed', warnings: 'cannot create a temporary file' };
-
-			const content = command_output(`${generate_command(name)} 2> ${temp}/generate.log`);
-			const warnings = trim(readfile(`${temp}/generate.log`) ?? '');
-			remove_temp(temp);
-
-			return content ? { content: content, warnings: warnings } : { error: 'generate_failed', warnings: warnings };
-		}
-	},
-
-	// the profile in use cannot be deleted
-	profile_delete: {
-		args: { name: 'name' },
-		call: function(req) {
-			const name = req.args?.name;
-			if (!profile_exists(name))
-				return { result: false, error: 'not_found' };
-
-			if (name == current_profile())
-				return { result: false, error: 'in_use' };
-
-			return { result: unlink(`${CONFIG_DIR}/${profile_package(name)}`) == true };
-		}
-	},
-
-	// switches to a profile; its config must pass the check, and a running
-	// service is reloaded with it
-	profile_use: {
-		args: { name: 'name' },
-		call: function(req) {
-			const name = req.args?.name;
-			if (!profile_exists(name))
-				return { result: false, error: 'not_found' };
-
-			const temp = make_temp();
-			if (!temp)
-				return { result: false, error: 'generate_failed' };
-
-			const path = `${temp}/check.json`;
-			if (system(`${generate_command(name)} > ${path} 2>/dev/null`) != 0) {
-				remove_temp(temp);
-				return { result: false, error: 'generate_failed' };
-			}
-
-			const check = check_config(path, temp);
-			remove_temp(temp);
-
-			if (!check.result) {
-				check.error = 'check_failed';
-				return check;
-			}
-
-			const uci = cursor();
-			uci.set('openbox', 'main', 'profile', name);
-			uci.commit('openbox');
-
-			return { result: true, reloaded: reload_running() };
-		}
-	},
-
-	core_install_status: {
-		call: function() {
-			const exit = readfile(INSTALL_EXIT);
-			const log = readfile(INSTALL_LOG) ?? '';
-			const lines = split(trim(log), '\n');
-
-			return {
-				running: install_running(),
-				success: exit != null ? +trim(exit) == 0 : null,
-				log: join('\n', slice(lines, -30))
-			};
-		}
-	}
+  status: {
+    call: function() {
+      const uci = cursor();
+      const pid = instance_pid();
+      const config = pid ? load_json(RUN_CONFIG) : pending_config();
+      const api = clash_api(config);
+
+      return {
+        enabled: uci.get('openbox', 'main', 'enabled') == '1',
+        running: pid != null,
+        uptime: pid ? process_uptime(pid) : null,
+        profile: current_profile(),
+        profile_title: filter(list_profiles(), (profile) => profile.name == current_profile())[0]?.title ?? current_profile(),
+        version: trim(readfile('/usr/share/openbox/version') ?? '') || null,
+        core: core_info(),
+        takeover: takeover(config),
+        // the mode sing-box runs with, and those the activity page
+        // switches between
+        clash_api: api ? {
+          mode: (pid ? clash_mode(api)?.mode : null) ?? api.default_mode,
+          modes: config_modes(config, api)
+        } : null
+      };
+    }
+  },
+
+  control: {
+    args: { action: 'action' },
+    call: function(req) {
+      const action = req.args?.action;
+
+      // takeover: stop and disable the service of the sing-box package,
+      // then enable and start OpenBox as below
+      if (action == 'takeover')
+        system('/etc/init.d/openbox takeover_core >/dev/null 2>&1');
+
+      // enable: turn the service on in UCI, then start it
+      if (action in [ 'enable', 'takeover' ]) {
+        const uci = cursor();
+        uci.set('openbox', 'main', 'enabled', '1');
+        uci.commit('openbox');
+
+        return { result: system('/etc/init.d/openbox start >/dev/null 2>&1') == 0 };
+      }
+
+      if (!(action in [ 'start', 'stop', 'restart', 'reload' ]))
+        return { result: false, error: 'invalid action' };
+
+      return { result: system(`/etc/init.d/openbox ${action} >/dev/null 2>&1`) == 0 };
+    }
+  },
+
+  // sets the outbound mode right away: it is kept in main.mode and a
+  // running service is reloaded, which sets it on sing-box and, as the mode
+  // decides what bypasses sing-box, regenerates the config and firewall
+  mode_set: {
+    args: { mode: 'mode' },
+    call: function(req) {
+      const uci = cursor();
+      const config = pending_config();
+      const api = clash_api(config);
+      if (!api)
+        return { result: false, error: 'no_clash_api' };
+
+      const wanted = req.args?.mode;
+      const mode = filter(config_modes(config, api), (m) => type(wanted) == 'string' && lc(m) == lc(wanted))[0];
+      if (!mode)
+        return { result: false, error: 'invalid_mode' };
+
+      uci.set('openbox', 'main', 'mode', mode);
+      uci.commit('openbox');
+
+      return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  // the outbounds of the running sing-box: their names, the groups with
+  // their current outbound, and the last measured delay of each
+  outbounds: {
+    call: function() {
+      const running = running_clash_api();
+      if (running.error)
+        return { available: false, reason: running.error };
+
+      const resp = clash_request(running.api, 'GET', '/proxies');
+      if (resp?.status != 200)
+        return { available: false, reason: 'unreachable' };
+
+      const names = [], groups = {}, delays = {};
+
+      for (let name, proxy in resp.data?.proxies ?? {}) {
+        // GLOBAL is added by the clash API itself
+        if (name == 'GLOBAL')
+          continue;
+
+        const history = proxy.history ?? [];
+        const delay = length(history) ? history[length(history) - 1].delay : 0;
+
+        push(names, name);
+
+        if (delay > 0)
+          delays[name] = delay;
+
+        if (type(proxy.all) == 'array')
+          groups[name] = { type: lc(proxy.type), now: proxy.now, all: proxy.all };
+      }
+
+      return { available: true, names: names, groups: groups, delays: delays };
+    }
+  },
+
+  // switch the outbound of a selector group
+  select: {
+    args: { group: 'group', outbound: 'outbound' },
+    call: function(req) {
+      const running = running_clash_api();
+      if (running.error)
+        return { result: false, error: running.error };
+
+      const group = req.args?.group, outbound = req.args?.outbound;
+      if (!group || !outbound)
+        return { result: false, error: 'invalid arguments' };
+
+      const resp = clash_request(running.api, 'PUT', `/proxies/${escape_path(group)}`,
+        sprintf('%J', { name: outbound }));
+
+      return { result: resp?.status == 204 };
+    }
+  },
+
+  // tests the latency of the members of a group at once: the delays of
+  // those that answered, by name. sing-box keeps them as the measured
+  // delays, and an auto group may switch to the fastest member
+  delay: {
+    args: { group: 'group' },
+    call: function(req) {
+      const running = running_clash_api();
+      if (running.error)
+        return { result: false, error: running.error };
+
+      const group = req.args?.group;
+      if (type(group) != 'string' || !length(group))
+        return { result: false, error: 'invalid arguments' };
+
+      // the test URL and timeout of the plugin settings; sing-box tests
+      // an auto group with its own URL
+      const uci = cursor();
+      const url = uci.get('openbox', 'latency', 'url');
+      const timeout = min(duration_ms(uci.get('openbox', 'latency', 'timeout')) || DELAY_TIMEOUT, DELAY_TIMEOUT_MAX);
+      let query = `timeout=${timeout}`;
+      if (url)
+        query += `&url=${escape_path(url)}`;
+
+      const resp = clash_request(running.api, 'GET', `/group/${escape_path(group)}/delay?${query}`);
+
+      if (resp?.status != 200)
+        return { result: false, error: resp?.data?.message ?? 'unreachable' };
+
+      return { result: true, delays: resp.data ?? {} };
+    }
+  },
+
+  log_read: {
+    args: { name: 'name', offset: 0 },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!(name in LOG_NAMES))
+        return { error: 'invalid log' };
+
+      const path = `${LOG_DIR}/${name}.log`;
+      const size = stat(path)?.size ?? 0;
+
+      // a log smaller than the offset was rotated or emptied: start over
+      let offset = +(req.args?.offset ?? 0);
+      if (offset > size)
+        offset = 0;
+
+      const start = (size - offset > LOG_BYTES) ? size - LOG_BYTES : offset;
+      let content = '';
+
+      if (size > start) {
+        const file = open(path);
+        if (file) {
+          file.seek(start);
+          content = file.read('all') ?? '';
+          file.close();
+        }
+
+        // skip the partial first line when starting mid-file
+        if (start > offset)
+          content = substr(content, index(content, '\n') + 1);
+      }
+
+      return { content: content, size: size };
+    }
+  },
+
+  // the latest GitHub release for this device
+  core_latest: {
+    call: function() {
+      const out = trim(command_output(`${CORE_INSTALL} latest 2>&1`) ?? '');
+
+      try {
+        return json(out);
+      }
+      catch (e) {
+        return { error: out };
+      }
+    }
+  },
+
+  // installs the core from the latest GitHub release or the uploaded apk in the
+  // background; progress is read with core_install_status
+  core_install: {
+    args: { source: 'source' },
+    call: function(req) {
+      const source = req.args?.source;
+      let cmd;
+
+      if (source == 'github')
+        cmd = `${CORE_INSTALL} github`;
+      else if (source == 'upload')
+        cmd = `${CORE_INSTALL} upload ${CORE_UPLOAD}`;
+      else
+        return { result: false, error: 'invalid source' };
+
+      if (install_running())
+        return { result: false, error: 'busy' };
+
+      system(`mkdir -p ${RUN_DIR}`);
+      unlink(INSTALL_EXIT);
+      writefile(INSTALL_LOG, '');
+      system(`( ${cmd} >> ${INSTALL_LOG} 2>&1; echo $? > ${INSTALL_EXIT} ) </dev/null >/dev/null 2>&1 &`);
+
+      return { result: true };
+    }
+  },
+
+  // the profiles, local ones and subscriptions, and the one in use
+  profiles: {
+    call: function() {
+      return { profile: current_profile(), profiles: list_profiles() };
+    }
+  },
+
+  // a new profile from the template, with its title
+  profile_create: {
+    args: { title: 'title' },
+    call: function(req) {
+      const res = create_profile(req.args?.title);
+      return res.error ? { result: false, error: res.error } : { result: true, name: res.name };
+    }
+  },
+
+  // the config a profile makes, with the warnings of the generator about
+  // what it skipped
+  profile_view: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name || current_profile();
+      if (!profile_exists(name))
+        return { error: 'not_found' };
+
+      const temp = make_temp();
+      if (!temp)
+        return { error: 'generate_failed', warnings: 'cannot create a temporary file' };
+
+      const content = command_output(`${generate_command(name)} 2> ${temp}/generate.log`);
+      const warnings = trim(readfile(`${temp}/generate.log`) ?? '');
+      remove_temp(temp);
+
+      return content ? { content: content, warnings: warnings } : { error: 'generate_failed', warnings: warnings };
+    }
+  },
+
+  // the profile in use cannot be deleted; one from a subscription goes
+  // with what it downloaded
+  profile_delete: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
+
+      if (name == current_profile())
+        return { result: false, error: 'in_use' };
+
+      unlink(`${SUBSCRIPTION_DIR}/${name}.json`);
+
+      return { result: unlink(`${CONFIG_DIR}/${profile_package(name)}`) == true };
+    }
+  },
+
+  // a new profile whose nodes come from a subscription, downloaded at
+  // once; it is dropped again when the download fails
+  subscription_save: {
+    args: { title: 'title', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
+    call: function(req) {
+      const url = req.args?.url;
+      const interval = req.args?.update_interval ?? '';
+      const agent = req.args?.user_agent ?? '';
+
+      if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
+        return { result: false, error: 'invalid_url' };
+
+      if (type(interval) != 'string' || (interval != '' && interval != '0' && !valid_interval(interval)))
+        return { result: false, error: 'invalid_interval' };
+
+      if (type(agent) != 'string' || match(agent, /[\r\n]/))
+        return { result: false, error: 'invalid_user_agent' };
+
+      const created = create_profile(req.args?.title, {
+        url: url,
+        update_interval: (interval != '0') ? interval : null,
+        user_agent: trim(agent)
+      });
+      if (created.error)
+        return { result: false, error: created.error };
+
+      const res = update_subscription(created.name);
+      res.name = created.name;
+      if (!res.result) {
+        unlink(`${CONFIG_DIR}/${profile_package(created.name)}`);
+        unlink(`${SUBSCRIPTION_DIR}/${created.name}.json`);
+      }
+
+      return res;
+    }
+  },
+
+  // the nodes a profile takes from its subscription, as the policy page
+  // lists them
+  subscription_nodes: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name || current_profile();
+      if (profile_kind(name) != 'subscription')
+        return { nodes: [] };
+
+      const sub = load_json(`${SUBSCRIPTION_DIR}/${name}.json`);
+      const nodes = [];
+
+      for (let kind in [ 'outbounds', 'endpoints' ])
+        for (let node in sub?.[kind] ?? [])
+          if (type(node) == 'object' && type(node.tag) == 'string' && !(node.type in [ 'direct', 'block', 'dns', 'selector', 'urltest' ]))
+            push(nodes, {
+              tag: node.tag,
+              type: node.type,
+              server: node.server ?? node.peers?.[0]?.address,
+              server_port: node.server_port ?? node.peers?.[0]?.port
+            });
+
+      return { nodes: nodes };
+    }
+  },
+
+  subscription_update: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (profile_kind(name) != 'subscription')
+        return { result: false, error: 'not_found' };
+
+      return update_subscription(name);
+    }
+  },
+
+  // switches to a profile; its config must pass the check, and a running
+  // service is reloaded with it
+  profile_use: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
+
+      const temp = make_temp();
+      if (!temp)
+        return { result: false, error: 'generate_failed' };
+
+      const path = `${temp}/check.json`;
+      if (system(`${generate_command(name)} > ${path} 2>/dev/null`) != 0) {
+        remove_temp(temp);
+        return { result: false, error: 'generate_failed' };
+      }
+
+      const check = check_config(path, temp);
+      remove_temp(temp);
+
+      if (!check.result) {
+        check.error = 'check_failed';
+        return check;
+      }
+
+      const uci = cursor();
+      uci.set('openbox', 'main', 'profile', name);
+      uci.commit('openbox');
+
+      return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  core_install_status: {
+    call: function() {
+      const exit = readfile(INSTALL_EXIT);
+      const log = readfile(INSTALL_LOG) ?? '';
+      const lines = split(trim(log), '\n');
+
+      return {
+        running: install_running(),
+        success: exit != null ? +trim(exit) == 0 : null,
+        log: join('\n', slice(lines, -30))
+      };
+    }
+  }
 };
 
 return { 'luci.openbox': methods };

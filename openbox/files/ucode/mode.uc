@@ -13,12 +13,12 @@ import { cursor } from 'uci';
 import { clash_api, clash_request, config_modes } from 'openbox.clash';
 
 function load_json(path) {
-	try {
-		return json(readfile(path) ?? '');
-	}
-	catch (e) {
-		return null;
-	}
+  try {
+    return json(readfile(path) ?? '');
+  }
+  catch (e) {
+    return null;
+  }
 }
 
 const config = load_json(ARGV[0]);
@@ -27,21 +27,21 @@ const wanted = cursor().get('openbox', 'main', 'mode');
 
 // nothing chosen yet: sing-box keeps its own
 if (!api || !wanted)
-	exit(0);
+  exit(0);
 
 const mode = filter(config_modes(config, api), (m) => lc(m) == lc(wanted))[0];
 if (!mode) {
-	warn(`openbox: the config offers no outbound mode '${wanted}'\n`);
-	exit(0);
+  warn(`openbox: the config offers no outbound mode '${wanted}'\n`);
+  exit(0);
 }
 
 const tries = +(ARGV[1] ?? 1) || 1;
 for (let i = 0; i < tries; i++) {
-	if (i > 0)
-		sleep(500);
+  if (i > 0)
+    sleep(500);
 
-	if (clash_request(api, 'PATCH', '/configs', sprintf('%J', { mode: mode }))?.status == 204)
-		exit(0);
+  if (clash_request(api, 'PATCH', '/configs', sprintf('%J', { mode: mode }))?.status == 204)
+    exit(0);
 }
 
 exit(1);

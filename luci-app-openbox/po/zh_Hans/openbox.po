@@ -18,14 +18,23 @@ msgstr "%d 分钟"
 msgid "%s (inverted)"
 msgstr "%s（反向）"
 
-msgid "0 uses the AEAD protocol; servers of the legacy protocol need 1."
-msgstr "0 使用 AEAD 协议；旧协议的服务器需要填 1。"
+msgid "%s is up to date."
+msgstr "%s 已是最新。"
+
+msgid "%s updated."
+msgstr "%s 已更新。"
+
+msgid "%s updated; sing-box was reloaded."
+msgstr "%s 已更新，sing-box 已重载。"
 
 msgid "0-RTT handshake"
 msgstr "0-RTT 握手"
 
-msgid "A key file on the router, in place of or together with the password."
-msgstr "路由器上的密钥文件，可代替密码或与密码同时使用。"
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
+msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段</a>组成的 JSON 对象，会覆盖上面的参数。"
+
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
+msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 拨号字段</a>组成的 JSON 对象。"
 
 msgid "A local file used at start while the rule set has not been downloaded yet."
 msgstr "启动时规则集还没下载下来，先用这个本地文件。"
@@ -36,9 +45,6 @@ msgstr "在 OpenWrt 上运行 sing-box 的简约客户端。"
 msgid "A profile with this name exists."
 msgstr "已有同名配置。"
 
-msgid "A regular expression matched against node names."
-msgstr "按节点名称匹配的正则表达式。"
-
 msgid "Action"
 msgstr "操作"
 
@@ -48,11 +54,8 @@ msgstr "活动"
 msgid "Address"
 msgstr "地址"
 
-msgid "All IPv4 and IPv6 addresses if empty."
-msgstr "留空时为全部 IPv4 和 IPv6 地址。"
-
-msgid "Allowed IPs"
-msgstr "允许的 IP"
+msgid "Advanced editing"
+msgstr "高级编辑"
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
 msgstr "sing-box <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">无头规则</a>数组。"
@@ -63,14 +66,26 @@ msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box DNS 规则<
 msgid "Another outbound already uses this name."
 msgstr "已有其他出站使用此名称。"
 
-msgid "Any host key is accepted if empty."
-msgstr "留空时接受任何主机密钥。"
+msgid "Another update is running; try again later."
+msgstr "另一个更新正在进行，请稍后再试。"
+
+msgid "Authenticated length"
+msgstr "认证长度"
 
 msgid "Auto by latency"
 msgstr "自动测速"
 
+msgid "BBR profile"
+msgstr "BBR 配置"
+
+msgid "Basic"
+msgstr "基本"
+
 msgid "Binary (.srs)"
 msgstr "二进制（.srs）"
+
+msgid "Brutal debug logs"
+msgstr "Brutal 调试日志"
 
 msgid "By the extension"
 msgstr "按扩展名"
@@ -96,6 +111,12 @@ msgstr "取消"
 msgid "Checking the latest release…"
 msgstr "正在查询最新版本…"
 
+msgid "Ciphers"
+msgstr "加密算法"
+
+msgid "Circular reference found in policy group: %s"
+msgstr "在策略组中发现了循环引用：%s"
+
 msgid "Clash API listen address"
 msgstr "Clash API 监听地址"
 
@@ -108,14 +129,20 @@ msgstr "自动清理日志"
 msgid "Clear"
 msgstr "清空"
 
+msgid "Client metadata"
+msgstr "客户端元数据"
+
+msgid "Client version"
+msgstr "客户端版本"
+
 msgid "Close"
 msgstr "关闭"
 
-msgid "Closes the connections of the previous outbound when the outbound in use changes."
-msgstr "当前出站改变时，断开经由原出站的连接。"
-
 msgid "Comment"
 msgstr "注释"
+
+msgid "Concurrent connections"
+msgstr "并发连接数"
 
 msgid "Configuration"
 msgstr "配置"
@@ -123,14 +150,20 @@ msgstr "配置"
 msgid "Congestion control"
 msgstr "拥塞控制"
 
+msgid "Connection receive window"
+msgstr "连接接收窗口"
+
 msgid "Connection reuse"
 msgstr "连接复用"
 
-msgid "Connects to the server through this node or group."
-msgstr "经由这个节点或策略组连接服务器。"
-
 msgid "Continue"
 msgstr "继续"
+
+msgid "Copied."
+msgstr "已复制。"
+
+msgid "Copy"
+msgstr "复制"
 
 msgid "Core log"
 msgstr "内核日志"
@@ -192,14 +225,23 @@ msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过
 msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
 msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。只能用本地和内联规则集。"
 
-msgid "Detour"
-msgstr "前置节点"
+msgid "Dial"
+msgstr "拨号"
+
+msgid "Dial fields"
+msgstr "拨号字段"
 
 msgid "Direct (default)"
 msgstr "直连（默认）"
 
 msgid "Direct connection"
 msgstr "直接连接"
+
+msgid "Disable Chrome parrot"
+msgstr "禁用 Chrome 指纹模仿"
+
+msgid "Disable path MTU discovery"
+msgstr "禁用路径 MTU 发现"
 
 msgid "Disabled"
 msgstr "已禁用"
@@ -210,14 +252,11 @@ msgstr "域名解析服务器"
 msgid "Download bandwidth"
 msgstr "下行带宽"
 
+msgid "Download failed."
+msgstr "下载失败。"
+
 msgid "Download via"
 msgstr "下载方式"
-
-msgid "Early data"
-msgstr "前置数据"
-
-msgid "Early data header"
-msgstr "前置数据请求头"
 
 msgid "Enable"
 msgstr "启用"
@@ -228,11 +267,26 @@ msgstr "启用 Reality"
 msgid "Enable TLS"
 msgstr "启用 TLS"
 
+msgid "Enable multiplexing"
+msgstr "启用多路复用"
+
 msgid "Encryption method"
 msgstr "加密方式"
 
+msgid "Expecting Name: value"
+msgstr "需要「名称: 值」的格式"
+
+msgid "Expecting a JSON object"
+msgstr "需要一个 JSON 对象"
+
+msgid "Expecting a name."
+msgstr "需要填写配置名。"
+
 msgid "Expecting a range such as 1000:2000"
 msgstr "需要是 1000:2000 这样的范围"
+
+msgid "Expecting a size such as 6MB"
+msgstr "需要 6MB 这样的大小"
 
 msgid "Expecting a whole number"
 msgstr "请输入整数"
@@ -243,8 +297,8 @@ msgstr "需要是 HTTP 或 HTTPS 地址"
 msgid "Expecting an array of rules"
 msgstr "需要是规则数组"
 
-msgid "Expecting three numbers such as 0,0,0"
-msgstr "需要是 0,0,0 这样的三个数字"
+msgid "Expecting an http:// or https:// URL."
+msgstr "需要 http:// 或 https:// 开头的地址。"
 
 msgid "Experimental"
 msgstr "实验性"
@@ -273,11 +327,17 @@ msgstr "剩余空间：%1024.2mB。"
 msgid "GLOBAL is reserved by the clash API."
 msgstr "GLOBAL 是 clash API 保留的名称。"
 
+msgid "Global padding"
+msgstr "全局填充"
+
 msgid "Global proxy"
 msgstr "全局代理"
 
 msgid "HTTP and SOCKS5 :%d"
 msgstr "HTTP 和 SOCKS5 :%d"
+
+msgid "HTTP client"
+msgstr "HTTP 客户端"
 
 msgid "HTTP method"
 msgstr "HTTP 方法"
@@ -285,17 +345,29 @@ msgstr "HTTP 方法"
 msgid "HTTP obfuscation"
 msgstr "HTTP 混淆"
 
+msgid "Headers"
+msgstr "请求头"
+
+msgid "Heartbeat interval"
+msgstr "心跳间隔"
+
 msgid "Hop interval"
 msgstr "跳跃间隔"
-
-msgid "Hops between ports of these ranges, such as 20000:30000, in place of the port."
-msgstr "在这些范围（如 20000:30000）内跳跃端口，代替上面的端口。"
 
 msgid "Host"
 msgstr "主机"
 
+msgid "Host key algorithms"
+msgstr "主机密钥算法"
+
 msgid "Host keys"
 msgstr "主机密钥"
+
+msgid "IP version"
+msgstr "IP 版本"
+
+msgid "IPv4 and IPv6"
+msgstr "IPv4 和 IPv6"
 
 msgid "IPv4 only"
 msgstr "仅 IPv4"
@@ -306,20 +378,23 @@ msgstr "IPv6"
 msgid "IPv6 only"
 msgstr "仅 IPv6"
 
+msgid "Idle session check interval"
+msgstr "空闲会话检查间隔"
+
+msgid "Idle session timeout"
+msgstr "空闲会话超时"
+
 msgid "Idle timeout"
 msgstr "闲置超时"
 
 msgid "In use"
 msgstr "使用中"
 
-msgid "Include all groups"
-msgstr "包含全部策略组"
-
-msgid "Include all nodes"
-msgstr "包含全部节点"
-
 msgid "Initial file"
 msgstr "初始文件"
+
+msgid "Initial packet size"
+msgstr "初始包长"
 
 msgid "Inline"
 msgstr "内联"
@@ -345,6 +420,12 @@ msgstr "中断现有连接"
 msgid "Invalid JSON: %s"
 msgstr "JSON 格式错误：%s"
 
+msgid "Invalid User-Agent."
+msgstr "User-Agent 无效。"
+
+msgid "Invalid update interval."
+msgstr "更新间隔无效。"
+
 msgid "Invert"
 msgstr "反向匹配"
 
@@ -354,14 +435,20 @@ msgstr "自带服务正在运行或开机启动"
 msgid "Keep logs for"
 msgstr "日志保留"
 
-msgid "Keepalive interval"
-msgstr "保活间隔"
+msgid "Keepalive period"
+msgstr "保活周期"
+
+msgid "Key exchange algorithms"
+msgstr "密钥交换算法"
 
 msgid "LAN devices can use the router as an HTTP or SOCKS5 proxy at this port, with or without the takeover."
 msgstr "局域网设备可以把路由器的这个端口设为 HTTP 或 SOCKS5 代理，开不开接管都能用。"
 
 msgid "LAN interfaces"
 msgstr "局域网接口"
+
+msgid "Last update failed: %s"
+msgstr "上次更新失败：%s"
 
 msgid "Latency"
 msgstr "延迟"
@@ -375,9 +462,6 @@ msgstr "测速"
 msgid "Latest release from GitHub"
 msgstr "从 GitHub 安装最新版"
 
-msgid "Leave empty to disable obfuscation."
-msgstr "留空不启用混淆。"
-
 msgid "Leave empty to use the proxy without a password."
 msgstr "留空时不需要密码。"
 
@@ -389,9 +473,6 @@ msgstr "域名或地址列表，供路由规则使用；DNS 规则和接管页�
 
 msgid "Local"
 msgstr "本地"
-
-msgid "Local addresses"
-msgstr "本地地址"
 
 msgid "Local file"
 msgstr "本地文件"
@@ -408,8 +489,8 @@ msgstr "日志"
 msgid "Logs connections with the MAC address and host name of the LAN device."
 msgstr "连接日志里显示局域网设备的 MAC 地址和主机名。"
 
-msgid "Lowercase letters, digits and underscores, up to 32."
-msgstr "小写字母、数字和下划线，最多 32 个。"
+msgid "MAC algorithms"
+msgstr "MAC 算法"
 
 msgid "MTU"
 msgstr "MTU"
@@ -477,11 +558,29 @@ msgstr "匹配来源端口。"
 msgid "Matches the user of the proxy port."
 msgstr "匹配代理端口的用户。"
 
-msgid "Members"
-msgstr "成员"
+msgid "Maximum concurrent streams"
+msgstr "最大并发流数"
 
-msgid "Mode"
-msgstr "模式"
+msgid "Maximum connections"
+msgstr "最大连接数"
+
+msgid "Maximum hop interval"
+msgstr "最大跳跃间隔"
+
+msgid "Maximum packet size"
+msgstr "最大包长"
+
+msgid "Maximum streams"
+msgstr "最大流数"
+
+msgid "Minimum idle sessions"
+msgstr "最少空闲会话数"
+
+msgid "Minimum packet size"
+msgstr "最小包长"
+
+msgid "Minimum streams"
+msgstr "最小流数"
 
 msgid "More"
 msgstr "更多"
@@ -489,17 +588,11 @@ msgstr "更多"
 msgid "Multiple conditions"
 msgstr "多个条件"
 
-msgid "Multiplex protocol"
-msgstr "多路复用协议"
-
-msgid "Multiplexing"
+msgid "Multiplex"
 msgstr "多路复用"
 
 msgid "Name"
 msgstr "名称"
-
-msgid "Needs multiplexing on the server as well."
-msgstr "服务器也需要开启多路复用。"
 
 msgid "Network protocols"
 msgstr "网络协议"
@@ -514,7 +607,7 @@ msgid "New node"
 msgstr "新节点"
 
 msgid "New profile"
-msgstr "新建配置文件"
+msgstr "新建配置"
 
 msgid "New rule set"
 msgstr "新规则集"
@@ -524,12 +617,6 @@ msgstr "新建…"
 
 msgid "Node domain resolver"
 msgstr "节点域名解析服务器"
-
-msgid "Node exclusion"
-msgstr "节点排除"
-
-msgid "Node filter"
-msgstr "节点筛选"
 
 msgid "Nodes"
 msgstr "节点"
@@ -573,17 +660,20 @@ msgstr "出站"
 msgid "Outbound mode"
 msgstr "出站模式"
 
+msgid "Outbound tags"
+msgstr "出站标签"
+
 msgid "Outbounds without an answer by then are shown as timed out."
 msgstr "超过这个时间没有响应的显示为超时。"
+
+msgid "Padding"
+msgstr "填充"
 
 msgid "Password"
 msgstr "密码"
 
 msgid "Path"
 msgstr "路径"
-
-msgid "Peer public key"
-msgstr "对端公钥"
 
 msgid "Plugin"
 msgstr "插件"
@@ -609,6 +699,15 @@ msgstr "策略组"
 msgid "Port"
 msgstr "端口"
 
+msgid "Port mapping"
+msgstr "端口映射"
+
+msgid "Port mapping lifetime"
+msgstr "端口映射租期"
+
+msgid "Port mapping timeout"
+msgstr "端口映射超时"
+
 msgid "Port ranges"
 msgstr "端口范围"
 
@@ -633,6 +732,9 @@ msgstr "私钥密码"
 msgid "Profile name"
 msgstr "配置名"
 
+msgid "Profile source"
+msgstr "来源"
+
 msgid "Profiles"
 msgstr "配置文件"
 
@@ -651,6 +753,15 @@ msgstr "Reality 公钥"
 msgid "Reality short ID"
 msgstr "Reality short ID"
 
+msgid "Realm ID"
+msgstr "Realm ID"
+
+msgid "Realm server URL"
+msgstr "Realm 服务地址"
+
+msgid "Realm token"
+msgstr "Realm 令牌"
+
 msgid "Redirect (%s)"
 msgstr "Redirect（%s）"
 
@@ -663,8 +774,8 @@ msgstr "重载"
 msgid "Remote"
 msgstr "远程"
 
-msgid "Reserved bytes"
-msgstr "保留字节"
+msgid "Remote subscription"
+msgstr "远程订阅"
 
 msgid "Resolve strategy"
 msgstr "解析策略"
@@ -696,23 +807,14 @@ msgstr "运行状态"
 msgid "SOCKS version"
 msgstr "SOCKS 版本"
 
-msgid "Selected until another one is picked. Must be a member; the first member is used if empty."
-msgstr "手动切换前使用的出站，必须是成员之一；留空时使用第一个成员。"
-
-msgid "Sends up to this much data with the handshake, such as 2048."
-msgstr "随握手发送的数据上限，如 2048。"
+msgid "STUN servers"
+msgstr "STUN 服务器"
 
 msgid "Server"
 msgstr "服务器"
 
-msgid "Set this node as the detour of a Shadowsocks or other node, which then connects through it."
-msgstr "在 Shadowsocks 等节点的“前置节点”中选择本节点，该节点即经由它连接。"
-
-msgid "ShadowTLS version"
-msgstr "ShadowTLS 版本"
-
-msgid "Shadowsocks ignores it while multiplexing is on."
-msgstr "Shadowsocks 开启多路复用时不使用此项。"
+msgid "Session receive window"
+msgstr "会话接收窗口"
 
 msgid "Show devices"
 msgstr "显示设备"
@@ -723,8 +825,8 @@ msgstr "跳过证书验证"
 msgid "Snell version"
 msgstr "Snell 版本"
 
-msgid "Source"
-msgstr "来源"
+msgid "Some providers answer in the format the User-Agent asks for; the default names sing-box and OpenBox."
+msgstr "有些服务商按 User-Agent 返回对应格式；默认会带上 sing-box 和 OpenBox 的版本。"
 
 msgid "Source (.json)"
 msgstr "源文件（.json）"
@@ -737,6 +839,15 @@ msgstr "状态"
 
 msgid "Stop"
 msgstr "停止"
+
+msgid "Stream receive window"
+msgstr "流接收窗口"
+
+msgid "Subscription"
+msgstr "订阅"
+
+msgid "Subscription URL"
+msgstr "订阅地址"
 
 msgid "Switched; sing-box was reloaded."
 msgstr "已切换，sing-box 已重载。"
@@ -792,9 +903,6 @@ msgstr "通过 TUN 或 TProxy 接管局域网设备和路由器自身的流量�
 msgid "Test URL"
 msgstr "测速地址"
 
-msgid "Test all"
-msgstr "测试全部"
-
 msgid "Test interval"
 msgstr "测速间隔"
 
@@ -804,14 +912,11 @@ msgstr "测速超时"
 msgid "Testing…"
 msgstr "测试中…"
 
-msgid "Tests pause after the group has not been used for this long."
-msgstr "策略组闲置超过这个时间后暂停测速。"
+msgid "The download is not a JSON config."
+msgstr "下载的内容不是 JSON 配置。"
 
-msgid "The clash API is not enabled in the current profile, so the outbound mode cannot be changed."
-msgstr "当前配置未启用 clash API，无法切换出站模式。"
-
-msgid "The current profile defines no other mode. Add route rules with clash_mode to switch modes."
-msgstr "当前配置没有定义其他模式。在路由规则中使用 clash_mode 后即可切换。"
+msgid "The nodes follow the subscription of this profile; only their latency is tested here."
+msgstr "节点来自这份配置的订阅，随订阅更新；这里只能测试延迟。"
 
 msgid "The profile and its nodes, groups and rules are deleted."
 msgstr "这份配置连同它的节点、策略组和规则都会删除。"
@@ -822,17 +927,20 @@ msgstr "配置不存在。"
 msgid "The profile in use cannot be deleted."
 msgstr "使用中的配置文件不能删除。"
 
+msgid "The profile, its groups and rules, and what its subscription downloaded are deleted."
+msgstr "这份配置连同它的策略组、规则和订阅下载的内容都会删除。"
+
 msgid "The rule applies when the condition does not match."
 msgstr "条件不满足时规则生效。"
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
 msgstr "sing-box 发布页中的 sing-box_*_openwrt_%s.apk 文件。"
 
+msgid "This protocol always uses TLS."
+msgstr "该协议必须使用 TLS。"
+
 msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
 msgstr "这条规则有多个条件，是在页面之外设置的。这里可以改动作和注释，条件保持原样。"
-
-msgid "Three numbers, for servers such as Cloudflare WARP."
-msgstr "三个数字，用于 Cloudflare WARP 等服务器。"
 
 msgid "Timeout"
 msgstr "超时"
@@ -852,8 +960,14 @@ msgstr "流量整形"
 msgid "Traffic that matches no rule uses this outbound."
 msgstr "不匹配任何规则的流量使用这个出站。"
 
+msgid "Transport"
+msgstr "传输"
+
 msgid "Transport protocol"
 msgstr "传输协议"
+
+msgid "Turn TLS off with Enable TLS."
+msgstr "关闭 TLS 请取消勾选「启用 TLS」。"
 
 msgid "Type"
 msgstr "类型"
@@ -869,6 +983,9 @@ msgstr "UDP 中继模式"
 
 msgid "URL"
 msgstr "URL"
+
+msgid "Unable to copy; select the URL and copy it by hand."
+msgstr "无法复制，请选中地址手动复制。"
 
 msgid "Unable to delete %s"
 msgstr "无法删除 %s"
@@ -888,6 +1005,9 @@ msgstr "无法切换 %s 的节点。"
 msgid "Unable to test the latency of %s."
 msgstr "无法测试 %s 的延迟。"
 
+msgid "Unable to update %s"
+msgstr "无法更新 %s"
+
 msgid "Unable to use %s"
 msgstr "无法使用 %s"
 
@@ -896,6 +1016,12 @@ msgstr "无法写入配置。"
 
 msgid "Unknown error"
 msgstr "未知错误"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Update failed."
+msgstr "更新失败。"
 
 msgid "Update interval"
 msgstr "更新间隔"
@@ -921,11 +1047,14 @@ msgstr "策略组的「延迟测试」和节点的「测试全部」使用；自
 msgid "Used with the IPv6 takeover on."
 msgstr "开启 IPv6 接管后生效。"
 
+msgid "User key"
+msgstr "用户密钥"
+
+msgid "User-Agent"
+msgstr "User-Agent"
+
 msgid "Username"
 msgstr "用户名"
-
-msgid "Uses QUIC instead of HTTP/2."
-msgstr "使用 QUIC 代替 HTTP/2。"
 
 msgid "Value"
 msgstr "值"
@@ -936,14 +1065,8 @@ msgstr "需要 1.14 或更高版本"
 msgid "View"
 msgstr "查看"
 
-msgid "View logs"
-msgstr "查看日志"
-
 msgid "View: %s"
 msgstr "查看：%s"
-
-msgid "WebSocket and HTTPUpgrade use the first one."
-msgstr "WebSocket 和 HTTPUpgrade 只使用第一项。"
 
 msgid "While OpenBox runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
 msgstr "OpenBox 运行时，dnsmasq 自己不应答的查询改发到 sing-box 的这个端口，而不是它的上游服务器。TProxy 模式下，发往 53 端口的查询也会重定向到这里。"
@@ -953,9 +1076,6 @@ msgstr "关闭 IPv6 接管时，发往其他 IPv6 地址的 TCP 和 UDP 连接�
 
 msgid "XTLS flow"
 msgstr "流控"
-
-msgid "Xray servers use Sec-WebSocket-Protocol; the data goes in the path if empty."
-msgstr "Xray 服务器使用 Sec-WebSocket-Protocol；留空时数据放在路径中。"
 
 msgid "bytes"
 msgstr "字节"
@@ -980,6 +1100,9 @@ msgstr "分钟"
 
 msgid "ms"
 msgstr "毫秒"
+
+msgid "non-empty value"
+msgstr "非空值"
 
 msgid "seconds"
 msgstr "秒"

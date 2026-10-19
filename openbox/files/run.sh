@@ -17,34 +17,34 @@ tun_route=
 
 # decided once: the config file may be replaced by a reload before this exits
 if uses_tun_route; then
-	tun_route=$(tun_route_params)
+  tun_route=$(tun_route_params)
 fi
 
 stop() {
-	if [ -n "$pid" ]; then
-		kill "$pid" 2> /dev/null
-		wait "$pid"
-	fi
+  if [ -n "$pid" ]; then
+    kill "$pid" 2> /dev/null
+    wait "$pid"
+  fi
 
-	cleanup
-	exit 0
+  cleanup
+  exit 0
 }
 
 cleanup() {
-	firewall_down
-	dnsmasq_down
-	if [ -n "$tun_route" ]; then
-		# shellcheck disable=SC2086
-		core_cleanup $tun_route
-	fi
-	flush_dns_cache
+  firewall_down
+  dnsmasq_down
+  if [ -n "$tun_route" ]; then
+    # shellcheck disable=SC2086
+    core_cleanup $tun_route
+  fi
+  flush_dns_cache
 }
 
 trap stop TERM INT
 
 if [ -n "$tun_route" ]; then
-	# shellcheck disable=SC2086
-	core_cleanup $tun_route
+  # shellcheck disable=SC2086
+  core_cleanup $tun_route
 fi
 
 # local time in the core log, for sing-box only: this shell, and dnsmasq
@@ -55,26 +55,26 @@ env ${tz:+TZ=$tz} "$CORE" run -c "$RUN_CONFIG" -D "$RUN_DIR" --disable-color >> 
 pid=$!
 
 if uses_tproxy || [ -n "$(dns_inbound)" ]; then
-	# let sing-box listen before traffic and queries are sent to it
-	if uses_tproxy; then
-		port=$(tproxy_port)
-	else
-		port=$(dns_inbound)
-		port=${port#* }
-	fi
-	# a raw JSON config may leave the port out: nothing to wait for
-	if [ -n "$port" ]; then
-		wait_for_listen "$port" "$pid"
-		if [ $? = 2 ]; then
-			log "sing-box does not listen on port $port yet, going on"
-		fi
-	fi
-	if kill -0 "$pid" 2> /dev/null; then
-		if uses_tproxy; then
-			firewall_up
-		fi
-		dnsmasq_up
-	fi
+  # let sing-box listen before traffic and queries are sent to it
+  if uses_tproxy; then
+    port=$(tproxy_port)
+  else
+    port=$(dns_inbound)
+    port=${port#* }
+  fi
+  # a raw JSON config may leave the port out: nothing to wait for
+  if [ -n "$port" ]; then
+    wait_for_listen "$port" "$pid"
+    if [ $? = 2 ]; then
+      log "sing-box does not listen on port $port yet, going on"
+    fi
+  fi
+  if kill -0 "$pid" 2> /dev/null; then
+    if uses_tproxy; then
+      firewall_up
+    fi
+    dnsmasq_up
+  fi
 fi
 
 # sing-box starts with the mode in its cache file: set the chosen one

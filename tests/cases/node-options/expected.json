@@ -1,318 +1,515 @@
 {
-	"$schema": "https://sing-box.sagernet.org/schema.json",
-	"log": {
-		"level": "warn",
-		"timestamp": true
-	},
-	"dns": {
-		"final": "remote",
-		"strategy": "ipv4_only",
-		"optimistic": true,
-		"servers": [
-			{
-				"type": "local",
-				"tag": "local"
-			},
-			{
-				"type": "udp",
-				"tag": "alidns",
-				"server": "223.5.5.5"
-			},
-			{
-				"type": "fakeip",
-				"tag": "fakeip",
-				"inet4_range": "198.18.0.0/15",
-				"inet6_range": "2001:2::/48"
-			},
-			{
-				"type": "https",
-				"tag": "remote",
-				"detour": "Proxy",
-				"server": "1.1.1.1"
-			}
-		],
-		"rules": [
-			{
-				"domain_suffix": [
-					"lan",
-					"10.in-addr.arpa",
-					"168.192.in-addr.arpa"
-				],
-				"domain_regex": [
-					"\\.(1[6-9]|2[0-9]|3[01])\\.172\\.in-addr\\.arpa$"
-				],
-				"server": "local"
-			},
-			{
-				"action": "evaluate",
-				"server": "alidns",
-				"timeout": "2s"
-			},
-			{
-				"match_response": true,
-				"rule_set": [
-					"cn-mainland-ip"
-				],
-				"action": "respond"
-			},
-			{
-				"match_response": true,
-				"response_rcode": "NOERROR",
-				"ip_accept_any": true,
-				"query_type": [
-					"A",
-					"AAAA"
-				],
-				"server": "fakeip",
-				"rewrite_ttl": 1
-			},
-			{
-				"match_response": true,
-				"response_rcode": "NOERROR",
-				"action": "respond"
-			},
-			{
-				"match_response": true,
-				"response_rcode": "NXDOMAIN",
-				"action": "respond"
-			},
-			{
-				"query_type": [
-					"A",
-					"AAAA"
-				],
-				"server": "fakeip",
-				"rewrite_ttl": 1
-			}
-		]
-	},
-	"ntp": {
-		"enabled": false,
-		"server": "ntp.aliyun.com",
-		"server_port": 123,
-		"interval": "30m"
-	},
-	"inbounds": [
-		{
-			"type": "tun",
-			"tag": "tun-in",
-			"interface_name": "openbox-tun",
-			"address": [
-				"172.19.0.1/30"
-			],
-			"auto_route": true,
-			"auto_redirect": true,
-			"route_exclude_address": [
-				"0.0.0.0/8",
-				"10.0.0.0/8",
-				"100.64.0.0/10",
-				"127.0.0.0/8",
-				"169.254.0.0/16",
-				"172.16.0.0/12",
-				"192.0.0.0/24",
-				"192.168.0.0/16",
-				"224.0.0.0/4",
-				"240.0.0.0/4",
-				"::1/128",
-				"fd00::/8",
-				"fe80::/10",
-				"ff00::/8"
-			],
-			"route_exclude_address_set": [
-				"cn-mainland-ip"
-			]
-		},
-		{
-			"type": "direct",
-			"tag": "dns-in",
-			"listen": "::",
-			"listen_port": 1053
-		}
-	],
-	"outbounds": [
-		{
-			"type": "direct",
-			"tag": "Direct"
-		},
-		{
-			"type": "vless",
-			"tag": "VLESS WS",
-			"server": "example.com",
-			"server_port": 443,
-			"uuid": "00000000-0000-0000-0000-000000000000",
-			"packet_encoding": "xudp",
-			"tls": {
-				"enabled": true,
-				"disable_sni": true,
-				"server_name": "www.example.com",
-				"min_version": "1.2",
-				"ech": {
-					"enabled": true
-				}
-			},
-			"transport": {
-				"type": "ws",
-				"path": "/ws",
-				"headers": {
-					"Host": "cdn.example.com"
-				},
-				"max_early_data": 2048,
-				"early_data_header_name": "Sec-WebSocket-Protocol"
-			},
-			"multiplex": {
-				"enabled": true,
-				"protocol": "smux",
-				"max_connections": 4,
-				"min_streams": 4,
-				"padding": true
-			},
-			"connect_timeout": "10s",
-			"tcp_fast_open": true,
-			"domain_resolver": "alidns"
-		},
-		{
-			"type": "trojan",
-			"tag": "Trojan HTTP",
-			"server": "192.0.2.1",
-			"server_port": 443,
-			"password": "placeholder-password",
-			"tls": {
-				"enabled": true,
-				"server_name": "example.com"
-			},
-			"transport": {
-				"type": "http",
-				"host": [
-					"a.example.com",
-					"b.example.com"
-				],
-				"path": "/h",
-				"method": "GET"
-			}
-		},
-		{
-			"type": "shadowsocks",
-			"tag": "SS obfs",
-			"server": "192.0.2.2",
-			"server_port": 8388,
-			"method": "aes-128-gcm",
-			"password": "placeholder-password",
-			"plugin": "obfs-local",
-			"plugin_opts": "obfs=http;obfs-host=example.com",
-			"udp_over_tcp": true
-		},
-		{
-			"type": "hysteria2",
-			"tag": "Hysteria2 gecko",
-			"server": "192.0.2.3",
-			"password": "placeholder-password",
-			"obfs": {
-				"type": "gecko",
-				"password": "placeholder-password",
-				"min_packet_size": 512,
-				"max_packet_size": 1200
-			},
-			"bbr_profile": "aggressive",
-			"tls": {
-				"enabled": true,
-				"server_name": "example.com"
-			},
-			"server_ports": [
-				"20000:30000"
-			],
-			"hop_interval": "30s",
-			"hop_interval_max": "60s"
-		},
-		{
-			"type": "selector",
-			"tag": "Proxy",
-			"outbounds": [
-				"VLESS WS",
-				"Trojan HTTP",
-				"SS obfs",
-				"Hysteria2 gecko",
-				"Direct"
-			]
-		},
-		{
-			"type": "selector",
-			"tag": "Global",
-			"outbounds": [
-				"Proxy",
-				"VLESS WS",
-				"Trojan HTTP",
-				"SS obfs",
-				"Hysteria2 gecko",
-				"Direct"
-			]
-		}
-	],
-	"http_clients": [
-	],
-	"route": {
-		"final": "Proxy",
-		"default_domain_resolver": "alidns",
-		"auto_detect_interface": true,
-		"find_neighbor": true,
-		"rules": [
-			{
-				"action": "sniff"
-			},
-			{
-				"protocol": [
-					"dns"
-				],
-				"action": "hijack-dns"
-			},
-			{
-				"ip_is_private": true,
-				"outbound": "Direct"
-			},
-			{
-				"clash_mode": "Direct",
-				"outbound": "Direct"
-			},
-			{
-				"clash_mode": "Global",
-				"outbound": "Global"
-			},
-			{
-				"port": [
-					853
-				],
-				"action": "reject"
-			},
-			{
-				"protocol": [
-					"quic"
-				],
-				"action": "reject"
-			},
-			{
-				"rule_set": [
-					"cn-mainland-ip"
-				],
-				"outbound": "Direct"
-			}
-		],
-		"rule_set": [
-			{
-				"tag": "cn-mainland-ip",
-				"type": "local",
-				"format": "binary",
-				"path": "/usr/share/openbox/rule-set/cn-mainland-ip.srs"
-			}
-		]
-	},
-	"experimental": {
-		"clash_api": {
-			"external_controller": "127.0.0.1:9090",
-			"default_mode": "Rule"
-		},
-		"cache_file": {
-			"enabled": true,
-			"path": "/etc/openbox/cache.db",
-			"store_fakeip": true
-		}
-	}
+  "$schema": "https://sing-box.sagernet.org/schema.json",
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "dns": {
+    "final": "remote",
+    "strategy": "ipv4_only",
+    "optimistic": true,
+    "servers": [
+      {
+        "type": "local",
+        "tag": "local"
+      },
+      {
+        "type": "udp",
+        "tag": "alidns",
+        "server": "223.5.5.5"
+      },
+      {
+        "type": "fakeip",
+        "tag": "fakeip",
+        "inet4_range": "198.18.0.0/15",
+        "inet6_range": "2001:2::/48"
+      },
+      {
+        "type": "https",
+        "tag": "remote",
+        "detour": "Proxy",
+        "server": "1.1.1.1"
+      }
+    ],
+    "rules": [
+      {
+        "domain_suffix": [
+          "lan",
+          "10.in-addr.arpa",
+          "168.192.in-addr.arpa"
+        ],
+        "domain_regex": [
+          "\\.(1[6-9]|2[0-9]|3[01])\\.172\\.in-addr\\.arpa$"
+        ],
+        "server": "local"
+      },
+      {
+        "action": "evaluate",
+        "server": "alidns",
+        "timeout": "2s"
+      },
+      {
+        "match_response": true,
+        "rule_set": [
+          "cn-mainland-ip"
+        ],
+        "action": "respond"
+      },
+      {
+        "match_response": true,
+        "response_rcode": "NOERROR",
+        "ip_accept_any": true,
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fakeip",
+        "rewrite_ttl": 1
+      },
+      {
+        "match_response": true,
+        "response_rcode": "NOERROR",
+        "action": "respond"
+      },
+      {
+        "match_response": true,
+        "response_rcode": "NXDOMAIN",
+        "action": "respond"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fakeip",
+        "rewrite_ttl": 1
+      }
+    ]
+  },
+  "ntp": {
+    "enabled": false,
+    "server": "ntp.aliyun.com",
+    "server_port": 123,
+    "interval": "30m"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "openbox-tun",
+      "address": [
+        "172.19.0.1/30"
+      ],
+      "auto_route": true,
+      "auto_redirect": true,
+      "route_exclude_address": [
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.0.0.0/24",
+        "192.168.0.0/16",
+        "224.0.0.0/4",
+        "240.0.0.0/4",
+        "::1/128",
+        "fd00::/8",
+        "fe80::/10",
+        "ff00::/8"
+      ],
+      "route_exclude_address_set": [
+        "cn-mainland-ip"
+      ]
+    },
+    {
+      "type": "direct",
+      "tag": "dns-in",
+      "listen": "::",
+      "listen_port": 1053
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "Direct"
+    },
+    {
+      "type": "vless",
+      "tag": "VLESS WS",
+      "server": "example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "packet_encoding": "xudp",
+      "network": "tcp",
+      "tls": {
+        "enabled": true,
+        "server_name": "override.example.com",
+        "min_version": "1.2",
+        "ech": {
+          "enabled": true
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "User-Agent": "Mozilla/5.0",
+          "Host": "cdn.example.com"
+        }
+      },
+      "multiplex": {
+        "enabled": true,
+        "protocol": "smux",
+        "max_connections": 4,
+        "min_streams": 4,
+        "padding": true,
+        "brutal": {
+          "enabled": true,
+          "up_mbps": 100,
+          "down_mbps": 200
+        }
+      },
+      "connect_timeout": "10s",
+      "tcp_fast_open": true,
+      "domain_resolver": "alidns"
+    },
+    {
+      "type": "trojan",
+      "tag": "Trojan HTTP",
+      "server": "192.0.2.1",
+      "server_port": 443,
+      "password": "placeholder-password",
+      "network": "tcp",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "transport": {
+        "type": "http",
+        "host": [
+          "a.example.com",
+          "b.example.com"
+        ],
+        "path": "/h",
+        "method": "GET",
+        "headers": {
+          "Accept": [
+            "text/html",
+            "*/*"
+          ],
+          "X-Note": "spaced value"
+        }
+      },
+      "multiplex": {
+        "enabled": true,
+        "max_streams": 8
+      },
+      "detour": "Hysteria2 gecko",
+      "bind_interface": "eth0",
+      "tcp_keep_alive": "5m"
+    },
+    {
+      "type": "vmess",
+      "tag": "VMess HTTPUpgrade",
+      "server": "192.0.2.4",
+      "server_port": 80,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "global_padding": true,
+      "authenticated_length": true,
+      "transport": {
+        "type": "httpupgrade",
+        "host": "hu.example.com",
+        "path": "/up",
+        "headers": {
+          "User-Agent": "Mozilla/5.0"
+        }
+      }
+    },
+    {
+      "type": "naive",
+      "tag": "Naive TLS",
+      "server": "192.0.2.5",
+      "server_port": 443,
+      "username": "user",
+      "password": "placeholder-password",
+      "insecure_concurrency": 2,
+      "extra_headers": {
+        "X-Test": [
+          "a",
+          "b"
+        ]
+      },
+      "stream_receive_window": "6MB",
+      "udp_over_tcp": true,
+      "quic": true,
+      "quic_congestion_control": "bbr2",
+      "quic_session_receive_window": 15728640,
+      "tls": {
+        "enabled": true,
+        "server_name": "naive.example.com"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "SS obfs",
+      "server": "192.0.2.2",
+      "server_port": 8388,
+      "method": "aes-128-gcm",
+      "password": "placeholder-password",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=http;obfs-host=example.com",
+      "network": "udp",
+      "udp_over_tcp": true
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Hysteria2 gecko",
+      "server": "192.0.2.3",
+      "password": "placeholder-password",
+      "obfs": {
+        "type": "gecko",
+        "password": "placeholder-password",
+        "min_packet_size": 512,
+        "max_packet_size": 1200
+      },
+      "network": "udp",
+      "bbr_profile": "aggressive",
+      "brutal_debug": true,
+      "disable_chrome_parrot": true,
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "initial_packet_size": 1200,
+      "disable_path_mtu_discovery": true,
+      "idle_timeout": "30s",
+      "keep_alive_period": "10s",
+      "stream_receive_window": "64 MB",
+      "connection_receive_window": 67108864,
+      "max_concurrent_streams": 100,
+      "server_ports": [
+        "20000:30000"
+      ],
+      "hop_interval": "30s",
+      "hop_interval_max": "60s"
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Hysteria2 realm",
+      "password": "placeholder-password",
+      "realm": {
+        "server_url": "https://realm.example.com",
+        "token": "placeholder-token",
+        "realm_id": "node-a",
+        "stun_servers": [
+          "stun.example.com:3478"
+        ],
+        "ip_version": 4,
+        "port_mapping": {
+          "enabled": true,
+          "timeout": "10s",
+          "lifetime": "10m"
+        },
+        "http_client": "Realm client"
+      },
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      }
+    },
+    {
+      "type": "tuic",
+      "tag": "TUIC stream",
+      "server": "192.0.2.7",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "password": "placeholder-password",
+      "udp_over_stream": true,
+      "heartbeat": "10s",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "max_concurrent_streams": 50
+    },
+    {
+      "type": "anytls",
+      "tag": "AnyTLS",
+      "server": "192.0.2.8",
+      "server_port": 443,
+      "password": "placeholder-password",
+      "idle_session_check_interval": "30s",
+      "idle_session_timeout": "60s",
+      "min_idle_session": 2,
+      "client_metadata": "custom",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      }
+    },
+    {
+      "type": "snell",
+      "tag": "Snell v4",
+      "server": "192.0.2.13",
+      "server_port": 443,
+      "version": 4,
+      "psk": "placeholder-psk",
+      "reuse": true,
+      "obfs_mode": "http",
+      "obfs_host": "bing.com"
+    },
+    {
+      "type": "snell",
+      "tag": "Snell v6",
+      "server": "192.0.2.9",
+      "server_port": 443,
+      "version": 6,
+      "psk": "placeholder-psk-0123",
+      "userkey": "placeholder-userkey",
+      "mode": "unshaped"
+    },
+    {
+      "type": "ssh",
+      "tag": "SSH",
+      "server": "192.0.2.10",
+      "server_port": 22,
+      "user": "root",
+      "password": "placeholder-password",
+      "host_key_algorithms": [
+        "ssh-ed25519"
+      ],
+      "client_version": "SSH-2.0-OpenSSH_9.6",
+      "cipher": [
+        "aes128-gcm@openssh.com"
+      ],
+      "mac": [
+        "hmac-sha2-256-etm@openssh.com"
+      ],
+      "kex_algorithm": [
+        "curve25519-sha256"
+      ]
+    },
+    {
+      "type": "http",
+      "tag": "HTTP proxy",
+      "server": "192.0.2.11",
+      "server_port": 8080,
+      "headers": {
+        "X-Test": "a"
+      }
+    },
+    {
+      "type": "selector",
+      "tag": "Proxy",
+      "outbounds": [
+        "VLESS WS",
+        "Trojan HTTP",
+        "VMess HTTPUpgrade",
+        "Naive TLS",
+        "SS obfs",
+        "Hysteria2 gecko",
+        "Hysteria2 realm",
+        "TUIC stream",
+        "AnyTLS",
+        "Snell v4",
+        "Snell v6",
+        "SSH",
+        "HTTP proxy",
+        "Direct"
+      ]
+    },
+    {
+      "type": "selector",
+      "tag": "Global",
+      "outbounds": [
+        "VLESS WS",
+        "Trojan HTTP",
+        "VMess HTTPUpgrade",
+        "Naive TLS",
+        "SS obfs",
+        "Hysteria2 gecko",
+        "Hysteria2 realm",
+        "TUIC stream",
+        "AnyTLS",
+        "Snell v4",
+        "Snell v6",
+        "SSH",
+        "HTTP proxy",
+        "Direct",
+        "Proxy"
+      ]
+    }
+  ],
+  "http_clients": [
+    {
+      "tag": "Realm client"
+    }
+  ],
+  "route": {
+    "final": "Proxy",
+    "default_domain_resolver": "alidns",
+    "auto_detect_interface": true,
+    "find_neighbor": true,
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": [
+          "dns"
+        ],
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "Direct"
+      },
+      {
+        "clash_mode": "Direct",
+        "outbound": "Direct"
+      },
+      {
+        "clash_mode": "Global",
+        "outbound": "Global"
+      },
+      {
+        "port": [
+          853
+        ],
+        "action": "reject"
+      },
+      {
+        "protocol": [
+          "quic"
+        ],
+        "action": "reject"
+      },
+      {
+        "rule_set": [
+          "cn-mainland-ip"
+        ],
+        "outbound": "Direct"
+      }
+    ],
+    "rule_set": [
+      {
+        "tag": "cn-mainland-ip",
+        "type": "local",
+        "format": "binary",
+        "path": "/usr/share/openbox/rule-set/cn-mainland-ip.srs"
+      }
+    ]
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "default_mode": "Rule"
+    },
+    "cache_file": {
+      "enabled": true,
+      "path": "/etc/openbox/cache.db",
+      "store_fakeip": true
+    }
+  }
 }
