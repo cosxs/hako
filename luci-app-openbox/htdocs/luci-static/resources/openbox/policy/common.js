@@ -37,45 +37,6 @@ const SS_METHODS = [
 
 const UTLS_FINGERPRINTS = ['chrome', 'firefox', 'edge', 'safari', '360', 'qq', 'ios', 'android', 'random', 'randomized'];
 
-// sing-box fields written as JSON: an object, or nothing
-function validateFields(section_id, value) {
-  if (!value?.trim())
-    return true;
-
-  try {
-    return L.isObject(JSON.parse(value)) ? true : _('Expecting a JSON object');
-  }
-  catch (e) {
-    return _('Invalid JSON: %s').format(e.message);
-  }
-}
-
-// sing-box fields written as JSON, null unless an object
-function parseFields(value) {
-  try {
-    const fields = JSON.parse(value || '{}');
-    return L.isObject(fields) ? fields : null;
-  }
-  catch (e) {
-    return null;
-  }
-}
-
-function formatFields(fields) {
-  const text = JSON.stringify(fields, null, 2);
-  return (text == '{}') ? '' : text;
-}
-
-// headers as "Name: value" items
-function validateHeader(section_id, value) {
-  return (!value || /^[^:]*[^:\s][^:]*:/.test(value)) ? true : _('Expecting Name: value');
-}
-
-// a size such as 6MB or 64 MB, or a number of bytes
-function validateSize(section_id, value) {
-  return (!value || /^[0-9]+( ?[KMGT]?B)?$/.test(value)) ? true : _('Expecting a size such as 6MB');
-}
-
 // a tag is shared by groups and nodes and must be unique among all outbounds
 function validateTag(section_id, value) {
   if (value == 'GLOBAL')
@@ -110,11 +71,6 @@ return baseclass.extend({
   PASSWORD_REQUIRED,
   SS_METHODS,
   UTLS_FINGERPRINTS,
-  validateFields,
-  parseFields,
-  formatFields,
-  validateHeader,
-  validateSize,
   validateTag,
   remote,
   address

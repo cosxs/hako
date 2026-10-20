@@ -5,7 +5,7 @@
     "timestamp": true
   },
   "dns": {
-    "final": "remote",
+    "final": "cloudflare",
     "strategy": "ipv4_only",
     "optimistic": true,
     "servers": [
@@ -14,21 +14,21 @@
         "tag": "local"
       },
       {
-        "type": "udp",
+        "type": "quic",
         "tag": "alidns",
         "server": "223.5.5.5"
+      },
+      {
+        "type": "https",
+        "tag": "cloudflare",
+        "detour": "Proxy",
+        "server": "1.1.1.1"
       },
       {
         "type": "fakeip",
         "tag": "fakeip",
         "inet4_range": "198.18.0.0/15",
         "inet6_range": "2001:2::/48"
-      },
-      {
-        "type": "https",
-        "tag": "remote",
-        "detour": "Proxy",
-        "server": "1.1.1.1"
       }
     ],
     "rules": [
@@ -160,12 +160,16 @@
     }
   ],
   "http_clients": [
+    {
+      "tag": "HTTP Proxy",
+      "detour": "Proxy"
+    }
   ],
   "route": {
     "final": "Final",
     "default_domain_resolver": "alidns",
-    "auto_detect_interface": true,
     "find_neighbor": true,
+    "auto_detect_interface": true,
     "rules": [
       {
         "action": "sniff"

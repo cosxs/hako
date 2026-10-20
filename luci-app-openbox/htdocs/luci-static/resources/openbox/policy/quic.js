@@ -4,7 +4,7 @@
 'require openbox.ui as openbox';
 'require openbox.policy.common as common';
 
-const { QUIC_TYPES, validateSize } = common;
+const { QUIC_TYPES } = common;
 
 // the fields of the QUIC tab of the dialog of a node
 return baseclass.extend({
@@ -39,14 +39,14 @@ return baseclass.extend({
     o = s.taboption('quic', form.Value, '_quic_stream_receive_window', _('Stream receive window'));
     o.ucioption = 'stream_receive_window';
     o.placeholder = '6MB';
-    o.validate = validateSize;
+    o.validate = openbox.validateSize;
     o.retain = true;
     o.modalonly = true;
     quic(o);
 
     o = s.taboption('quic', form.Value, 'connection_receive_window', _('Connection receive window'));
     o.placeholder = '15MB';
-    o.validate = validateSize;
+    o.validate = openbox.validateSize;
     o.modalonly = true;
     quic(o);
 

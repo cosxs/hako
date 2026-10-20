@@ -114,7 +114,7 @@ const NTP_FIELDS = {
 };
 
 const ROUTE_FIELDS = {
-  final: 'outbound', default_domain_resolver: 'dns_server', auto_detect_interface: 'bool',
+  final: 'outbound', default_domain_resolver: 'dns_server', auto_detect_interface: 'openbox',
   find_neighbor: 'bool', dhcp_lease_files: 'list', default_http_client: 'http_client'
 };
 
@@ -129,10 +129,6 @@ const INBOUND_FIELDS = {
   include_interface: 'list', exclude_interface: 'list',
   include_mac_address: 'list', exclude_mac_address: 'list', exclude_uid: 'numbers',
   username: 'string', password: 'string'
-};
-
-const HTTP_CLIENT_FIELDS = {
-  tag: 'string', detour: 'detour'
 };
 
 const RULE_SET_FIELDS = {
@@ -153,13 +149,52 @@ const DNS_RULE_FIELDS = merge({
   response_rcode: 'string', ip_accept_any: 'bool'
 }, MATCH_FIELDS);
 
-const ROUTE_RULE_FIELDS = merge({
-  action: 'string', outbound: 'outbound', method: 'string', no_drop: 'bool',
+// what a route rule matches, and so a rule of a logical one
+const ROUTE_MATCH_FIELDS = merge({
   inbound: 'list', ip_version: 'number', auth_user: 'list', protocol: 'list', network: 'list',
   port: 'numbers', port_range: 'list', source_port: 'numbers', source_port_range: 'list',
-  source_ip_is_private: 'bool', source_mac_address: 'list', source_hostname: 'list',
-  comment: 'openbox'
+  source_ip_is_private: 'bool', source_mac_address: 'list', source_hostname: 'list'
 }, MATCH_FIELDS);
+
+// a logical rule has type, mode and an id, which its rules name
+const ROUTE_RULE_FIELDS = merge({
+  type: 'string', mode: 'string', id: 'string',
+  action: 'string', outbound: 'outbound', method: 'string', no_drop: 'bool',
+  comment: 'openbox'
+}, ROUTE_MATCH_FIELDS);
+
+// a rule of a logical rule: the conditions of a standard rule, or any rule
+// written as JSON in json; rule is the id of its logical rule
+const ROUTE_SUBRULE_FIELDS = merge({
+  rule: 'openbox', json: 'openbox'
+}, ROUTE_MATCH_FIELDS);
+
+// headers, as transport_headers, the extra_headers of naive and those of an
+// http client: "Name: value" items; a name given more than once has a list
+// of values
+function headers(section, option) {
+  let result = null;
+
+  for (let item in list(section[option])) {
+    const m = match(item, /^([^:]+):(.*)$/);
+    const name = m ? trim(m[1]) : null;
+    if (!name) {
+      warn(`openbox: ${section['.type']} ${section['.name']}: skipping ${option} '${item}': expecting "Name: value"\n`);
+      continue;
+    }
+
+    const value = trim(m[2]);
+    result ??= {};
+    if (result[name] == null)
+      result[name] = value;
+    else if (type(result[name]) == 'array')
+      push(result[name], value);
+    else
+      result[name] = [ result[name], value ];
+  }
+
+  return result;
+}
 
 // convert the options of a section by a field table; "enabled" is the UCI
 // switch of array elements unless the object has a field of that name, and
@@ -267,12 +302,12 @@ function json_fields(section, option) {
     fields = json(section[option]);
   }
   catch (e) {
-    warn(`openbox: outbound ${section['.name']}: skipping ${option}: ${e}\n`);
+    warn(`openbox: ${section['.type']} ${section['.name']}: skipping ${option}: ${e}\n`);
     return null;
   }
 
   if (type(fields) != 'object') {
-    warn(`openbox: outbound ${section['.name']}: skipping ${option}: not an object\n`);
+    warn(`openbox: ${section['.type']} ${section['.name']}: skipping ${option}: not an object\n`);
     return null;
   }
 
@@ -298,32 +333,6 @@ function tls(section, required) {
       short_id: section.tls_reality_short_id
     } : null
   }, json_fields(section, 'tls_fields'));
-}
-
-// headers, as transport_headers and the extra_headers of naive: "Name:
-// value" items; a name given more than once has a list of values
-function headers(section, option) {
-  let result = null;
-
-  for (let item in list(section[option])) {
-    const m = match(item, /^([^:]+):(.*)$/);
-    const name = m ? trim(m[1]) : null;
-    if (!name) {
-      warn(`openbox: outbound ${section['.name']}: skipping ${option} '${item}': expecting "Name: value"\n`);
-      continue;
-    }
-
-    const value = trim(m[2]);
-    result ??= {};
-    if (result[name] == null)
-      result[name] = value;
-    else if (type(result[name]) == 'array')
-      push(result[name], value);
-    else
-      result[name] = [ result[name], value ];
-  }
-
-  return result;
 }
 
 // transport_host is a list for http; httpupgrade takes the first host
@@ -908,8 +917,12 @@ function enabled_sections(sectionType) {
 const httpClients = enabled_sections('http_client');
 const ruleSets = enabled_sections('rule_set');
 
+// a reference to an http client that is gone falls back to the default one
 function resolve_http_client(ref) {
   const section = find(httpClients, ref);
+  if (!section)
+    warn(`openbox: unknown http_client '${ref}', using the default one\n`);
+
   return section ? tag(section) : null;
 }
 
@@ -990,12 +1003,50 @@ function default_mark() {
   return null;
 }
 
-const httpClientObjects = elements('http_client', HTTP_CLIENT_FIELDS, () => null, true);
+// an http client in the order of sing-box: the HTTP2 fields go with version 2,
+// the default, and the QUIC fields, which hold them, with 3; TLS and dial
+// fields are written as JSON, a detour among them
+function http_client(section) {
+  const version = number(section.version);
+  const http2 = (version != 1);
+  const quic = (version == 3);
+
+  return merge({
+    tag: tag(section),
+    version: version,
+    disable_version_fallback: bool(section.disable_version_fallback) || null,
+    headers: headers(section, 'headers'),
+    initial_packet_size: quic ? number(section.initial_packet_size) : null,
+    disable_path_mtu_discovery: (quic && bool(section.disable_path_mtu_discovery)) || null,
+    idle_timeout: http2 ? section.idle_timeout : null,
+    keep_alive_period: http2 ? section.keep_alive_period : null,
+    stream_receive_window: http2 ? section.stream_receive_window : null,
+    connection_receive_window: http2 ? section.connection_receive_window : null,
+    max_concurrent_streams: http2 ? number(section.max_concurrent_streams) : null,
+    tls: json_fields(section, 'tls_fields')
+  }, json_fields(section, 'dial_fields'));
+}
+
+const httpClientObjects = map(httpClients, http_client);
 
 const ruleSetObjects = elements('rule_set', RULE_SET_FIELDS, (ruleSet) =>
   (ruleSet.type == 'remote' && !ruleSet.url) ? 'needs url' :
   (ruleSet.type == 'local' && !ruleSet.path) ? 'needs path' :
   (ruleSet.type == 'inline' && type(ruleSet.rules) != 'array') ? 'needs rules' : null, true);
+
+// with no http client, sing-box makes the requests of remote rule sets and
+// realms through the default outbound, which it no longer does from 1.16:
+// then one is added that goes the same way, through route.final, or directly
+// when that is a direct outbound
+if (!length(httpClientObjects) &&
+    (length(filter(ruleSetObjects, (ruleSet) => ruleSet.type == 'remote')) ||
+     length(filter(proxyObjects, (object) => object.realm)))) {
+  const outbound = puci.get(PROFILE, 'route', 'final');
+  push(httpClientObjects, {
+    tag: 'Default',
+    detour: (find(proxies, outbound)?.type == 'direct') ? null : resolve(outbound)
+  });
+}
 
 // actions that send a query to a server need a valid one
 const dnsRules = elements('dns_rule', DNS_RULE_FIELDS, (rule) =>
@@ -1042,9 +1093,39 @@ if (length(customRules)) {
     splice(dnsRules, at, 0, customRules[i]);
 }
 
-// the route action, the default, needs a valid outbound
-const routeRules = elements('route_rule', ROUTE_RULE_FIELDS, (rule) =>
-  ((rule.action ?? 'route') == 'route' && !rule.outbound) ? 'needs a valid outbound' : null);
+// the rules of logical rules, by the id of theirs, in order
+const subrules = {};
+for (let section in enabled_sections('route_subrule')) {
+  const rule = section.json
+    ? json_fields(section, 'json')
+    : convert(section, ROUTE_SUBRULE_FIELDS, `route_subrule ${section['.name']}`, refs);
+
+  // a rule written as JSON may still be inverted from the page
+  if (section.json && rule && length(keys(rule)) && section.invert == '1')
+    rule.invert = true;
+
+  if (!rule || !length(keys(rule)))
+    warn(`openbox: skipping route_subrule ${section['.name']}: no condition\n`);
+  else if (section.rule)
+    push(subrules[section.rule] ??= [], rule);
+}
+
+// the route action, the default, needs a valid outbound, and a logical rule
+// its rules
+const routeRules = filter(elements('route_rule', ROUTE_RULE_FIELDS, (rule) =>
+  ((rule.action ?? 'route') == 'route' && !rule.outbound) ? 'needs a valid outbound' : null), (rule) => {
+  const id = rule.id;
+  delete rule.id;
+  if (rule.type != 'logical')
+    return true;
+
+  rule.rules = subrules[id];
+  if (length(rule.rules))
+    return true;
+
+  warn(`openbox: skipping logical route_rule ${id}: needs rules\n`);
+  return false;
+});
 
 const config = {
   '$schema': 'https://sing-box.sagernet.org/schema.json',
@@ -1061,7 +1142,10 @@ const config = {
   endpoints: length(filter(subNodes, (n) => n.endpoint))
     ? map(filter(subNodes, (n) => n.endpoint), (n) => n.node) : null,
   http_clients: httpClientObjects,
+  // auto_detect_interface is always on: with it the connections of sing-box
+  // leave by the interface of the default route, not back into the takeover
   route: merge(mirror('route', 'route', ROUTE_FIELDS, refs) ?? {}, {
+    auto_detect_interface: true,
     default_mark: default_mark(),
     rules: routeRules,
     rule_set: ruleSetObjects

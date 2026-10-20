@@ -203,12 +203,16 @@
     }
   ],
   "http_clients": [
+    {
+      "tag": "Default",
+      "detour": "Proxy"
+    }
   ],
   "route": {
     "final": "Proxy",
     "default_domain_resolver": "alidns",
-    "auto_detect_interface": true,
     "find_neighbor": true,
+    "auto_detect_interface": true,
     "rules": [
       {
         "action": "sniff"
@@ -248,6 +252,40 @@
           "cn-mainland-ip"
         ],
         "outbound": "Direct"
+      },
+      {
+        "type": "logical",
+        "mode": "and",
+        "outbound": "Auto",
+        "rules": [
+          {
+            "source_ip_cidr": [
+              "192.168.1.50/32"
+            ]
+          },
+          {
+            "type": "logical",
+            "mode": "or",
+            "rules": [
+              {
+                "domain_suffix": [
+                  "netflix.com"
+                ]
+              },
+              {
+                "domain_keyword": [
+                  "nflx"
+                ]
+              }
+            ]
+          },
+          {
+            "rule_set": [
+              "cn-mainland-ip"
+            ],
+            "invert": true
+          }
+        ]
       }
     ],
     "rule_set": [
@@ -256,6 +294,12 @@
         "type": "local",
         "format": "binary",
         "path": "/usr/share/openbox/rule-set/cn-mainland-ip.srs"
+      },
+      {
+        "tag": "geosite-cn",
+        "type": "remote",
+        "format": "binary",
+        "url": "https://example.com/geosite-cn.srs"
       }
     ]
   },

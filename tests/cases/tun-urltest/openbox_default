@@ -88,6 +88,15 @@ config rule_set 'cn_ip'
   option format 'binary'
   option path '/usr/share/openbox/rule-set/cn-mainland-ip.srs'
 
+# a remote rule set without an http client: one is added through route.final;
+# the one it names is gone, so it falls back to it with a warning
+config rule_set 'geosite_cn'
+  option tag 'geosite-cn'
+  option type 'remote'
+  option format 'binary'
+  option url 'https://example.com/geosite-cn.srs'
+  option http_client 'gone'
+
 config outbound 'direct'
   option tag 'Direct'
   option type 'direct'
@@ -175,3 +184,31 @@ config outbound 'auto_us'
   option tag 'Auto US'
   option type 'urltest'
   list outbounds 'node_us'
+
+# a logical rule: a device and a domain, one of them an or of two written
+# as JSON, and not the mainland addresses of a rule set named by its section
+config route_rule
+  option type 'logical'
+  option id 'netflix'
+  option mode 'and'
+  option outbound 'auto'
+
+config route_subrule
+  option rule 'netflix'
+  list source_ip_cidr '192.168.1.50/32'
+
+config route_subrule
+  option rule 'netflix'
+  option json '{"type": "logical", "mode": "or", "rules": [{"domain_suffix": ["netflix.com"]}, {"domain_keyword": ["nflx"]}]}'
+
+config route_subrule
+  option rule 'netflix'
+  list rule_set 'cn_ip'
+  option invert '1'
+
+# a logical rule without rules is skipped with a warning
+config route_rule
+  option type 'logical'
+  option id 'empty'
+  option mode 'or'
+  option outbound 'auto'

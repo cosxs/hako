@@ -92,6 +92,22 @@ return baseclass.extend({
     return uci.get(this.profileConfig(), section_id, 'hidden') == '1';
   },
 
+  // a section of the profile by section name or by tag, as the generator
+  // looks one up
+  lookup(type, name) {
+    return uci.get(this.profileConfig(), name) ?? uci.sections(this.profileConfig(), type).find((section) => section.tag == name);
+  },
+
+  // the sections of a type to choose from, stored by section name; empty
+  // labels a choice of none, and filter keeps some of them
+  sectionChoices(option, type, empty, filter = () => true) {
+    if (empty)
+      option.value('', empty);
+
+    uci.sections(this.profileConfig(), type).filter(filter)
+      .forEach((section) => option.value(section['.name'], this.label(section)));
+  },
+
   // the outbounds to choose from, stored by section name: groups first,
   // then nodes and direct outbounds; except leaves one out
   outboundChoices(option, except) {
@@ -107,12 +123,7 @@ return baseclass.extend({
 
   // dns servers that resolve real addresses: all but FakeIP
   resolverChoices(option, empty) {
-    if (empty)
-      option.value('', empty);
-
-    uci.sections(this.profileConfig(), 'dns_server')
-      .filter((section) => section.type != 'fakeip')
-      .forEach((section) => option.value(section['.name'], this.label(section)));
+    this.sectionChoices(option, 'dns_server', empty, (section) => section.type != 'fakeip');
   },
 
   // a fixed unit after the input field of an option
@@ -125,6 +136,16 @@ return baseclass.extend({
         E('span', {}, text)
       ]);
     };
+  },
+
+  // headers as "Name: value" items
+  validateHeader(section_id, value) {
+    return (!value || /^[^:]*[^:\s][^:]*:/.test(value)) ? true : _('Expecting Name: value');
+  },
+
+  // a size such as 6MB or 64 MB, or a number of bytes
+  validateSize(section_id, value) {
+    return (!value || /^[0-9]+( ?[KMGT]?B)?$/.test(value)) ? true : _('Expecting a size such as 6MB');
   },
 
   // a sing-box duration entered as a whole number of one unit: "3" is kept

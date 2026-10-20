@@ -5,7 +5,7 @@
 'require openbox.ui as openbox';
 'require openbox.policy.common as common';
 
-const { NODE_TYPES, PASSWORD_REQUIRED, SS_METHODS, validateHeader, validateSize, validateTag, remote, address } = common;
+const { NODE_TYPES, PASSWORD_REQUIRED, SS_METHODS, validateTag, remote, address } = common;
 
 // the fields of the Basic tab of the dialog of a node: the server and
 // what each protocol takes, in the order of the sing-box docs
@@ -309,14 +309,13 @@ return baseclass.extend({
     o.modalonly = true;
     realm(o, { realm_ip_version: /^4?$/, realm_port_mapping_enabled: '1' });
 
+    // left empty, the default one of the route settings
     o = s.taboption('general', form.ListValue, 'realm_http_client', _('HTTP client'));
-    o.value('', _('Default'));
     o.modalonly = true;
     o.load = function (section_id) {
       this.keylist = [];
       this.vallist = [];
-      this.value('', _('Default'));
-      uci.sections(openbox.profileConfig(), 'http_client').forEach((section) => this.value(section['.name'], openbox.label(section)));
+      openbox.sectionChoices(this, 'http_client', _('Default HTTP client'));
 
       return form.ListValue.prototype.load.call(this, section_id);
     };
@@ -351,7 +350,7 @@ return baseclass.extend({
 
     o = s.taboption('general', form.DynamicList, 'extra_headers', _('Headers'));
     o.placeholder = 'User-Agent: Mozilla/5.0';
-    o.validate = validateHeader;
+    o.validate = openbox.validateHeader;
     o.modalonly = true;
     o.depends('type', 'naive');
 
@@ -359,7 +358,7 @@ return baseclass.extend({
     o = s.taboption('general', form.Value, '_naive_stream_receive_window', _('Stream receive window'));
     o.ucioption = 'stream_receive_window';
     o.placeholder = '6MB';
-    o.validate = validateSize;
+    o.validate = openbox.validateSize;
     o.retain = true;
     o.modalonly = true;
     o.depends('type', 'naive');
@@ -383,7 +382,7 @@ return baseclass.extend({
 
     o = s.taboption('general', form.Value, 'quic_session_receive_window', _('Session receive window'));
     o.placeholder = '15MB';
-    o.validate = validateSize;
+    o.validate = openbox.validateSize;
     o.modalonly = true;
     o.depends({ type: 'naive', quic: '1' });
 
@@ -460,7 +459,7 @@ return baseclass.extend({
 
     o = s.taboption('general', form.DynamicList, 'headers', _('Headers'));
     o.placeholder = 'User-Agent: Mozilla/5.0';
-    o.validate = validateHeader;
+    o.validate = openbox.validateHeader;
     o.modalonly = true;
     o.depends('type', 'http');
   }

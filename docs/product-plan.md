@@ -131,7 +131,7 @@ config log 'log'                   # → log
     option timestamp '1'
 
 config dns 'dns'                   # → dns
-    option final 'remote'          # 规则都没命中时用的 DNS 服务器
+    option final 'cloudflare'      # 规则都没命中时用的 DNS 服务器；留空时 sing-box 用第一个，即 local，会绕回 sing-box，所以要明确设置
     option strategy 'ipv4_only'    # 只解析 IPv4；开启 IPv6 接管时为 prefer_ipv4
     option optimistic '1'          # 乐观缓存：过期先返回旧结果，后台刷新
     # option custom_rules '[...]'  # OpenBox：sing-box 原生 DNS 规则的 JSON 数组，原样插到下面局域网域名规则之后、
@@ -142,23 +142,23 @@ config dns_server 'local'          # → dns.servers[]；系统解析（OpenWrt 
     option type 'local'            # local | udp | tcp | tls | quic | https | h3 | fakeip；界面列表不显示 local 和 fakeip，
                                    # 其余按官方文档显示为 UDP、TCP、TLS、QUIC、HTTPS、HTTP/3
 
-config dns_server 'alidns'         # 国内 DNS（阿里 DNS），直连
-    option tag 'alidns'
-    option type 'udp'
+config dns_server 'alidns'         # 国内 DNS（阿里 DNS），直连；DNS over QUIC（UDP 853），不经 53 端口，
+    option tag 'alidns'            # 不会被运营商劫持，路由器自己的 53 端口查询被接管时也不受影响
+    option type 'quic'
     option server '223.5.5.5'      # 其余字段：server_port、path、tls_server_name、
                                    # detour（出站）、domain_resolver（DNS 服务器）
+
+config dns_server 'cloudflare'     # 经代理的 DoH（Cloudflare），兜底；之前的配置里叫 remote
+    option tag 'cloudflare'
+    option type 'https'
+    option server '1.1.1.1'
+    option detour 'proxy'
 
 config dns_server 'fakeip'         # 在「接管」页随 DNS 模式设置，内核设置的 DNS 服务器列表里不显示
     option tag 'fakeip'
     option type 'fakeip'
     option inet4_range '198.18.0.0/15'
     option inet6_range '2001:2::/48' # 基准测试地址段（RFC 5180），与 IPv4 的 198.18.0.0/15 对应；不用 sing-box 示例的 fc00::/18：dnsmasq 的重绑定保护会丢弃 fc00::/7 的应答；dns.strategy 为 ipv4_only 时用不到
-
-config dns_server 'remote'         # 经代理的 DoH，兜底
-    option tag 'remote'
-    option type 'https'
-    option server '1.1.1.1'
-    option detour 'proxy'
 
 config dns_rule                    # → dns.rules[]，按顺序生成
     list   domain_suffix 'lan'     # 本地域名和私有网段的反查经系统解析（local）交给 dnsmasq
@@ -220,10 +220,10 @@ config inbound 'tun'               # → inbounds[]；enabled 即接管总开关
 config route 'route'               # → route
     option final 'final'           # 规则都没命中的流量走 Final 组
     option default_domain_resolver 'alidns'  # 解析节点域名用的 DNS 服务器，必须直连
-    option auto_detect_interface '1'        # 出站绑定物理网卡，接管时避免回环
-    option find_neighbor '1'                # 日志显示局域网设备的 MAC 和主机名（内核设置 → 日志 →「显示设备」）
+                                            # auto_detect_interface 不是选项：生成器总是开启，出站绑定物理网卡，接管时避免回环
+    option find_neighbor '1'                # 日志显示局域网设备的 MAC 和主机名（路由规则页 → 路由设置 →「邻居解析」）
     # list dhcp_lease_files ''              # 默认不写：sing-box 自动探测 /tmp/dhcp.leases（OpenWrt 的 dnsmasq）等租约文件
-    # option default_http_client ''         # 远程规则集默认的下载方式
+    # option default_http_client ''   # 远程规则集默认的下载方式；模板留空，即第一个 HTTP 客户端（内置的 HTTP Proxy）
 
 config rule_set 'cn_ip'            # → route.rule_set[]
     option tag 'cn-mainland-ip'
@@ -267,9 +267,20 @@ config openbox 'firewall'          # OpenBox 为 TProxy 设置的防火墙与策
     option route_table '233'
     option rule_priority '1100'
 
-config http_client 'via_proxy'     # 示例 → http_clients[]，供远程规则集下载
+config http_client 'proxy_client'  # 模板内置：经 Proxy 组下载，tag 为 HTTP Proxy；默认 HTTP 客户端留空，用的就是它；
+    option tag 'HTTP Proxy'        # 没有节点时 Proxy 只含 Direct，等于直连；加了节点后自动走节点。
+    option dial_fields '{"detour": "Proxy"}'  # 启动时节点都不可用、又没有缓存，首次下载远程规则集会失败、sing-box 起不来，可给规则集设初始文件
+
+config http_client 'via_proxy'     # 示例 → http_clients[]，供远程规则集和 Hysteria2 realm 发请求
     option tag 'via-proxy'
-    option detour 'proxy'
+    option version '2'             # HTTP 版本 1 / 2 / 3，留空为 2
+    option disable_version_fallback '0'  # 不自动回退到更低的 HTTP 版本
+    list   headers 'User-Agent: sing-box'  # 请求头，"名称: 值"
+    option initial_packet_size ''  # QUIC 字段，只在版本 3 生成：initial_packet_size、disable_path_mtu_discovery
+    option idle_timeout ''         # HTTP2 字段，版本 2、3 生成：idle_timeout、keep_alive_period、
+                                   # stream_receive_window、connection_receive_window、max_concurrent_streams
+    option tls_fields ''           # TLS 字段，JSON 对象 → tls
+    option dial_fields '{"detour": "Proxy"}'  # 拨号字段，JSON 对象，原样合并；经哪个出站就写在 detour 里，留空为直连
 
 config outbound 'direct'           # → outbounds[]
     option tag 'Direct'
@@ -388,6 +399,21 @@ config route_rule                  # 拒绝 QUIC（按嗅探到的协议），�
 config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sing-box 的流量）
     list   rule_set 'cn_ip'
     option outbound 'direct'
+
+# config route_rule                # 逻辑规则：and / or 组合子规则，动作用这一条的
+#     option type 'logical'
+#     option mode 'and'
+#     option id 'a1b2c3d4'         # OpenBox：子规则用它指向这条规则，不生成
+#     option outbound 'proxy'
+#
+# config route_subrule             # → 所属逻辑规则的 rules[]，按顺序生成
+#     option rule 'a1b2c3d4'       # OpenBox：所属逻辑规则的 id
+#     list   source_ip_cidr '192.168.1.50/32'
+#
+# config route_subrule
+#     option rule 'a1b2c3d4'
+#     option json '{"type":"logical","mode":"or","rules":[{"port":[80]},{"port":[443]}]}'
+#     option invert '1'
 ```
 
 规则：
@@ -405,14 +431,14 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 | 日志 | `config log 'log'` |
 | 出站 | 每个启用的 `outbound` 一个出站。策略组的成员就是 `outbounds` 列出的，按列出的顺序（即弹窗里拖动排好的顺序）；隐藏的组（全局模式的 Global）再自动带上没列出的全部节点（含订阅节点）、Direct 和所有未隐藏的组。不提供「包含全部节点 / 全部策略组」。防环：列出的组若已直接或经其他组包含本组（隐藏的组算作包含所有未隐藏的组），就丢弃这个引用并警告（页面保存时已拦截，这里是保底，防导入或手改 UCI 造成的循环），例如 Proxy、Final 互相列出时两边都丢弃对方；`sing-box check` 查不出组的循环，要到启动时才报 circular outbound dependency 而无法启动 |
 | 入站 | 启用的 `config inbound`：`tun`，或 `tproxy` 加 `direct`（DNS）；另有可单独启用的 `mixed`（代理端口，`username` / `password` 生成为 `users`）；启用 TProxy 时 `route.default_mark` 取 `firewall.output_mark`。都关闭时不生成入站，sing-box 只提供出站模式和组切换 |
-| 路由规则 | `config route_rule` 按顺序生成；默认动作 `route` 必须有有效的 `outbound`，否则跳过并警告；`hidden` 只用于界面，不生成；`final` 取 `route.final` 指向的节点或组 |
-| 规则集 | `config rule_set` → `route.rule_set`；`config http_client` → `http_clients`，供远程规则集下载 |
+| 路由规则 | `config route_rule` 按顺序生成；默认动作 `route` 必须有有效的 `outbound`，否则跳过并警告；逻辑规则写作 `type 'logical'`、`mode`（and / or）和一个 `id`；它的子规则是单独的 `config route_subrule`，用 `option rule '<id>'` 指向它，按配置里的顺序生成为 `rules`；子规则只有匹配条件（字段同标准规则，外加 `invert`），或者用 `json` 原样写一条（多个条件、嵌套 logical）；没有条件的子规则跳过并警告，没有子规则的逻辑规则也跳过并警告；`hidden` 只用于界面，不生成；`final` 取 `route.final` 指向的节点或组 |
+| 规则集 | `config rule_set` → `route.rule_set`；`config http_client` → `http_clients`，供远程规则集下载；引用的 HTTP 客户端不存在时去掉引用并警告，改用默认的；一个 HTTP 客户端都没定义、又有远程规则集或 Hysteria2 realm 时，生成器补一个 tag 为 `Default` 的，经 `route.final` 出去（`route.final` 是 Direct 出站时直连），和 sing-box 1.16 前的隐式默认一致 |
 | clash API | 存在 `config experimental 'clash_api'` 时生成 |
 | DNS | `config dns 'dns'` 加上所有 `config dns_server` 和按顺序的 `config dns_rule`；发往服务器的动作（`route`、`evaluate`）必须有有效的 `server`；`dns.custom_rules`（JSON 数组）原样插到第一条 `evaluate` 规则之前，JSON 无效时跳过并警告；规则里的 `strategy` 已被 sing-box 1.14 弃用，不再生成 |
 | NTP | `config ntp 'ntp'`；默认关闭，路由器时钟不可靠时再开启 |
 | 缓存文件 | 存在 `config experimental 'cache_file'` 时生成；默认放在闪存上，路由器重启和系统升级后仍保留出站模式、各组的选择和 FakeIP 映射 |
 
-默认配置（没有节点）生成的结果：`Direct`、只含 `Direct` 的 `Proxy`、含 `Proxy` 和 `Direct` 的 `Final`（`route.final` 指向它）、包含 `Proxy`、`Final` 和 `Direct` 的 `Global`；DNS 分流和路由规则；国内 IP 规则集；clash API 和缓存文件。接管默认开启（TUN），开启 OpenBox 后即接管流量；关闭接管时不生成入站。
+默认配置（没有节点）生成的结果：`Direct`、只含 `Direct` 的 `Proxy`、含 `Proxy` 和 `Direct` 的 `Final`（`route.final` 指向它）、包含 `Proxy`、`Final` 和 `Direct` 的 `Global`；DNS 分流和路由规则；国内 IP 规则集；经 Proxy 组的 HTTP 客户端 `HTTP Proxy`（默认 HTTP 客户端留空，即用第一个，也就是它）；clash API 和缓存文件。接管默认开启（TUN），开启 OpenBox 后即接管流量；关闭接管时不生成入站。
 
 生成器只在一个地方适配 sing-box 的版本差异。将来 sing-box 改格式时，只需改生成器，用户的 UCI 不受影响。
 
@@ -442,7 +468,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 2. **DNS**：发往外部 53 端口的查询（包括设备写死的 8.8.8.8）都由 sing-box 应答（TUN 由 sing-box 劫持，TProxy 由 OpenBox 重定向到 `dns-in`），sing-box 能看到是哪台设备在查询；问路由器（dnsmasq）的查询由 dnsmasq 转给 `dns-in`（见第 3 点）。本地域名和私有网段的反查转给 dnsmasq，DHCP 主机名照常可用；其余先问国内 DNS，国内 IP 原样返回，其他按 DNS 模式处理：
    - **FakeIP**（默认）：立即返回假地址，连接时由节点解析域名。快、分流准；应答的 TTL 为 1 秒（与 mihomo 的 fake-ip 相同），设备几乎不缓存假地址，停止服务后下一次查询就拿到真实地址。假地址由 sing-box 在本地分配，查询变多几乎没有开销；自带 DNS 缓存的程序（如 Java 默认缓存 30 秒）仍要等它自己的缓存过期。
    - **RealIP**：经代理向远程 DNS 再查一次，返回真实地址。首次访问稍慢，所有应用都能正常使用，停止后不留假地址。
-   - 两种模式只差 `dns_rule 'foreign'` 和 `'fallback'` 的 `server`（`fakeip` 或 `remote`）和 `rewrite_ttl`（FakeIP 为 1，RealIP 不设）；接管页的「DNS 模式」同时修改这两处。
+   - 两种模式只差 `dns_rule 'foreign'` 和 `'fallback'` 的 `server`（`fakeip` 或 `cloudflare`，之前的配置里是 `remote`）和 `rewrite_ttl`（FakeIP 为 1，RealIP 不设）；接管页的「DNS 模式」同时修改这两处。
 3. **dnsmasq 转发给 sing-box**：dnsmasq 的上游常是私有地址（主路由、光猫），TUN 不接管路由器发往私有地址的查询，路由器自己和问 dnsmasq 的设备就会绕过 sing-box、拿到真实地址。所以 sing-box 运行期间，`run.sh` 在每个 dnsmasq 实例的 conf-dir（默认 `/tmp/dnsmasq.<实例>.d`）写入 `openbox.conf`：`no-resolv` 加 `server=127.0.0.1#<dns-in 端口>`，然后重启 dnsmasq；dnsmasq 仍负责 DHCP、本地域名和私有网段的反查（`local=/lan/`、`boguspriv`，OpenWrt 默认开启，sing-box 的 `local` 服务器经它解析这些名字，不会循环），其余查询交给 sing-box。sing-box 一退出（崩溃或停止）就删掉这些文件并重启 dnsmasq，恢复原来的上游；写过的文件记在 `/var/run/openbox/dnsmasq.state`，`/etc/config/dhcp` 不改动。运行的配置里没有 tag 为 `dns-in` 的 `direct` 入站（例如原生 JSON 没写）时不做转发。
 4. **停止后**：sing-box 撤掉 TUN、路由规则和 nft 表，dnsmasq 回到原来的上游，国内网络立即恢复。
 
@@ -504,8 +530,14 @@ openbox/
 ├── luci-app-openbox/
 │   ├── Makefile
 │   ├── htdocs/…/view/openbox/  # 各页面
-│   ├── htdocs/…/openbox/       # ui.js：各页面共用；policy/：策略页节点弹窗，common.js 放协议常量与校验，
-│   │                           # general、tls、transport、multiplex、quic、dial 各对应弹窗的一个标签页
+│   ├── htdocs/…/openbox/       # ui.js：各页面共用（section 查找与选项、校验、时长等）；fields.js：sing-box 字段的
+│   │                           # JSON 输入框及与表单字段的双向绑定（节点 TLS、拨号，HTTP 客户端 TLS、拨号共用），
+│   │                           # 以及规则 JSON 的校验；
+│   │                           # policy/：策略页节点弹窗，common.js 放协议常量与校验，
+│   │                           # general、tls、transport、multiplex、quic、dial 各对应弹窗的一个标签页；
+│   │                           # rules/：路由规则页，condition.js 是「规则类型 + 值」（类型表、表格显示、
+│   │                           # 弹窗字段），标准规则和子规则共用；logical.js 是逻辑规则（弹窗两个标签页的切换、
+│   │                           # 子规则表格和叠放弹窗），依赖 LuCI 弹窗内部行为的处理都集中在这里
 │   ├── root/usr/share/rpcd/    # ACL、ucode 插件
 │   └── po/
 ├── docs/
@@ -518,10 +550,10 @@ openbox/
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式（单选切换，选中立即生效；配置里只有一种模式时只显示名称，未启用 clash API 时不显示）、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里，只有策略组和节点，「添加」按钮在各自的子标题下。策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、出站标签、默认出站、自动测速参数和闲置超时、中断现有连接；出站标签用 LuCI 原生的动态列表，可拖动排序，生成时按这个顺序，下拉框按节点（含订阅节点）、Direct、策略组排列；保存时提示循环引用并拦截：列出的组若已直接或经其他组包含本组，列表标红并提示「在策略组中发现了循环引用：<组名>」（参考 Surge），不能保存，判断与生成器的防环一致，默认出站也不列出这样的成员）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「延迟测试」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）；订阅配置的节点列表改为只读列出订阅的节点（经 `subscription_nodes`），只能测试延迟。当前出站立即生效，其余保存并应用后生效 |
-| 路由规则 | 二级标签：规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。标签底部是默认出站（`route.final`）。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集 |
+| 策略 | sing-box 的出站都在这里，只有策略组和节点，「添加」按钮在各自列表底部（LuCI 默认位置）。策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、出站标签、默认出站、自动测速参数和闲置超时、中断现有连接；出站标签用 LuCI 原生的动态列表，可拖动排序，生成时按这个顺序，下拉框按节点（含订阅节点）、Direct、策略组排列；保存时提示循环引用并拦截：列出的组若已直接或经其他组包含本组，列表标红并提示「在策略组中发现了循环引用：<组名>」（参考 Surge），不能保存，判断与生成器的防环一致，默认出站也不列出这样的成员）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「延迟测试」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）；订阅配置的节点列表改为只读列出订阅的节点（经 `subscription_nodes`），只能测试延迟。当前出站立即生效，其余保存并应用后生效 |
+| 路由规则 | 从上到下平铺三块：路由设置、规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值；弹窗分「标准规则」「逻辑规则」两个标签页（参考 Surge 的标准规则和 AND/OR 规则），保存时停在哪个标签页，规则就是哪种（逻辑规则写入 `type 'logical'`，不留自己的匹配条件；标准规则不留 `mode`、`id` 和子规则）；动作、出站、拒绝方式、反向匹配、注释两个标签页各有一份，切换时带过去，保存时只写当前这份；编辑已有规则时打开在它那种的标签页；启用只在表格里切换；逻辑规则填模式 and / or 和子规则：子规则是标签页里嵌的 LuCI 原生表格（参考 Surge 的子规则表格），列出类型和值，可增删、拖动排序；添加或编辑时叠一层弹窗，和标准规则一样左边选规则类型、右边填值，另有反向匹配，类型多一个「JSON」，写类型表达不了的（多个条件、嵌套 logical）；打开子规则弹窗前先保存逻辑规则这一层（LuCI 叠放弹窗的做法），逻辑规则第一次加子规则时生成 `id`；删除逻辑规则、取消新建的逻辑规则或把它改成标准规则时，它的子规则一起删除；子规则只写匹配条件，动作用外层这条规则的；表格里照 Surge 的写法一行显示：类型为 AND / OR，值为子规则的表达式，如 `((domain_suffix,netflix.com), (NOT,((port,443))))`，反向的子规则包一层 NOT，JSON 写的也换成这种写法；子规则表格里 JSON 的值同样这样显示）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集。路由设置：按 sing-box 文档顺序列出路由器用得上的 `route` 字段：默认出站 `final`、邻居解析 `find_neighbor`、DHCP 租约文件 `dhcp_lease_files`、默认 HTTP 客户端 `default_http_client`（留空时 sing-box 用第一个 HTTP 客户端，空选项据此显示「第一个 HTTP 客户端」；一个都没定义时显示「未定义 HTTP 客户端」，这时会经默认出站下载，1.14 已废弃、1.16 移除；规则集的「下载方式」和 Hysteria2 realm 的「HTTP 客户端」留空则跟随这里，空选项显示「默认 HTTP 客户端」）、默认域名解析服务器 `default_domain_resolver`（只列直连、且不是 local 的 DNS 服务器：节点连上之前要靠它解析自己的服务器域名，走代理的会卡死，local 会绕回 sing-box）；不列出 `auto_detect_interface`（生成器总是开启）、`default_interface`、`find_process`、多网卡策略（`default_network_strategy`、`default_network_type`、`default_fallback_network_type`、`default_fallback_delay`），以及 OpenBox 在 TProxy 时自动设置的 `default_mark`（取防火墙的 `output_mark`） |
 | 设备 | 访问控制模式与设备列表 |
-| 内核设置 | 二级标签依次为：日志（级别、显示设备 `find_neighbor`、时间戳）、DNS（默认服务器、解析策略、乐观缓存、节点域名解析服务器、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
+| 内核设置 | 二级标签依次为：日志（级别、时间戳）、DNS（默认服务器（不列出 local：OpenBox 运行时 dnsmasq 把查询交回 sing-box，没命中规则的查询会绕回来）、解析策略、乐观缓存、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、HTTP 客户端（顶层 `http_clients` 的列表；弹窗和节点一样分标签页：基本（标签、HTTP 版本 1 / 2 / 3、禁用版本回退、请求头）、HTTP2（版本 2 时显示）、QUIC（版本 3 时显示，含 HTTP2 字段）、TLS（TLS 字段 JSON）、拨号（固定显示出站 `detour` 和域名解析服务器 `domain_resolver`，按 tag 选择，与下方拨号字段 JSON 双向同步，只存 JSON；选了出站时 sing-box 忽略其他拨号字段，域名解析服务器随之隐藏）；供路由规则页的默认 HTTP 客户端、规则集的下载方式和 Hysteria2 realm 选用）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
 | 配置文件 | 一张表列出全部配置：配置名（点击查看；订阅上次更新失败时下面一行红字写原因）、类型（本地 / 订阅）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单——本地：查看、删除；订阅：查看、更新、删除（使用中的不显示删除）。「查看」在弹窗里只读显示生成的 JSON（两个空格缩进）。「新建…」弹窗：配置名、来源（默认配置 / 远程订阅），远程订阅再填订阅地址、更新间隔（小时）和 User-Agent |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 | 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |

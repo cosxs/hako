@@ -67,15 +67,11 @@ button.openbox-menu-item:hover:not([disabled]), button.openbox-menu-item:focus-v
 .openbox-delay.pending, .openbox-delay.none { background: none; color: inherit; opacity: .5; }
 `;
 
-// a toolbar under the title of a section: its add button, moved up from
-// below the table, then the given items
+// a toolbar of the given items under the title of a section
 function sectionToolbar(node, items) {
-  const create = node.querySelector('.cbi-section-create');
-  const add = create?.querySelector('.cbi-button-add');
-  const toolbar = E('div', { 'class': 'openbox-toolbar' }, [add, ...items].filter((item) => item));
+  const toolbar = E('div', { 'class': 'openbox-toolbar' }, items);
   const title = node.querySelector('h3');
 
-  create?.remove();
   if (title)
     title.after(toolbar);
   else
@@ -425,8 +421,6 @@ return view.extend({
             row.addEventListener(type, (ev) => ev.stopImmediatePropagation(), true);
           row.style.display = (view.mode?.toLowerCase() == 'global') ? '' : 'none';
         }
-
-        sectionToolbar(node, []);
 
         return node;
       });

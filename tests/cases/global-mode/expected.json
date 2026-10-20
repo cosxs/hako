@@ -152,8 +152,8 @@
   "route": {
     "final": "Proxy",
     "default_domain_resolver": "alidns",
-    "auto_detect_interface": true,
     "find_neighbor": true,
+    "auto_detect_interface": true,
     "rules": [
       {
         "action": "sniff"

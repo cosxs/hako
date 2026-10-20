@@ -28,7 +28,13 @@ msgstr ""
 msgid "0-RTT handshake"
 msgstr ""
 
+msgid "A <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box route rule</a> as JSON, with conditions only, for what a type above cannot write: several conditions, or a logical rule."
+msgstr ""
+
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
+msgstr ""
+
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>."
 msgstr ""
 
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
@@ -178,6 +184,9 @@ msgstr ""
 msgid "Current outbound"
 msgstr ""
 
+msgid "DHCP lease files"
+msgstr ""
+
 msgid "DNS"
 msgstr ""
 
@@ -205,7 +214,13 @@ msgstr ""
 msgid "Default DNS server"
 msgstr ""
 
+msgid "Default HTTP client"
+msgstr ""
+
 msgid "Default config"
+msgstr ""
+
+msgid "Default domain resolver"
 msgstr ""
 
 msgid "Default outbound"
@@ -239,6 +254,9 @@ msgid "Disable Chrome parrot"
 msgstr ""
 
 msgid "Disable path MTU discovery"
+msgstr ""
+
+msgid "Disable version fallback"
 msgstr ""
 
 msgid "Disabled"
@@ -313,6 +331,9 @@ msgstr ""
 msgid "FakeIP answers foreign domains at once and lets the node resolve them. RealIP resolves them through the proxy first: slower on the first visit, but works with every app."
 msgstr ""
 
+msgid "First HTTP client"
+msgstr ""
+
 msgid "First member"
 msgstr ""
 
@@ -337,10 +358,16 @@ msgstr ""
 msgid "HTTP client"
 msgstr ""
 
+msgid "HTTP clients"
+msgstr ""
+
 msgid "HTTP method"
 msgstr ""
 
 msgid "HTTP obfuscation"
+msgstr ""
+
+msgid "HTTP version"
 msgstr ""
 
 msgid "Headers"
@@ -481,6 +508,9 @@ msgstr ""
 msgid "Log settings"
 msgstr ""
 
+msgid "Logical rule"
+msgstr ""
+
 msgid "Logs"
 msgstr ""
 
@@ -535,7 +565,7 @@ msgstr ""
 msgid "Matches the domain and its subdomains."
 msgstr ""
 
-msgid "Matches the domains and addresses of rule sets, which are added on the Rule sets tab."
+msgid "Matches the domains and addresses of rule sets, which are added below."
 msgstr ""
 
 msgid "Matches the full domain."
@@ -580,6 +610,9 @@ msgstr ""
 msgid "Minimum streams"
 msgstr ""
 
+msgid "Mode"
+msgstr ""
+
 msgid "More"
 msgstr ""
 
@@ -592,10 +625,16 @@ msgstr ""
 msgid "Name"
 msgstr ""
 
+msgid "Neighbor resolution"
+msgstr ""
+
 msgid "Network protocols"
 msgstr ""
 
 msgid "New DNS server"
+msgstr ""
+
+msgid "New HTTP client"
 msgstr ""
 
 msgid "New group"
@@ -613,7 +652,7 @@ msgstr ""
 msgid "New…"
 msgstr ""
 
-msgid "Node domain resolver"
+msgid "No HTTP client defined"
 msgstr ""
 
 msgid "Nodes"
@@ -772,6 +811,9 @@ msgstr ""
 msgid "Remote"
 msgstr ""
 
+msgid "Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set."
+msgstr ""
+
 msgid "Remote subscription"
 msgstr ""
 
@@ -779,6 +821,9 @@ msgid "Resolve strategy"
 msgstr ""
 
 msgid "Route rules"
+msgstr ""
+
+msgid "Route settings"
 msgstr ""
 
 msgid "Rule sets"
@@ -814,9 +859,6 @@ msgstr ""
 msgid "Session receive window"
 msgstr ""
 
-msgid "Show devices"
-msgstr ""
-
 msgid "Skip certificate verification"
 msgstr ""
 
@@ -829,6 +871,9 @@ msgstr ""
 msgid "Source (.json)"
 msgstr ""
 
+msgid "Standard rule"
+msgstr ""
+
 msgid "Start"
 msgstr ""
 
@@ -839,6 +884,12 @@ msgid "Stop"
 msgstr ""
 
 msgid "Stream receive window"
+msgstr ""
+
+msgid "Sub-rule"
+msgstr ""
+
+msgid "Sub-rules"
 msgstr ""
 
 msgid "Subscription"
@@ -860,6 +911,9 @@ msgid "TCP and UDP"
 msgstr ""
 
 msgid "TCP only"
+msgstr ""
+
+msgid "TLS fields"
 msgstr ""
 
 msgid "TLS server name"
@@ -932,6 +986,9 @@ msgid "The rule applies when the condition does not match."
 msgstr ""
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
+msgstr ""
+
+msgid "The sub-rule matches when its condition does not."
 msgstr ""
 
 msgid "This protocol always uses TLS."
@@ -1075,6 +1132,9 @@ msgstr ""
 msgid "XTLS flow"
 msgstr ""
 
+msgid "and: all the sub-rules match; or: any of them does."
+msgstr ""
+
 msgid "bytes"
 msgstr ""
 
@@ -1125,3 +1185,4 @@ msgstr ""
 
 msgid "uTLS fingerprint"
 msgstr ""
+

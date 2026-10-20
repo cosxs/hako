@@ -63,10 +63,13 @@ return view.extend({
     // answered with a TTL of 1 second, so devices hardly cache them and
     // get real ones as soon as OpenBox stops
     const modeRules = [ 'foreign', 'fallback' ].filter((name) => uci.get(profile, name));
+    // RealIP resolves through cloudflare, named remote in profiles made
+    // before
+    const realip = uci.get(profile, 'cloudflare') ? 'cloudflare' : 'remote';
 
     let o = s.option(form.ListValue, '_dns_mode', _('DNS mode'));
     o.value('fakeip', _('FakeIP'));
-    o.value('remote', _('RealIP'));
+    o.value(realip, _('RealIP'));
     o.description = _('FakeIP answers foreign domains at once and lets the node resolve them. RealIP resolves them through the proxy first: slower on the first visit, but works with every app.');
     o.cfgvalue = () => uci.get(profile, 'foreign', 'server');
     o.write = (section_id, value) => modeRules.forEach((name) => {
@@ -77,7 +80,7 @@ return view.extend({
 
     // keep a server set by hand selectable
     const current = uci.get(profile, 'foreign', 'server');
-    if (current && !(current in { fakeip: 1, remote: 1 }))
+    if (current && current != 'fakeip' && current != realip)
       o.value(current, current);
 
     if (!modeRules.length)
@@ -152,7 +155,7 @@ return view.extend({
 
     o = modeOption(s.option(form.MultiValue, 'route_exclude_address_set', _('Bypass rule sets')), 'tun');
     o.description = _('Destinations in these rule sets bypass sing-box in the firewall.');
-    uci.sections(profile, 'rule_set').forEach((section) => o.value(section['.name'], section.tag || section['.name']));
+    openbox.sectionChoices(o, 'rule_set');
 
     // sing-box takes both families in one list: shown split, saved merged
     const excludeList = (family, title) => {
@@ -198,7 +201,7 @@ return view.extend({
     o.ucisection = 'firewall';
     o.ucioption = 'bypass_rule_set';
     o.description = _('Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used.');
-    uci.sections(profile, 'rule_set').forEach((section) => o.value(section['.name'], section.tag || section['.name']));
+    openbox.sectionChoices(o, 'rule_set');
 
     o = modeOption(s.option(form.DynamicList, '_bypass_address', _('Bypass IPv4 addresses')), 'tproxy');
     o.ucisection = 'firewall';

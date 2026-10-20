@@ -30,8 +30,14 @@ msgstr "%s 已更新，sing-box 已重载。"
 msgid "0-RTT handshake"
 msgstr "0-RTT 握手"
 
+msgid "A <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box route rule</a> as JSON, with conditions only, for what a type above cannot write: several conditions, or a logical rule."
+msgstr "一条 <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 路由规则</a>的 JSON，只写条件，用于上面的类型写不了的：多个条件，或逻辑规则。"
+
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
 msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段</a>组成的 JSON 对象，会覆盖上面的参数。"
+
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>."
+msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段</a>组成的 JSON 对象。"
 
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
 msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 拨号字段</a>组成的 JSON 对象。"
@@ -180,6 +186,9 @@ msgstr "创建"
 msgid "Current outbound"
 msgstr "当前出站"
 
+msgid "DHCP lease files"
+msgstr "DHCP 租约文件"
+
 msgid "DNS"
 msgstr "DNS"
 
@@ -207,8 +216,14 @@ msgstr "默认"
 msgid "Default DNS server"
 msgstr "默认 DNS 服务器"
 
+msgid "Default HTTP client"
+msgstr "默认 HTTP 客户端"
+
 msgid "Default config"
 msgstr "默认配置"
+
+msgid "Default domain resolver"
+msgstr "默认域名解析服务器"
 
 msgid "Default outbound"
 msgstr "默认出站"
@@ -242,6 +257,9 @@ msgstr "禁用 Chrome 指纹模仿"
 
 msgid "Disable path MTU discovery"
 msgstr "禁用路径 MTU 发现"
+
+msgid "Disable version fallback"
+msgstr "禁用版本回退"
 
 msgid "Disabled"
 msgstr "已禁用"
@@ -315,6 +333,9 @@ msgstr "FakeIP IPv6 地址段"
 msgid "FakeIP answers foreign domains at once and lets the node resolve them. RealIP resolves them through the proxy first: slower on the first visit, but works with every app."
 msgstr "FakeIP：境外域名立即返回假地址，由节点解析，速度快。RealIP：先经代理查询真实地址，首次访问稍慢，但所有应用都能正常使用。"
 
+msgid "First HTTP client"
+msgstr "第一个 HTTP 客户端"
+
 msgid "First member"
 msgstr "第一个成员"
 
@@ -339,11 +360,17 @@ msgstr "HTTP 和 SOCKS5 :%d"
 msgid "HTTP client"
 msgstr "HTTP 客户端"
 
+msgid "HTTP clients"
+msgstr "HTTP 客户端"
+
 msgid "HTTP method"
 msgstr "HTTP 方法"
 
 msgid "HTTP obfuscation"
 msgstr "HTTP 混淆"
+
+msgid "HTTP version"
+msgstr "HTTP 版本"
 
 msgid "Headers"
 msgstr "请求头"
@@ -483,6 +510,9 @@ msgstr "日志"
 msgid "Log settings"
 msgstr "日志设置"
 
+msgid "Logical rule"
+msgstr "逻辑规则"
+
 msgid "Logs"
 msgstr "日志"
 
@@ -537,8 +567,8 @@ msgstr "匹配目标端口。"
 msgid "Matches the domain and its subdomains."
 msgstr "匹配该域名及其子域名。"
 
-msgid "Matches the domains and addresses of rule sets, which are added on the Rule sets tab."
-msgstr "匹配规则集中的域名和地址，规则集在「规则集」标签中添加。"
+msgid "Matches the domains and addresses of rule sets, which are added below."
+msgstr "匹配规则集中的域名和地址，规则集在下方添加。"
 
 msgid "Matches the full domain."
 msgstr "匹配完整域名。"
@@ -582,6 +612,9 @@ msgstr "最小包长"
 msgid "Minimum streams"
 msgstr "最小流数"
 
+msgid "Mode"
+msgstr "模式"
+
 msgid "More"
 msgstr "更多"
 
@@ -594,11 +627,17 @@ msgstr "多路复用"
 msgid "Name"
 msgstr "名称"
 
+msgid "Neighbor resolution"
+msgstr "邻居解析"
+
 msgid "Network protocols"
 msgstr "网络协议"
 
 msgid "New DNS server"
 msgstr "新 DNS 服务器"
+
+msgid "New HTTP client"
+msgstr "新 HTTP 客户端"
 
 msgid "New group"
 msgstr "新策略组"
@@ -615,8 +654,8 @@ msgstr "新规则集"
 msgid "New…"
 msgstr "新建…"
 
-msgid "Node domain resolver"
-msgstr "节点域名解析服务器"
+msgid "No HTTP client defined"
+msgstr "未定义 HTTP 客户端"
 
 msgid "Nodes"
 msgstr "节点"
@@ -774,6 +813,9 @@ msgstr "重载"
 msgid "Remote"
 msgstr "远程"
 
+msgid "Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set."
+msgstr "远程规则集通过它们下载，可在路由规则页设为默认，或给单个规则集指定。"
+
 msgid "Remote subscription"
 msgstr "远程订阅"
 
@@ -782,6 +824,9 @@ msgstr "解析策略"
 
 msgid "Route rules"
 msgstr "路由规则"
+
+msgid "Route settings"
+msgstr "路由设置"
 
 msgid "Rule sets"
 msgstr "规则集"
@@ -816,9 +861,6 @@ msgstr "服务器"
 msgid "Session receive window"
 msgstr "会话接收窗口"
 
-msgid "Show devices"
-msgstr "显示设备"
-
 msgid "Skip certificate verification"
 msgstr "跳过证书验证"
 
@@ -831,6 +873,9 @@ msgstr "有些服务商按 User-Agent 返回对应格式；默认会带上 sing-
 msgid "Source (.json)"
 msgstr "源文件（.json）"
 
+msgid "Standard rule"
+msgstr "标准规则"
+
 msgid "Start"
 msgstr "启动"
 
@@ -842,6 +887,12 @@ msgstr "停止"
 
 msgid "Stream receive window"
 msgstr "流接收窗口"
+
+msgid "Sub-rule"
+msgstr "子规则"
+
+msgid "Sub-rules"
+msgstr "子规则"
 
 msgid "Subscription"
 msgstr "订阅"
@@ -863,6 +914,9 @@ msgstr "TCP 和 UDP"
 
 msgid "TCP only"
 msgstr "仅 TCP"
+
+msgid "TLS fields"
+msgstr "TLS 字段"
 
 msgid "TLS server name"
 msgstr "TLS 服务器名称"
@@ -935,6 +989,9 @@ msgstr "条件不满足时规则生效。"
 
 msgid "The sing-box_*_openwrt_%s.apk file from the sing-box release page."
 msgstr "sing-box 发布页中的 sing-box_*_openwrt_%s.apk 文件。"
+
+msgid "The sub-rule matches when its condition does not."
+msgstr "条件不匹配时，这条子规则算匹配。"
 
 msgid "This protocol always uses TLS."
 msgstr "该协议必须使用 TLS。"
@@ -1077,6 +1134,9 @@ msgstr "关闭 IPv6 接管时，发往其他 IPv6 地址的 TCP 和 UDP 连接�
 msgid "XTLS flow"
 msgstr "流控"
 
+msgid "and: all the sub-rules match; or: any of them does."
+msgstr "and：子规则全部匹配才命中；or：任一子规则匹配就命中。"
+
 msgid "bytes"
 msgstr "字节"
 
@@ -1127,3 +1187,4 @@ msgstr "sing-box 版本过低"
 
 msgid "uTLS fingerprint"
 msgstr "uTLS 指纹"
+

@@ -443,14 +443,36 @@
   ],
   "http_clients": [
     {
-      "tag": "Realm client"
+      "tag": "Realm client",
+      "version": 3,
+      "disable_version_fallback": true,
+      "headers": {
+        "User-Agent": "openbox",
+        "Accept": "*/*"
+      },
+      "initial_packet_size": 1252,
+      "disable_path_mtu_discovery": true,
+      "idle_timeout": "30s",
+      "max_concurrent_streams": 100,
+      "tls": {
+        "server_name": "realm.example.com",
+        "insecure": true
+      },
+      "detour": "VLESS WS",
+      "connect_timeout": "5s"
+    },
+    {
+      "tag": "HTTP2 client",
+      "keep_alive_period": "15s",
+      "stream_receive_window": "6MB",
+      "connection_receive_window": "15MB"
     }
   ],
   "route": {
     "final": "Proxy",
     "default_domain_resolver": "alidns",
-    "auto_detect_interface": true,
     "find_neighbor": true,
+    "auto_detect_interface": true,
     "rules": [
       {
         "action": "sniff"

@@ -1,11 +1,10 @@
 'use strict';
 'require baseclass';
 'require form';
-'require uci';
-'require openbox.ui as openbox';
+'require openbox.fields as fields';
 'require openbox.policy.common as common';
 
-const { TLS_OPTIONAL, TLS_REQUIRED, UTLS_TYPES, UTLS_FINGERPRINTS, validateFields, parseFields, formatFields, remote } = common;
+const { TLS_OPTIONAL, TLS_REQUIRED, UTLS_TYPES, UTLS_FINGERPRINTS, remote } = common;
 
 // the TLS options of a node by their fields in the JSON of the advanced
 // editing, which takes them over: [ read from the JSON, write into it ]
@@ -37,37 +36,6 @@ const TLS_OPTIONS = {
   ]
 };
 
-// the TLS options shown in the dialog of a node into the JSON of the
-// advanced editing; JSON being typed that is not valid is left alone
-function tlsOptionsToFields(section, section_id) {
-  const field = section.getUIElement(section_id, 'tls_fields');
-  const parsed = field ? parseFields(field.getValue()) : null;
-  if (!parsed)
-    return;
-
-  // TLS is on wherever the JSON shows, so it says so first
-  const tls = { enabled: true, ...parsed };
-  for (const [name, [, write]] of Object.entries(TLS_OPTIONS)) {
-    const option = section.children.find((option) => option.option == name);
-    if (option?.isActive(section_id))
-      write(tls, option.formvalue(section_id));
-  }
-
-  field.setValue(formatFields(tls));
-}
-
-// and back, once the JSON is edited
-function tlsFieldsToOptions(section, section_id) {
-  const tls = parseFields(section.getUIElement(section_id, 'tls_fields')?.getValue());
-  if (!tls)
-    return;
-
-  for (const [name, [read]] of Object.entries(TLS_OPTIONS))
-    section.getUIElement(section_id, name)?.setValue(read(tls));
-
-  section.map.checkDepends();
-}
-
 // the fields of the TLS tab of the dialog of a node
 return baseclass.extend({
   add(s) {
@@ -75,10 +43,6 @@ return baseclass.extend({
 
     // tls; the options shown here and the JSON of the advanced editing
     // follow each other, and the JSON is what counts
-
-    const syncTls = function (ev, section_id) {
-      tlsOptionsToFields(this.section, section_id);
-    };
 
     o = s.taboption('tls', form.Flag, 'tls_enabled', _('Enable TLS'));
     o.modalonly = true;
@@ -99,7 +63,6 @@ return baseclass.extend({
     };
 
     o = s.taboption('tls', form.Value, 'tls_server_name', _('TLS server name'));
-    o.onchange = syncTls;
     o.datatype = 'hostname';
     o.modalonly = true;
     tls(o, [...TLS_OPTIONAL, ...TLS_REQUIRED]);
@@ -107,65 +70,47 @@ return baseclass.extend({
     const fullTls = [...TLS_OPTIONAL, ...TLS_REQUIRED.filter((type) => type != 'naive')];
 
     o = s.taboption('tls', form.Flag, 'tls_insecure', _('Skip certificate verification'));
-    o.onchange = syncTls;
     o.modalonly = true;
     tls(o, fullTls);
 
     o = s.taboption('tls', form.ListValue, 'tls_utls_fingerprint', _('uTLS fingerprint'));
-    o.onchange = syncTls;
     o.value('', _('None'));
     UTLS_FINGERPRINTS.forEach((fingerprint) => o.value(fingerprint));
     o.modalonly = true;
     tls(o, UTLS_TYPES);
 
     o = s.taboption('tls', form.Flag, 'tls_reality_enabled', _('Enable Reality'));
-    o.onchange = syncTls;
     o.modalonly = true;
     tls(o, ['vless']);
 
     o = s.taboption('tls', form.Value, 'tls_reality_public_key', _('Reality public key'));
-    o.onchange = syncTls;
     o.rmempty = false;
     o.modalonly = true;
     o.depends({ type: 'vless', tls_enabled: '1', tls_reality_enabled: '1' });
 
     o = s.taboption('tls', form.Value, 'tls_reality_short_id', _('Reality short ID'));
-    o.onchange = syncTls;
     o.modalonly = true;
     o.depends({ type: 'vless', tls_enabled: '1', tls_reality_enabled: '1' });
 
-    // all TLS fields as JSON, the options above included, taken as they are
-    o = s.taboption('tls', form.TextValue, 'tls_fields', _('Advanced editing'));
-    o.description = _('A JSON object of <a href="%s" target="_blank" rel="noreferrer">sing-box TLS fields</a>, which overrides the options above.')
-      .format('https://sing-box.sagernet.org/configuration/shared/tls/#outbound');
-    o.rows = 6;
-    o.monospace = true;
-    o.placeholder = JSON.stringify({ min_version: '1.2', ech: { enabled: true } }, null, 2);
-    o.modalonly = true;
+    // all TLS fields as JSON, the options above included, taken as they
+    // are; TLS is on wherever the JSON shows, so it says so first
+    o = fields.add(s, 'tls', 'tls_fields', _('Advanced editing'),
+      _('A JSON object of <a href="%s" target="_blank" rel="noreferrer">sing-box TLS fields</a>, which overrides the options above.')
+        .format('https://sing-box.sagernet.org/configuration/shared/tls/#outbound'), {
+        placeholder: JSON.stringify({ min_version: '1.2', ech: { enabled: true } }, null, 2),
+        bind: TLS_OPTIONS,
+        base: () => ({ enabled: true }),
+        stored: true
+      });
     // TLS is turned off by Enable TLS, where it may be, not here
     o.validate = function (section_id, value) {
-      const valid = validateFields(section_id, value);
-      if (valid !== true || parseFields(value)?.enabled !== false)
+      const valid = fields.validate(section_id, value);
+      if (valid !== true || fields.parse(value)?.enabled !== false)
         return valid;
 
       return TLS_REQUIRED.includes(this.section.formvalue(section_id, 'type'))
         ? _('This protocol always uses TLS.') : _('Turn TLS off with Enable TLS.');
     };
     tls(o, [...TLS_OPTIONAL, ...TLS_REQUIRED]);
-    // a node saved before shows the options it has
-    o.cfgvalue = function (section_id) {
-      const value = form.TextValue.prototype.cfgvalue.call(this, section_id);
-      if (value)
-        return value;
-
-      const tls = { enabled: true };
-      for (const [name, [, write]] of Object.entries(TLS_OPTIONS))
-        write(tls, uci.get(openbox.profileConfig(), section_id, name));
-
-      return formatFields(tls);
-    };
-    o.onchange = function (ev, section_id) {
-      tlsFieldsToOptions(this.section, section_id);
-    };
   }
 });

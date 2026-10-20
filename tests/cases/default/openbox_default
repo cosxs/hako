@@ -3,7 +3,7 @@ config log 'log'
   option timestamp '1'
 
 config dns 'dns'
-  option final 'remote'
+  option final 'cloudflare'
   option strategy 'ipv4_only'
   option optimistic '1'
 
@@ -13,20 +13,20 @@ config dns_server 'local'
 
 config dns_server 'alidns'
   option tag 'alidns'
-  option type 'udp'
+  option type 'quic'
   option server '223.5.5.5'
+
+config dns_server 'cloudflare'
+  option tag 'cloudflare'
+  option type 'https'
+  option server '1.1.1.1'
+  option detour 'proxy'
 
 config dns_server 'fakeip'
   option tag 'fakeip'
   option type 'fakeip'
   option inet4_range '198.18.0.0/15'
   option inet6_range '2001:2::/48'
-
-config dns_server 'remote'
-  option tag 'remote'
-  option type 'https'
-  option server '1.1.1.1'
-  option detour 'proxy'
 
 config dns_rule
   list domain_suffix 'lan'
@@ -76,10 +76,13 @@ config ntp 'ntp'
   option server_port '123'
   option interval '30m'
 
+config http_client 'proxy_client'
+  option tag 'HTTP Proxy'
+  option dial_fields '{"detour": "Proxy"}'
+
 config route 'route'
   option final 'final'
   option default_domain_resolver 'alidns'
-  option auto_detect_interface '1'
   option find_neighbor '1'
 
 config rule_set 'cn_ip'

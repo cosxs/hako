@@ -1,9 +1,10 @@
 'use strict';
 'require baseclass';
 'require form';
+'require openbox.ui as openbox';
 'require openbox.policy.common as common';
 
-const { validateHeader, remote } = common;
+const { remote } = common;
 
 // the fields of the Transport tab of the dialog of a node
 return baseclass.extend({
@@ -40,7 +41,7 @@ return baseclass.extend({
 
     o = s.taboption('transport', form.DynamicList, 'transport_headers', _('Headers'));
     o.placeholder = 'User-Agent: Mozilla/5.0';
-    o.validate = validateHeader;
+    o.validate = openbox.validateHeader;
     o.modalonly = true;
     ['ws', 'httpupgrade', 'http'].forEach((type) => o.depends('transport_type', type));
 

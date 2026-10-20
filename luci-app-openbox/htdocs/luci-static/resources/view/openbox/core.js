@@ -3,6 +3,7 @@
 'require openbox.ui as openbox';
 'require form';
 'require uci';
+'require openbox.fields as fields';
 
 const LEVELS = [ 'trace', 'debug', 'info', 'warn', 'error', 'fatal', 'panic' ];
 
@@ -48,18 +49,42 @@ const CUSTOM_RULES_EXAMPLE = JSON.stringify([
 ], null, 2);
 
 // outbounds a dial detour may use: a plain direct outbound is refused by
-// sing-box, and leaving detour empty already means direct
+// sing-box, and leaving detour empty already means direct; a hidden group,
+// as Global, is the one of a mode
 function detourChoices(option) {
-  option.value('', _('Direct (default)'));
-
-  uci.sections(openbox.profileConfig(), 'outbound')
-    .filter((section) => section.type != 'direct')
-    .forEach((section) => option.value(section['.name'], openbox.label(section)));
+  openbox.sectionChoices(option, 'outbound', _('Direct (default)'),
+    (section) => section.type != 'direct' && section.hidden != '1');
 }
 
 function dependsOnTypes(option, types) {
   types.forEach((type) => option.depends('type', type));
 }
+
+// a choice for a value set by hand that is not among the others
+function keepValue(option) {
+  option.renderWidget = function (section_id, option_index, cfgvalue) {
+    if (cfgvalue && !this.keylist.includes(cfgvalue))
+      this.value(cfgvalue);
+
+    return form.ListValue.prototype.renderWidget.apply(this, arguments);
+  };
+}
+
+// the dial fields of an http client shown on their own: [ read from the
+// JSON of the dial fields, write into it ]; the resolver may be an object
+// with more than its server
+const DIAL_OPTIONS = {
+  _detour: [
+    (dial) => dial.detour ?? '',
+    (dial, value) => dial.detour = value || undefined
+  ],
+  _domain_resolver: [
+    (dial) => (L.isObject(dial.domain_resolver) ? dial.domain_resolver.server : dial.domain_resolver) ?? '',
+    (dial, value) => dial.domain_resolver = L.isObject(dial.domain_resolver)
+      ? (value ? { ...dial.domain_resolver, server: value } : undefined)
+      : (value || undefined)
+  ]
+};
 
 return view.extend({
   load() {
@@ -78,6 +103,7 @@ return view.extend({
     s.tab('log', _('Log'));
     s.tab('dns', _('DNS'));
     s.tab('ntp', 'NTP');
+    s.tab('http_client', _('HTTP clients'));
     s.tab('experimental', _('Experimental'));
 
     // log
@@ -86,23 +112,17 @@ return view.extend({
     LEVELS.forEach((level) => o.value(level));
     o.default = 'warn';
 
-    // find_neighbor: the MAC address and host name of LAN devices in the
-    // log, from the neighbor table and the DHCP leases
-    o = s.taboption('log', form.Flag, 'find_neighbor', _('Show devices'));
-    o.ucisection = 'route';
-    o.description = _('Logs connections with the MAC address and host name of the LAN device.');
-    o.default = '1';
-    o.rmempty = false;
-
     o = s.taboption('log', form.Flag, 'timestamp', _('Timestamp'));
     o.default = '1';
     o.rmempty = false;
 
     // dns
 
+    // not local: while sing-box runs, dnsmasq sends its queries back to it,
+    // and a query no rule matched would go round
     o = s.taboption('dns', form.ListValue, 'final', _('Default DNS server'));
     o.ucisection = 'dns';
-    openbox.resolverChoices(o);
+    openbox.sectionChoices(o, 'dns_server', null, (section) => !(section.type in { fakeip: 1, local: 1 }));
 
     o = s.taboption('dns', form.ListValue, 'strategy', _('Resolve strategy'));
     o.ucisection = 'dns';
@@ -113,10 +133,6 @@ return view.extend({
     o.ucisection = 'dns';
     o.default = '1';
     o.rmempty = false;
-
-    o = s.taboption('dns', form.ListValue, 'default_domain_resolver', _('Node domain resolver'));
-    o.ucisection = 'route';
-    openbox.resolverChoices(o);
 
     o = s.taboption('dns', form.SectionValue, '_dns_servers', form.GridSection, 'dns_server', _('DNS servers'));
     const ss = o.subsection;
@@ -179,20 +195,7 @@ return view.extend({
     so.monospace = true;
     so.wrap = 'off';
     so.placeholder = CUSTOM_RULES_EXAMPLE;
-    so.validate = (section_id, value) => {
-      if (!value?.trim())
-        return true;
-
-      try {
-        const rules = JSON.parse(value);
-        const list = Array.isArray(rules) ? rules : [ rules ];
-
-        return list.every((rule) => L.isObject(rule)) ? true : _('Expecting an array of rules');
-      }
-      catch (e) {
-        return _('Invalid JSON: %s').format(e.message);
-      }
-    };
+    so.validate = fields.validateRules;
 
     // ntp; options are named per tab and mapped to their UCI option, since
     // several objects share option names (enabled, path, ...)
@@ -202,15 +205,18 @@ return view.extend({
     o.ucioption = 'enabled';
     o.rmempty = false;
 
+    // the options below are kept while NTP is off
     o = s.taboption('ntp', form.Value, 'ntp_server', _('Server'));
     o.ucisection = 'ntp';
     o.ucioption = 'server';
+    o.retain = true;
     o.placeholder = 'ntp.aliyun.com';
     o.depends('ntp_enabled', '1');
 
     o = s.taboption('ntp', form.Value, 'ntp_server_port', _('Port'));
     o.ucisection = 'ntp';
     o.ucioption = 'server_port';
+    o.retain = true;
     o.datatype = 'port';
     o.default = '123';
     o.depends('ntp_enabled', '1');
@@ -218,6 +224,7 @@ return view.extend({
     o = s.taboption('ntp', form.Value, 'ntp_interval', _('Sync interval'));
     o.ucisection = 'ntp';
     o.ucioption = 'interval';
+    o.retain = true;
     openbox.duration(o, 'm', _('minutes'));
     o.default = '30';
     o.depends('ntp_enabled', '1');
@@ -225,8 +232,113 @@ return view.extend({
     o = s.taboption('ntp', form.ListValue, 'ntp_detour', _('Outbound'));
     o.ucisection = 'ntp';
     o.ucioption = 'detour';
+    o.retain = true;
     detourChoices(o);
     o.depends('ntp_enabled', '1');
+
+    // http clients: how remote rule sets and Hysteria2 realms make their
+    // requests, as the top-level http_clients of sing-box, with a dialog in
+    // tabs as the one of a node
+
+    o = s.taboption('http_client', form.SectionValue, '_http_clients', form.GridSection, 'http_client', _('HTTP clients'),
+      _('Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set.'));
+    const hs = o.subsection;
+    hs.anonymous = true;
+    hs.addremove = true;
+    hs.nodescriptions = true;
+    hs.modaltitle = (section_id) => _('HTTP clients') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New HTTP client'));
+    hs.tab('general', _('Basic'));
+    hs.tab('http2', 'HTTP2');
+    hs.tab('quic', 'QUIC');
+    hs.tab('tls', 'TLS');
+    hs.tab('dial', _('Dial'));
+
+    so = hs.taboption('general', form.Value, 'tag', _('Tag'));
+    so.rmempty = false;
+
+    so = hs.taboption('general', form.ListValue, 'version', _('HTTP version'));
+    [ '1', '2', '3' ].forEach((version) => so.value(version));
+    so.default = '2';
+
+    so = hs.taboption('general', form.Flag, 'disable_version_fallback', _('Disable version fallback'));
+    so.modalonly = true;
+
+    so = hs.taboption('general', form.DynamicList, 'headers', _('Headers'));
+    so.placeholder = 'User-Agent: sing-box';
+    so.validate = openbox.validateHeader;
+    so.modalonly = true;
+
+    // the QUIC fields of version 3 hold the HTTP2 fields of version 2: the
+    // same options on both tabs, each kept while the other is shown
+    so = hs.taboption('quic', form.Value, 'initial_packet_size', _('Initial packet size'));
+    openbox.suffix(so, _('bytes'));
+    so.datatype = 'uinteger';
+    so.modalonly = true;
+    so.depends('version', '3');
+
+    so = hs.taboption('quic', form.Flag, 'disable_path_mtu_discovery', _('Disable path MTU discovery'));
+    so.modalonly = true;
+    so.depends('version', '3');
+
+    for (const [tab, version] of [ [ 'http2', '2' ], [ 'quic', '3' ] ]) {
+      const http2 = (name, title) => {
+        const option = hs.taboption(tab, form.Value, `_${tab}_${name}`, title);
+        option.ucioption = name;
+        option.retain = true;
+        option.modalonly = true;
+        option.depends('version', version);
+        return option;
+      };
+
+      openbox.duration(http2('idle_timeout', _('Idle timeout')), 's', _('seconds'));
+      openbox.duration(http2('keep_alive_period', _('Keepalive period')), 's', _('seconds'));
+
+      so = http2('stream_receive_window', _('Stream receive window'));
+      so.placeholder = '6MB';
+      so.validate = openbox.validateSize;
+
+      so = http2('connection_receive_window', _('Connection receive window'));
+      so.placeholder = '15MB';
+      so.validate = openbox.validateSize;
+
+      so = http2('max_concurrent_streams', _('Maximum concurrent streams'));
+      so.datatype = 'uinteger';
+    }
+
+    fields.add(hs, 'tls', 'tls_fields', _('TLS fields'),
+      _('A JSON object of <a href="%s" target="_blank" rel="noreferrer">sing-box TLS fields</a>.')
+        .format('https://sing-box.sagernet.org/configuration/shared/tls/#outbound'), {
+        placeholder: JSON.stringify({ server_name: 'example.com', min_version: '1.2' }, null, 2)
+      });
+
+    // the dial fields used most, shown above the JSON of them all, by tag as
+    // sing-box takes them; with a detour, sing-box ignores the others
+    // also a column of the table
+    so = hs.taboption('dial', form.ListValue, '_detour', _('Outbound'));
+    so.value('', _('Direct (default)'));
+    uci.sections(openbox.profileConfig(), 'outbound')
+      .filter((section) => section.type != 'direct' && section.hidden != '1')
+      .forEach((section) => so.value(openbox.label(section)));
+    so.textvalue = function (section_id) {
+      return '%h'.format(this.cfgvalue(section_id) || _('Direct (default)'));
+    };
+    keepValue(so);
+
+    so = hs.taboption('dial', form.ListValue, '_domain_resolver', _('Domain resolver'));
+    so.value('', _('Default'));
+    uci.sections(openbox.profileConfig(), 'dns_server')
+      .filter((section) => section.type != 'fakeip')
+      .forEach((section) => so.value(openbox.label(section)));
+    so.modalonly = true;
+    so.depends('_detour', '');
+    keepValue(so);
+
+    fields.add(hs, 'dial', 'dial_fields', _('Dial fields'),
+      _('A JSON object of <a href="%s" target="_blank" rel="noreferrer">sing-box dial fields</a>.')
+        .format('https://sing-box.sagernet.org/configuration/shared/dial/'), {
+        placeholder: JSON.stringify({ detour: 'Proxy' }, null, 2),
+        bind: DIAL_OPTIONS
+      });
 
     // experimental
 
