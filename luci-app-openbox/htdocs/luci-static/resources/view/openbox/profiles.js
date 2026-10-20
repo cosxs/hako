@@ -39,20 +39,6 @@ const callUse = rpc.declare({
   expect: { '': {} }
 });
 
-const callSubscriptionSave = rpc.declare({
-  object: 'luci.openbox',
-  method: 'subscription_save',
-  params: [ 'title', 'url', 'update_interval', 'user_agent' ],
-  expect: { '': {} }
-});
-
-const callSubscriptionUpdate = rpc.declare({
-  object: 'luci.openbox',
-  method: 'subscription_update',
-  params: [ 'name' ],
-  expect: { '': {} }
-});
-
 const errors = {
   invalid_title: _('Expecting a name.'),
   exists: _('A profile with this name exists.'),
@@ -60,22 +46,12 @@ const errors = {
   not_found: _('The profile does not exist.'),
   in_use: _('The profile in use cannot be deleted.'),
   generate_failed: _('Unable to generate the config.'),
-  check_failed: _('sing-box check failed.'),
-  invalid_url: _('Expecting an http:// or https:// URL.'),
-  invalid_interval: _('Invalid update interval.'),
-  invalid_user_agent: _('Invalid User-Agent.'),
-  download_failed: _('Download failed.'),
-  invalid_json: _('The download is not a JSON config.'),
-  busy: _('Another update is running; try again later.'),
-  update_failed: _('Update failed.')
+  check_failed: _('sing-box check failed.')
 };
 
-// the menu of a profile and the tags of the table
+// the menu of a profile and the tag of the one in use
 const STYLE = `
 .openbox-tag { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 12px; line-height: 1.6; }
-.openbox-tag.local { background: #eeeeee; color: #444444; }
-.openbox-tag.subscription { background: #e6f4ea; color: #1e6b34; }
-.openbox-error { margin-top: 2px; color: #c43c35; font-size: 12px; }
 .openbox-tag.in-use { background: #2e7d32; color: #ffffff; }
 .openbox-name { padding: 0; border: 0; background: none; color: var(--primary-color-high, #0069d6); font: inherit; cursor: pointer; text-align: left; }
 .openbox-name:hover { text-decoration: underline; }
@@ -139,19 +115,6 @@ return view.extend({
     });
   },
 
-  handleUpdate(name) {
-    return callSubscriptionUpdate(name).then((res) => {
-      if (!res.result)
-        return failed(_('Unable to update %s').format(this.title(name)), res);
-
-      const title = '%h'.format(this.title(name));
-      ui.addTimeLimitedNotification(null, E('p', !res.changed ? _('%s is up to date.').format(title)
-        : res.reloaded ? _('%s updated; sing-box was reloaded.').format(title) : _('%s updated.').format(title)), 5000, 'info');
-
-      return this.refresh();
-    });
-  },
-
   // the config the profile makes, read-only, indented with two spaces
   handleView(name) {
     return callView(name).then((res) => {
@@ -161,10 +124,7 @@ return view.extend({
       }
       catch (e) {}
 
-      const url = this.profile(name)?.url;
-
       ui.showModal(_('View: %s').format(this.title(name)), [
-        url ? this.renderUrl(url) : '',
         content
           ? E('pre', { 'style': 'max-height:60vh;overflow:auto;font-size:12px;white-space:pre' }, '%h'.format(content))
           : E('p', {}, errorText(res)),
@@ -174,41 +134,9 @@ return view.extend({
     });
   },
 
-  // the URL of a subscription, read-only, with a button that copies it
-  renderUrl(url) {
-    const input = E('input', {
-      'type': 'text',
-      'class': 'cbi-input-text',
-      'readonly': '',
-      'value': url,
-      'style': 'flex:1;min-width:0',
-      'click': (ev) => ev.target.select()
-    });
-
-    const copy = () => {
-      // without HTTPS the browser offers no clipboard API: copy the
-      // selected text then
-      const copied = navigator.clipboard?.writeText(url) ?? new Promise((resolve, reject) => {
-        input.select();
-        document.execCommand('copy') ? resolve() : reject();
-      });
-
-      return copied.then(() => ui.addTimeLimitedNotification(null, E('p', _('Copied.')), 3000, 'info'),
-        () => ui.addTimeLimitedNotification(null, E('p', _('Unable to copy; select the URL and copy it by hand.')), 5000, 'warning'));
-    };
-
-    return E('div', { 'style': 'display:flex;align-items:center;gap:8px;margin-bottom:10px' }, [
-      E('label', { 'style': 'flex:none' }, _('Subscription URL')),
-      input,
-      button(_('Copy'), copy)
-    ]);
-  },
-
   handleDelete(name) {
     ui.showModal(_('Delete %s?').format(this.title(name)), [
-      E('p', {}, (this.profile(name)?.type == 'subscription')
-        ? _('The profile, its groups and rules, and what its subscription downloaded are deleted.')
-        : _('The profile and its nodes, groups and rules are deleted.')),
+      E('p', {}, _('The profile, its nodes, subscriptions, groups and rules are deleted.')),
       E('div', { 'class': 'right', 'style': 'display:flex;gap:6px;justify-content:flex-end' }, [
         button(_('Cancel'), ui.hideModal),
         button(_('Delete'), () => callDelete(name).then((res) => {
@@ -222,15 +150,11 @@ return view.extend({
     ]);
   },
 
-  // a new profile: its name and where it comes from; the default config is
-  // the template built into OpenBox
+  // a new profile from the template built into OpenBox, with its name; its
+  // nodes and subscriptions are added on the policy page
   handleNew() {
     const name = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:260px' });
     const message = E('div', { 'class': 'cbi-value-description' });
-    const row = (label, field) => E('div', { 'class': 'cbi-value' }, [
-      E('label', { 'class': 'cbi-value-title' }, label),
-      E('div', { 'class': 'cbi-value-field' }, field)
-    ]);
 
     const create = () => {
       if (!name.value.trim()) {
@@ -238,18 +162,7 @@ return view.extend({
         return;
       }
 
-      // a subscription is downloaded right away; hours are kept as a
-      // sing-box duration, none updates only by hand
-      const subscribe = document.querySelector('input[name="openbox-source"]:checked')?.value == 'subscription';
-      if (subscribe && !/^\d*$/.test(hours.value.trim())) {
-        message.textContent = errors.invalid_interval;
-        return;
-      }
-
-      const interval = (+hours.value > 0) ? hours.value.trim() + 'h' : '';
-      const call = subscribe ? callSubscriptionSave(name.value.trim(), url.value.trim(), interval, agent.value.trim()) : callCreate(name.value.trim());
-
-      return call.then((res) => {
+      return callCreate(name.value.trim()).then((res) => {
         if (!res.result) {
           message.textContent = errorText(res);
           return;
@@ -260,26 +173,11 @@ return view.extend({
       });
     };
 
-    const url = E('input', { 'type': 'url', 'class': 'cbi-input-text', 'style': 'width:100%', 'placeholder': 'https://example.com/sing-box.json' });
-    const hours = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:80px', 'placeholder': '24' });
-    const agent = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:100%', 'placeholder': 'sing-box/1.14 OpenBox/0.1' });
-    const subRows = E('div', { 'style': 'display:none' }, [
-      row(_('Subscription URL'), url),
-      row(_('Update interval'), E('span', {}, [ hours, ' ', _('hours') ])),
-      row(_('User-Agent'), [ agent, E('div', { 'class': 'cbi-value-description' }, _('Some providers answer in the format the User-Agent asks for; the default names sing-box and OpenBox.')) ])
-    ]);
-    const source = (value, label, checked) => E('label', { 'style': 'display:inline-flex;align-items:center;gap:6px;margin-right:20px' }, [
-      E('input', {
-        'type': 'radio', 'name': 'openbox-source', 'value': value, 'checked': checked ? '' : null,
-        'change': () => subRows.style.display = (value == 'subscription') ? '' : 'none'
-      }),
-      label
-    ]);
-
     ui.showModal(_('New profile'), [
-      row(_('Profile name'), [ name, message ]),
-      row(_('Profile source'), [ source('default', _('Default config'), true), source('subscription', _('Remote subscription')) ]),
-      subRows,
+      E('div', { 'class': 'cbi-value' }, [
+        E('label', { 'class': 'cbi-value-title' }, _('Profile name')),
+        E('div', { 'class': 'cbi-value-field' }, [ name, message ])
+      ]),
       E('div', { 'class': 'right', 'style': 'display:flex;gap:6px;justify-content:flex-end' }, [
         button(_('Cancel'), ui.hideModal),
         button(_('Create'), ui.createHandlerFn(this, create), 'positive')
@@ -316,11 +214,8 @@ return view.extend({
       }
     }, label);
 
-    const subscription = this.profile(name)?.type == 'subscription';
-
     this.menu = E('div', { 'class': 'openbox-more-menu', 'role': 'menu' }, [
       item(_('View'), () => this.handleView(name)),
-      subscription ? item(_('Update'), () => this.handleUpdate(name)) : '',
       inUse ? '' : item(_('Delete'), () => this.handleDelete(name), true)
     ]);
 
@@ -351,12 +246,8 @@ return view.extend({
             'type': 'button',
             'class': 'openbox-name',
             'click': ui.createHandlerFn(this, 'handleView', name)
-          }, '%h'.format(profile.title ?? name)),
-          profile.last_error ? E('div', { 'class': 'openbox-error' }, _('Last update failed: %s').format('%h'.format(profile.last_error))) : ''
+          }, '%h'.format(profile.title ?? name))
         ]),
-        E('td', { 'class': 'td' }, (profile.type == 'subscription')
-          ? E('span', { 'class': 'openbox-tag subscription' }, _('Subscription'))
-          : E('span', { 'class': 'openbox-tag local' }, _('Local'))),
         E('td', { 'class': 'td' }, inUse ? E('span', { 'class': 'openbox-tag in-use' }, _('In use')) : ''),
         E('td', { 'class': 'td right', 'style': 'white-space:nowrap' }, [
           inUse ? '' : button(_('Use'), ui.createHandlerFn(this, 'handleUse', name), 'action'),
@@ -368,8 +259,7 @@ return view.extend({
 
     return [
       E('tr', { 'class': 'tr table-titles' }, [
-        E('th', { 'class': 'th' }, _('Name')),
-        E('th', { 'class': 'th', 'style': 'width:120px' }, _('Type')),
+        E('th', { 'class': 'th' }, _('Profile name')),
         E('th', { 'class': 'th', 'style': 'width:90px' }, _('Status')),
         E('th', { 'class': 'th', 'style': 'width:170px' })
       ]),

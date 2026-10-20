@@ -76,11 +76,6 @@ return baseclass.extend({
     return uci.load('openbox').then(() => uci.load(this.profileConfig()));
   },
 
-  // whether the nodes of the profile in use come from a subscription
-  isSubscription() {
-    return !!uci.get(this.profileConfig(), 'profile', 'url');
-  },
-
   // the name of a section as the generator tags it
   label(section) {
     return section.tag || section['.name'];
@@ -109,7 +104,8 @@ return baseclass.extend({
   },
 
   // the outbounds to choose from, stored by section name: groups first,
-  // then nodes and direct outbounds; except leaves one out
+  // then subscriptions, each a group of its nodes, then nodes and direct
+  // outbounds; except leaves one out
   outboundChoices(option, except) {
     const isGroup = (section) => section.type == 'selector' || section.type == 'urltest';
     // a hidden group, as Global, is the one of a mode, not to be chosen;
@@ -118,6 +114,8 @@ return baseclass.extend({
       .filter((section) => section['.name'] != except && !(isGroup(section) && section.hidden == '1'));
 
     sections.filter(isGroup).forEach((section) => option.value(section['.name'], this.label(section)));
+    uci.sections(this.profileConfig(), 'subscription').filter((section) => section.enabled != '0')
+      .forEach((section) => option.value(section['.name'], _('%s (subscription)').format(this.label(section))));
     sections.filter((section) => !isGroup(section)).forEach((section) => option.value(section['.name'], this.label(section)));
   },
 

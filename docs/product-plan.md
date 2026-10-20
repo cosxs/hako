@@ -30,16 +30,17 @@
 | 运行 | procd 托管 sing-box，崩溃后自动拉起；启动前执行 `sing-box check`，不通过就不启动；重载失败时保留旧配置继续运行 |
 | 内核 | 从 GitHub 安装最新版，或上传官方 apk；要求 sing-box ≥ 1.14 |
 | 生成器 | 从 UCI 生成 sing-box 配置，写入 `/var/run/openbox/config.json`；界面可查看生成结果 |
-| 节点 | 手动添加、编辑、删除。支持 Shadowsocks、VMess、VLESS（含 Reality）、Trojan、Hysteria2（可端口跳跃）、TUIC、AnyTLS、NaiveProxy、Snell（v4/v5、v6）、SSH、SOCKS、HTTP；每个节点可在弹窗的「拨号」页用 JSON 填写 sing-box 拨号字段，前置节点（`detour`）也写在这里；Hysteria v1、ShadowTLS（只是给其他节点包一层 TLS 的前置，不单独使用；订阅里的 ShadowTLS 节点照常保留，Global 不会把它加入）、WireGuard（sing-box 1.11 起只能作为 endpoint）、Tor（需另装 tor）、bridge（三层转发）不做；订阅里的 WireGuard 等 endpoint 节点照常使用 |
+| 节点 | 手动添加、编辑、删除。支持 Shadowsocks、VMess、VLESS（含 Reality）、Trojan、Hysteria2（可端口跳跃）、TUIC、AnyTLS、NaiveProxy、Snell（v4/v5、v6）、SSH、SOCKS、HTTP；每个节点可在弹窗的「拨号」页用 JSON 填写 sing-box 拨号字段，前置节点（`detour`）也写在这里；Hysteria v1、ShadowTLS（只是给其他节点包一层 TLS 的前置，不单独使用；订阅里的 ShadowTLS 节点照常保留，订阅策略不会把它加入）、WireGuard（sing-box 1.11 起只能作为 endpoint）、Tor（需另装 tor）、bridge（三层转发）不做；订阅里的 WireGuard 等 endpoint 节点照常使用 |
 | 策略组 | 手动选择或自动测速；成员逐个添加节点和组，可拖动排序，不提供“全部节点”“全部策略组”；手动选择可设默认出站，自动测速可设闲置超时，两者都可设切换时中断现有连接；运行时可切换当前选择，并可对组内全部成员测延迟 |
 | 出站模式 | 规则判定 / 全局代理 / 直接连接，运行时切换；全局代理时国内 IP 也走代理 |
 | 透明代理 | 一个总开关，接管局域网和路由器自身的流量。接管方式二选一：TUN（sing-box 的 `auto_route` + `auto_redirect`，规则由 sing-box 设置）或 TProxy（OpenBox 设置 nft 规则和策略路由）；DNS 由 sing-box 应答，本地域名交还 dnsmasq；默认只接管 IPv4，可开启 IPv6 接管 |
 | 访问控制 | 按设备（IP 或 MAC）设置黑名单或白名单 |
 | 绕过与分流 | 内网和保留地址始终直连；国内 IP 用自带的规则集在防火墙层绕过；DNS 先问国内 DNS，国内 IP 原样返回，其余返回 FakeIP 并由节点解析 |
-| 配置文件 | 本地、订阅两种配置（见 3.1）：都基于内置模板新建，设置页编辑当前配置；订阅配置的节点来自订阅，只读，其余可编辑 |
+| 订阅 | 在策略页的「订阅节点」添加，一份配置可以有多个订阅，和手动节点并列；订阅只提供节点，一个订阅一行，「详情」弹窗只读列出它的节点、可测延迟；每个订阅也是一个策略（手动选择或自动测速），策略组和规则都能选它；所有配置的订阅都定时更新（见 3.1.1） |
+| 配置文件 | 配置都基于内置模板新建（见 3.1），设置页编辑当前配置 |
 | 日志 | 日志设置在页面上方：自动清理（默认开启）、保留天数（默认 7 天）、内核日志级别；下方插件日志和内核日志分两个标签，只显示当天的日志并自动刷新，「清空」只清空显示、不删除文件；后台按天保存，每天零点轮转 |
 
-**M1 不做**（之后再定）：分享链接导入、订阅、redirect 接管模式、自定义 JSON 片段（DNS 规则除外）。
+**M1 不做**（之后再定）：分享链接导入、订阅的格式转换（Clash、分享链接、base64）、redirect 接管模式、自定义 JSON 片段（DNS 规则除外）。
 
 **完成标准**：在 x86_64 虚拟机和一台 arm64 真机上，只用表单添加一个节点就能跑通透明代理；访问控制生效；停止服务后路由、nft 规则和 DNS 都恢复原状。
 
@@ -49,39 +50,63 @@
 
 > **基线版本**：插件还在开发阶段，只有一台实机（N100），这一版的配置结构作为基线，不为之前的版本写迁移：`main.config_version` 从 `1` 重新开始，`migrate.uc` 的旧步骤全部删掉，实机重装默认配置。此后改动默认值，照 3.3.3 逐级加迁移步骤。
 
-设置分两层，参考 Surge：**设备设置**跟着路由器走，切换配置不受影响；**配置内容**跟着配置走，策略、路由规则和内核设置页编辑的就是当前使用的配置。
+设置分两层，参考 Surge：**设备设置**跟着路由器走，切换配置不受影响；**配置内容**跟着配置走，策略、规则和内核设置页编辑的就是当前使用的配置。
 
 | 层级 | 内容 | 存放 |
 | --- | --- | --- |
 | 设备设置 | 启用、当前配置（`main.profile`）、出站模式、接管（TUN / TProxy、DNS 入站、代理端口、绕过）、访问控制、Clash API 与缓存文件、插件设置（测速）、日志保留 | `/etc/config/openbox` |
 | 配置内容 | 节点、策略组、路由规则、规则集、默认出站等路由设置、DNS、sing-box 日志级别、NTP | 每份配置一个 UCI 包 `/etc/config/openbox_<标识>` |
 
-配置有两种，都是一个配置包，设置页都能编辑：
+每份配置是一个配置包，都基于插件内置的模板 `/usr/share/openbox/template/openbox_template` 新建，设置页编辑当前配置；节点和订阅都在策略页增删改（订阅见 3.1.1）。
 
-| 类型 | 怎么来 | 节点 |
-| --- | --- | --- |
-| 本地 | 新建时来源选「默认配置」：复制插件内置的模板 `/usr/share/openbox/template/openbox_template` | 在策略页增删改 |
-| 订阅 | 新建时来源选「远程订阅」：同样复制模板，再在包里的 `config profile 'profile'` 记下 `url`、`update_interval`、`user_agent` | 全部来自订阅，随订阅更新；策略页只读列出，不能新增、编辑或删除，只能测试延迟 |
-
-订阅只提供节点：订阅返回完整的 sing-box JSON，下载到 `/etc/openbox/subscriptions/<标识>.json`，生成时只取其中的节点，策略组、规则、DNS 等全部用配置包自己的，所以不会和设备设置冲突。新建后订阅的节点只自动出现在 Global 里，要在 Proxy 等策略组里使用，需在组的出站标签里逐个添加（按名字引用）。
-
-- **配置名与标识**：配置名可以是任意文字（去掉首尾空格后不能为空，也不能和已有的重名），只用来显示，存在包里 `config profile 'profile'` 的 `title`。内部标识在新建时自动取当前的毫秒时间戳（13 位，被占用时加 1），用作包名 `openbox_<标识>` 和订阅文件名，`main.profile` 记的也是它；没有 `title` 时显示标识（如 `default`）。
-- **默认配置**：首次安装由模板创建 `openbox_default` 并设为当前配置。它和其他本地配置一样可以编辑、删除；需要时随时可以再基于内置模板新建。
-- **删除**：使用中的配置不能删除；删除订阅配置时，下载的内容一起删掉。
+- **配置名与标识**：配置名可以是任意文字（去掉首尾空格后不能为空，也不能和已有的重名），只用来显示，存在包里 `config profile 'profile'` 的 `title`。内部标识在新建时自动取当前的毫秒时间戳（13 位，被占用时加 1），用作包名 `openbox_<标识>` 和订阅的下载目录名，`main.profile` 记的也是它；没有 `title` 时显示标识（如 `default`）。
+- **默认配置**：首次安装由模板创建 `openbox_default` 并设为当前配置。它和其他配置一样可以编辑、删除；需要时随时可以再基于内置模板新建。
+- **删除**：使用中的配置不能删除；删除配置时，它的订阅下载的内容一起删掉。
 - 之前的原生 JSON 配置（`/etc/openbox/profiles/*.json`，上传、粘贴、编辑 JSON）不再支持，界面上的「查看」只显示生成的 JSON。
 
-运行的配置由当前配置和设备设置生成（`generate.uc`），写入 `/var/run/openbox/config.json`，经 `sing-box check` 后运行。配置包有 `profile.url` 时，生成器把订阅 JSON 中 `outbounds` 和 `endpoints` 里的节点（`direct`、`block`、`dns`、`selector`、`urltest` 以外的类型）追加进来：
+运行的配置由当前配置和设备设置生成（`generate.uc`），写入 `/var/run/openbox/config.json`，经 `sing-box check` 后运行。
 
-- 与配置包里出站重名的订阅节点跳过并给出警告。
-- 策略组的成员和路由规则可以按名字引用它们；Global 自动包含它们。
-- 订阅节点的 `detour` 只保留指向其他订阅节点的；`domain_resolver` 指向配置里没有的 DNS 服务器（多半是订阅自己的）时去掉，改用路由的默认解析服务器。
+#### 3.1.1 订阅
 
-订阅更新后，如果当前使用的正是这份配置，就重载（见 3.3.4）。
+> 之前的「订阅配置」（新建配置时来源选「远程订阅」，整份配置的节点来自一个订阅，记在 `config profile 'profile'` 的 `url` 等）已经取消，配置不再分本地和订阅两种；升级时由迁移步骤转成带一个订阅的普通配置（见 3.3.3）。
 
-实现分两步，每步都能单独发布：
+订阅是配置的一个节点来源，也是一个策略：和策略组一样可以被策略组和规则选用，参考 Surge 的外部策略（policy-path）：
+
+- **一份配置多个订阅**：每个订阅是配置包里的一个 `config subscription`（见 3.2）。section 名在添加时自动生成（`sub_` 加毫秒时间戳），之后不变；`tag` 是订阅名，在订阅之间唯一，也不能和出站的 `tag` 重名。
+- **节点名前缀**：订阅的节点都以「前缀 · 原名」命名（`prefix`，不写时用订阅名），如 `机场 A · 香港 01`，所以不同订阅的节点不会重名；订阅节点之间的 `detour` 随之改名。前缀在订阅之间唯一（不写前缀的按订阅名算）。
+- **只提供节点**：订阅返回完整的 sing-box JSON，下载到 `/etc/openbox/subscriptions/<配置标识>/<订阅 section 名>.json`，生成时只取其中 `outbounds` 和 `endpoints` 里的节点（`direct`、`block`、`dns`、`selector`、`urltest` 以外的类型）；策略组、规则、DNS 等全部用配置包自己的，所以不会和设备设置冲突。
+- **订阅即策略**：每个订阅生成一个和订阅同名的组，成员是它的全部节点（按订阅里的顺序，不含 ShadowTLS 节点），订阅更新后自动跟着变。组的类型可选手动选择（默认，`group_type` 不写）或自动测速（`group_type 'urltest'`，测速地址取插件设置）；手动选择时在策略页的订阅表格里切换当前出站。
+- **立即生效**：订阅的添加、编辑、删除和更新经 rpcd 直接写入并提交配置包，不经「保存并应用」，与配置文件页的操作一致；这份配置正在使用且服务在运行时重载。
+  - 添加时先下载一次，失败就不保存。
+  - 编辑时改了订阅地址或 User-Agent 也先重新下载，失败则不保存修改，原来的内容不动；只改名称或更新间隔时直接保存。
+  - 删除时一并删除下载的内容，以及各策略组里对这个订阅的整体引用（对其中单个节点的引用留着，由生成器丢弃并警告）。
+- **都定时更新**：所有配置的订阅都按各自的更新间隔更新，不论配置是否在使用（见 3.3.4）。
+
+策略组和规则这样使用订阅：
+
+- **订阅策略**：策略组的出站标签、路由规则的出站、默认出站里选这个订阅（存订阅的 section 名，如 `list outbounds 'sub_1792230866123'`），生成为对它的组的引用。策略组的下拉框只列订阅这一项，不列它的单个节点，具体用哪个节点在订阅策略里切换。比如一个策略组列出两个订阅，就能在两家机场之间切换；参考 Surge 的 policy-path 和 mihomo 的 `use`。
+- **单个节点**：以前选过的单个订阅节点（按带前缀的节点名，如 `list outbounds '机场 A · 香港 01'`）仍然有效，页面上不再提供；订阅更新后节点名变了，这个引用就失效，生成时丢弃并警告。
+
+全局模式的 Global 不包含订阅的节点，但和包含其他策略组一样包含各订阅策略，排在策略组之后。订阅的组名和配置里的出站或订阅节点重名时不生成，对它的引用丢弃并警告。
+
+策略组还可以**包含订阅节点**（参考 Surge 的 `include-other-group` 和 `policy-regex-filter`）：
+
+- **包含**：`list include '<订阅 section 名>'`，只能选订阅。生成时把这些订阅的节点（不含 ShadowTLS）直接作为本组的成员，排在出站标签列出的成员之后，按 `include` 的顺序，重复的去掉。比如一个自动测速组包含「机场 A」「机场 B」，就是在两家机场的全部节点里选最快的；和把两个订阅策略列进出站标签不同，那样只能在两个订阅各自当前选的节点之间选。
+- **节点筛选**：`option filter '<正则>'`，只作用于包含进来的订阅节点，出站标签里列出的成员不受影响。按节点的原名匹配（不带前缀，前缀不会误匹配），不区分大小写，比如 `hong kong|japan` 只取香港和日本的节点；不写就取全部。正则无效时，包含进来的节点一个都不取，并给出警告，以免本该只走某地的组用上了别的节点。
+- 订阅没有节点或已关闭时跳过并警告；订阅里只有节点，包含不会让组之间形成循环。
+
+生成时（`generate.uc`）：
+
+- 按订阅在配置里的顺序取节点，名字加上订阅的前缀；加上前缀后仍与配置包里出站重名的、与前面订阅的节点重名的（前缀本身唯一，只在前缀和原名拼起来恰好相同时才会发生）跳过，并警告是哪个订阅的哪个节点。
+- 没下载过的订阅没有节点，给出警告；没有节点或 `enabled '0'` 的订阅不生成组，对它的引用丢弃并警告。
+- 出站引用按这个顺序查找：出站（section 名或 tag）、订阅（section 名或 tag）、订阅里的节点名。
+- 订阅节点的 `detour` 只保留指向同一订阅里其他节点的，并改成那个节点加前缀后的名字；`domain_resolver` 指向配置里没有的 DNS 服务器（多半是订阅自己的）时去掉，改用路由的默认解析服务器。
+
+实现分步进行，每步都能单独发布：
 
 1. **配置包**：设备设置和配置内容拆开，`generate.uc` 读当前配置包；`config_version` 重置为 1；配置文件页按设计稿重写（列表、「使用」和「更多」菜单、新建、查看弹窗）；各设置页改为编辑当前配置包。
-2. **订阅**：新建时可选「远程订阅」，订阅只提供节点，可自定义 User-Agent；策略页的订阅节点只读、可测延迟。
+2. **订阅**（已被第 3 步取代）：新建配置时可选「远程订阅」，订阅只提供节点，可自定义 User-Agent；策略页的订阅节点只读、可测延迟。
+3. **订阅移到策略页**（见 3.1.1）：数据模型与迁移（`config_version` 2）、生成器、`subscription.sh` 与 rpcd、策略页的「订阅节点」、配置文件页去掉订阅类型，一次发布。
 
 > **技术验证结论**（OpenWrt 25.12 容器，sing-box 1.14.3）：`tun` 入站的 `auto_route` + `auto_redirect` 能接管局域网设备和路由器自身的流量。TCP 经 nftables 重定向，UDP 经策略路由进入 TUN；sing-box 自建 `inet sing-box` 表，与 fw4 互不影响，重启防火墙不丢接管，停止后清理干净。节点不可用时流量不会泄露为直连。TProxy 由 OpenBox 自建 `inet openbox` 表和策略路由，同样逐项验证通过。
 
@@ -89,12 +114,12 @@
 
 原则：**所有配置都来自 UCI**，生成器里不写任何具体的值，只负责翻译和必要的计算。
 
-下面的 section 按 3.1 分在两个包里：类型为 `openbox`（`main`、`logs`、`latency`、`firewall`）、`inbound`、`experimental` 的属于设备设置，在 `openbox`；其余（`log`、`dns`、`dns_server`、`dns_rule`、`ntp`、`route`、`rule_set`、`http_client`、`outbound`、`route_rule`）属于配置，在当前配置的包里。软件包附带的默认值也分两份：`openbox.conf` 是设备设置，`template/openbox_template` 是新建配置时复制的模板（装到 `/usr/share/openbox/template/`，这个目录本身可以当 UCI 目录读）。设备设置引用的规则集（如 `route_exclude_address_set`、`firewall.bypass_rule_set` 的 `cn_ip`）在当前配置里查找。界面上，接管、插件设置和日志页编辑 `openbox`；策略、路由规则和内核设置页编辑当前配置的包，内核设置的「实验性」（Clash API、缓存文件）和接管页的 DNS 模式、FakeIP 地址段例外，分别写到另一个包。ACL 用 `openbox_*` 放行所有配置包。
+下面的 section 按 3.1 分在两个包里：类型为 `openbox`（`main`、`logs`、`latency`、`firewall`）、`inbound`、`experimental` 的属于设备设置，在 `openbox`；其余（`profile`、`subscription`、`log`、`dns`、`dns_server`、`dns_rule`、`ntp`、`route`、`rule_set`、`http_client`、`outbound`、`route_rule`、`route_subrule`）属于配置，在当前配置的包里。软件包附带的默认值也分两份：`openbox.conf` 是设备设置，`template/openbox_template` 是新建配置时复制的模板（装到 `/usr/share/openbox/template/`，这个目录本身可以当 UCI 目录读）。设备设置引用的规则集（如 `route_exclude_address_set`、`firewall.bypass_rule_set` 的 `cn_ip`）在当前配置里查找。界面上，接管、插件设置和日志页编辑 `openbox`；策略、规则和内核设置页编辑当前配置的包，内核设置的「实验性」（Clash API、缓存文件）和接管页的 DNS 模式、FakeIP 地址段例外，分别写到另一个包。ACL 用 `openbox_*` 放行所有配置包。
 
 命名约定：
 - **能用 sing-box 的就以 sing-box 为准**：section 类型是 sing-box 的顶层键（数组元素用单数，如 `outbound`、`route_rule`），section 名是下一层的键或元素的内部标识，option 沿用 sing-box 字段名，嵌套字段用 `_` 连接（`tls.server_name` → `tls_server_name`）。
 - **OpenBox 自己加的概念参考 mihomo 命名**：`hidden`。
-- 引用（`outbounds`、`default`、`final`、`outbound`、`detour`、`server`、`domain_resolver`、`default_domain_resolver`、`rule_set`、`route_exclude_address_set`、`http_client`）可以写 section 名或 tag，先按 section 名查找；节点 `dial_fields` 里的 JSON 原样使用，只能写 tag。
+- 引用（`outbounds`、`default`、`final`、`outbound`、`detour`、`server`、`domain_resolver`、`default_domain_resolver`、`rule_set`、`route_exclude_address_set`、`http_client`）可以写 section 名或 tag，先按 section 名查找；策略组的 `outbounds`、规则的 `outbound` 和 `final` 还可以写订阅（订阅策略），策略组也可以写订阅里的节点名（见 3.1.1）；节点 `dial_fields` 里的 JSON 原样使用，只能写 tag。
 - DNS 服务器等 UCI 里的 `detour` 不能指向 direct 类型的出站（sing-box 会报错），生成时忽略并给出警告；留空就是直连。
 - 生成器按字段类型表转换布尔、数字和列表；表中没有的 option 会被跳过并给出警告。
 
@@ -102,10 +127,10 @@
 
 ```
 config openbox 'main'              # OpenBox 自身的设置
-    option config_version '13'      # 配置格式的版本，升级时由迁移脚本逐级更新（2：加入 mixed 入站；3：固定的路由规则标 hidden；4：local 改为 local 类型，AliDNS 改名 alidns；5：FakeIP 加 IPv6 地址段；6：绕过的 IPv6 地址 fc00::/7 改为 fd00::/8；7：删掉 dnsmasq 服务器，局域网域名改用 local；8：拒绝 QUIC 改按嗅探到的协议；9：开启 find_neighbor；10：TUN 接管也启用 dns_in，供 dnsmasq 转发；11：FakeIP 的 IPv6 地址段 fc00::/18 改为 2001:2::/48；12：FakeIP 应答的 TTL 改为 1 秒；13：加入插件设置的测速段 latency）
+    option config_version '2'      # 配置格式的版本，升级时由迁移脚本逐级更新（1：基线，见 3.1；
+                                   # 2：订阅从「订阅配置」改为配置包里的 config subscription，见 3.1.1）
     option enabled '0'
-    option source 'model'          # model | profile
-    option profile ''              # source 为 profile 时使用的文件
+    option profile 'default'       # 当前配置的标识，即配置包 openbox_<标识>
     # option mode 'Global'         # 出站模式：在活动页选择后立即写入并重载，由 OpenBox 经 clash API 设到 sing-box；
                                    # 也决定国内 IP 是否在防火墙层绕过；没有时取 clash_api.default_mode
 
@@ -118,13 +143,19 @@ config openbox 'latency'           # 测速，OpenBox 自己的概念；插件�
                                    # 自动测速组没写 url 时，生成器也用它；不写时 sing-box 用 https://www.gstatic.com/generate_204
     # option timeout '5s'          # 手动测速的超时，sing-box 时长写法（界面按秒填），最多 15 秒；自动测速组的超时由 sing-box 固定
 
-config profile 'profile'           # 示例：配置包里的这一段（在 openbox_<标识> 里，不在 openbox 里），OpenBox 自己的概念，生成器只读 url
-    option title '机场 A'           # 配置名，任意文字，只用来显示
-    option url 'https://example.com/sing-box.json'  # 订阅配置才有：返回完整的 sing-box JSON 配置（http / https），只取其中的节点
+config profile 'profile'           # 示例：配置包里的这一段（在 openbox_<标识> 里，不在 openbox 里），OpenBox 自己的概念，生成器不读
+    option title '家里'             # 配置名，任意文字，只用来显示
+
+config subscription 'sub_1792230866123'  # 示例：订阅（见 3.1.1），OpenBox 自己的概念；在配置包里，可以有多个
+    option tag '机场 A'             # 订阅名，在订阅之间唯一，也不能和出站的 tag 重名
+    # option group_type ''         # 订阅策略的类型：不写为手动选择（selector），'urltest' 为自动测速
+    # option prefix ''             # 节点名前缀：节点名为「前缀 · 原名」，不写时用订阅名；在订阅之间唯一
+    option url 'https://example.com/sing-box.json'  # 返回完整的 sing-box JSON 配置（http / https），只取其中的节点
     option update_interval '24h'   # sing-box 时长写法（界面按小时填）；不写或 '0' 时只手动更新
     option user_agent ''           # 不写时为 sing-box/<内核版本> OpenBox/<插件版本>
     option last_update '1792230866'  # 由 subscription.sh 写入：最近一次成功更新的时间（epoch）
     # option last_error ''         # 由 subscription.sh 写入：最近一次失败的原因，成功后删除
+    # option enabled '0'           # 停用：不生成它的节点
 
 config log 'log'                   # → log
     option level 'warn'            # info 及更低级别会为每个连接记录日志
@@ -339,7 +370,7 @@ config outbound 'hk01'             # 节点示例
 config outbound 'proxy'            # 策略组也是 outbound
     option tag 'Proxy'
     option type 'selector'         # selector | urltest
-    list   outbounds 'hk'          # sing-box：成员，按列出的顺序；订阅节点按名字引用
+    list   outbounds 'hk'          # sing-box：成员，按列出的顺序；订阅写订阅的 section 名（订阅策略），订阅里的单个节点按带前缀的名字（见 3.1.1）
     list   outbounds 'direct'
     option default ''              # sing-box：selector 的默认出站，必须是成员，否则忽略并警告；留空用第一个成员
     option interrupt_exist_connections '0'  # sing-box：当前出站改变时中断现有连接（两种组都可用）
@@ -353,13 +384,15 @@ config outbound 'final'            # 规则都没命中的流量走这个组（r
 config outbound 'global'           # 全局模式使用的组
     option tag 'Global'
     option type 'selector'
-    option hidden '1'              # 隐藏的组自动包含全部节点、Direct 和所有未隐藏的组；组不会包含隐藏的组，所以不会形成循环
+    option hidden '1'              # 隐藏的组自动包含配置自己的全部节点（不含订阅节点）、Direct 和所有未隐藏的组；组不会包含隐藏的组，所以不会形成循环
 
 config outbound 'hk'               # 示例：在列出的节点中自动测速
     option tag '香港'
     option type 'urltest'
     list   outbounds 'hk01'
     list   outbounds 'hk02'
+    # list include 'sub_1792230866123'  # OpenBox：包含这个订阅的节点，排在 outbounds 之后（见 3.1.1）
+    # option filter 'hong kong|hk'  # OpenBox：只取原名匹配这个正则（不区分大小写）的订阅节点；只作用于 include
     option interval '3m'
     option idle_timeout ''         # sing-box：闲置超过这个时间后暂停测速，默认 30m
 
@@ -429,7 +462,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 | 部分 | 生成内容 |
 | --- | --- |
 | 日志 | `config log 'log'` |
-| 出站 | 每个启用的 `outbound` 一个出站。策略组的成员就是 `outbounds` 列出的，按列出的顺序（即弹窗里拖动排好的顺序）；隐藏的组（全局模式的 Global）再自动带上没列出的全部节点（含订阅节点）、Direct 和所有未隐藏的组。不提供「包含全部节点 / 全部策略组」。防环：列出的组若已直接或经其他组包含本组（隐藏的组算作包含所有未隐藏的组），就丢弃这个引用并警告（页面保存时已拦截，这里是保底，防导入或手改 UCI 造成的循环），例如 Proxy、Final 互相列出时两边都丢弃对方；`sing-box check` 查不出组的循环，要到启动时才报 circular outbound dependency 而无法启动 |
+| 出站 | 每个启用的 `outbound` 一个出站。策略组的成员就是 `outbounds` 列出的，按列出的顺序（即弹窗里拖动排好的顺序），再加上 `include` 的订阅里原名匹配 `filter` 的节点（见 3.1.1）；每个有节点的订阅生成一个同名的组，列出的订阅就是它（见 3.1.1）；隐藏的组（全局模式的 Global）再自动带上没列出的配置自己的节点（不含订阅节点）、Direct、所有未隐藏的组和各订阅的组。不提供「包含全部节点 / 全部策略组」。防环：列出的组若已直接或经其他组包含本组（隐藏的组算作包含所有未隐藏的组），就丢弃这个引用并警告（页面保存时已拦截，这里是保底，防导入或手改 UCI 造成的循环），例如 Proxy、Final 互相列出时两边都丢弃对方；`sing-box check` 查不出组的循环，要到启动时才报 circular outbound dependency 而无法启动 |
 | 入站 | 启用的 `config inbound`：`tun`，或 `tproxy` 加 `direct`（DNS）；另有可单独启用的 `mixed`（代理端口，`username` / `password` 生成为 `users`）；启用 TProxy 时 `route.default_mark` 取 `firewall.output_mark`。都关闭时不生成入站，sing-box 只提供出站模式和组切换 |
 | 路由规则 | `config route_rule` 按顺序生成；默认动作 `route` 必须有有效的 `outbound`，否则跳过并警告；逻辑规则写作 `type 'logical'`、`mode`（and / or）和一个 `id`；它的子规则是单独的 `config route_subrule`，用 `option rule '<id>'` 指向它，按配置里的顺序生成为 `rules`；子规则只有匹配条件（字段同标准规则，外加 `invert`），或者用 `json` 原样写一条（多个条件、嵌套 logical）；没有条件的子规则跳过并警告，没有子规则的逻辑规则也跳过并警告；`hidden` 只用于界面，不生成；`final` 取 `route.final` 指向的节点或组 |
 | 规则集 | `config rule_set` → `route.rule_set`；`config http_client` → `http_clients`，供远程规则集下载；引用的 HTTP 客户端不存在时去掉引用并警告，改用默认的；一个 HTTP 客户端都没定义、又有远程规则集或 Hysteria2 realm 时，生成器补一个 tag 为 `Default` 的，经 `route.final` 出去（`route.final` 是 Direct 出站时直连），和 sing-box 1.16 前的隐式默认一致 |
@@ -476,17 +509,18 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 
 `/etc/config/openbox` 是配置文件，升级时保留，默认值的改动不会自动出现在老用户的配置里。`main.config_version` 记录配置格式的版本；软件包附带的 uci-defaults 脚本在每次安装或升级时运行 `migrate.uc`，按版本逐级执行迁移步骤（例如补上新增的 section），最后把版本号更新到最新。新安装的配置已是最新版本，不执行任何步骤。改动默认值时，必须同时加一个迁移步骤。基线版本（见 3.1）从版本 1 重新开始，之前的步骤不再保留。
 
+迁移步骤也可以改配置包：版本 2（订阅移到策略页）对每个带 `profile.url` 的配置包，新建一个 `config subscription`（section 名 `sub_` 加配置标识，`tag` 取配置名），把 `url`、`update_interval`、`user_agent`、`last_update`、`last_error` 从 `profile` 段移过去，并把下载的内容从 `/etc/openbox/subscriptions/<标识>.json` 移到 `/etc/openbox/subscriptions/<标识>/sub_<标识>.json`。订阅的节点从此带前缀（订阅名），所以配置里按原名引用订阅节点的地方（策略组的 `outbounds`、`default`，路由规则的 `outbound`，`route.final`，DNS 服务器的 `detour`；配置自己的出站同名时不算）一并改成带前缀的名字。
+
 ### 3.3.4 订阅更新
 
-订阅是一个返回完整 sing-box JSON 配置的 URL，记在订阅配置的包里（`config profile 'profile'` 的 `url`、`update_interval`、`user_agent`，以及由脚本写入的 `last_update`、`last_error`），下载后存为 `/etc/openbox/subscriptions/<标识>.json`，生成时只取其中的节点（见 3.1）。新建时立即下载，第一次下载失败就不保留这份配置。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <file>` 更新一个，`due` 更新到期的）：
+订阅（`config subscription`，见 3.1.1）是一个返回完整 sing-box JSON 配置的 URL，下载后存为 `/etc/openbox/subscriptions/<配置标识>/<订阅 section 名>.json`，生成时只取其中的节点。不做 Clash 格式、分享链接或 base64 转换。更新由 `/usr/share/openbox/subscription.sh` 完成（`update <配置标识> <订阅 section 名>` 更新一个，`due` 更新所有配置里到期的）：
 
-- **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新时 10 秒，LuCI 的调用 20 秒超时）；UA 用配置里的 `user_agent`，不写时为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
-- **校验**：必须是 JSON 对象，且通过 `sing-box check`（没装内核时跳过检查）；任何一步失败都不动原文件，原因写进 `last_error`。
+- **下载**：`uclient-fetch`，超时 30 秒（页面上手动更新、添加和编辑时 10 秒，LuCI 的调用 20 秒超时）；UA 用订阅的 `user_agent`，不写时为 `sing-box/<内核版本> OpenBox/<插件版本>`（没装内核时只有 OpenBox 部分），让订阅服务端返回 sing-box 格式。
+- **校验**：必须是 JSON 对象，且通过 `sing-box check`（没装内核时跳过检查）；任何一步失败都不动原文件，原因写进订阅的 `last_error`。
 - **替换**：内容与原文件相同时不写闪存、不重载；否则先复制到同目录的临时文件，再改名原子替换。成功后写 `last_update`、删掉 `last_error`。
-- **使用中则重载**：`main.profile` 正是这份配置，并且服务在运行，就执行 `/etc/init.d/openbox reload`。
-- **定时**：服务运行期间，`/etc/crontabs/root` 里带 `#openbox` 标记的一行每小时（第 30 分）执行 `subscription.sh due`，与日志轮转一起随服务启停写入、删除；所以 **OpenBox 停止时订阅不会自动更新**。距 `last_update` 达到 `update_interval`（留 5 分钟余量，避免每小时的检查刚好差几秒）或从未更新过的才下载。
+- **使用中则重载**：订阅所在的配置正是 `main.profile`，并且服务在运行，就执行 `/etc/init.d/openbox reload`；一次 `due` 更新了同一配置的多个订阅时只重载一次。
+- **定时**：服务运行期间，`/etc/crontabs/root` 里带 `#openbox` 标记的一行每小时（第 30 分）执行 `subscription.sh due`，与日志轮转一起随服务启停写入、删除；所以 **OpenBox 停止时订阅不会自动更新**。`due` 遍历所有配置包里的订阅，不论配置是否在使用；距 `last_update` 达到 `update_interval`（留 5 分钟余量，避免每小时的检查刚好差几秒）或从未更新过的才下载。
 - 同一时间只有一次更新（`flock`）；页面上手动更新时如果正有更新在进行，提示稍后再试。输出同时写进插件日志 `app.log`。下载失败不影响正在运行的服务。
-- 在配置文件页添加订阅时先下载一次；第一次就失败的新订阅不保存。已有同名的普通文件时报错，不会把它变成订阅。删除文件时一并删除它的订阅。
 
 ### 3.4 组件
 
@@ -494,7 +528,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 LuCI JS 界面（form.Map 直接读写 UCI）
    │ ubus / rpcd
    ▼
-rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点和延迟（经 clash API）；配置的列表、新建（复制模板）、查看（生成的 JSON）、删除、切换
+rpcd ucode 插件（luci.openbox）：状态、内核安装、可选的出站模式、组的当前节点和延迟（经 clash API）；配置的列表、新建（复制模板）、查看（生成的 JSON）、删除、切换；当前配置的订阅：列表（含各订阅的节点和更新状态）、添加、编辑、删除、更新
    │
    ▼
 /etc/init.d/openbox（procd）
@@ -523,7 +557,7 @@ openbox/
 │       ├── run.sh              # procd 运行它，它运行 sing-box 并管理 TProxy 规则
 │       ├── common.sh
 │       ├── core-install.sh
-│       ├── subscription.sh     # 下载、检查并替换订阅的内容（subscriptions/<标识>.json）；cron 每小时执行 due
+│       ├── subscription.sh     # 下载、检查并替换订阅的内容（subscriptions/<配置标识>/<订阅>.json）；cron 每小时执行 due
 │       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
 │       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
 │                               # clash.uc、config.uc、profile.uc 为共享模块，装到 /usr/share/ucode/openbox/
@@ -550,13 +584,35 @@ openbox/
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式（单选切换，选中立即生效；配置里只有一种模式时只显示名称，未启用 clash API 时不显示）、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 OpenBox 接管」 |
 | 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
-| 策略 | sing-box 的出站都在这里，只有策略组和节点，「添加」按钮在各自列表底部（LuCI 默认位置）。策略组列表：名称、类型、当前出站（参考 Surge：点击弹出菜单，列出全部成员及 sing-box 测得的延迟，手动选择组在此切换；「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置，无响应的显示为超时，延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色），增删改（名称、类型、出站标签、默认出站、自动测速参数和闲置超时、中断现有连接；出站标签用 LuCI 原生的动态列表，可拖动排序，生成时按这个顺序，下拉框按节点（含订阅节点）、Direct、策略组排列；保存时提示循环引用并拦截：列出的组若已直接或经其他组包含本组，列表标红并提示「在策略组中发现了循环引用：<组名>」（参考 Surge），不能保存，判断与生成器的防环一致，默认出站也不列出这样的成员）；全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；sing-box 未运行时当前出站显示「未运行」，新加的组显示「保存并应用后生效」；节点列表：名称、协议、服务器、延迟（任一组测得的结果），上方有「延迟测试」（测 Global 组即测全部节点），不能拖动排序，增删改，按协议显示对应字段（凭据、TLS / Reality、传输方式）；订阅配置的节点列表改为只读列出订阅的节点（经 `subscription_nodes`），只能测试延迟。当前出站立即生效，其余保存并应用后生效 |
+| 策略 | 策略组、节点和订阅节点，见下方「策略页」 |
 | 规则 | 从上到下平铺三块：设置、规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值；弹窗分「标准规则」「逻辑规则」两个标签页（参考 Surge 的标准规则和 AND/OR 规则），保存时停在哪个标签页，规则就是哪种（逻辑规则写入 `type 'logical'`，不留自己的匹配条件；标准规则不留 `mode`、`id` 和子规则）；动作、出站、拒绝方式、反向匹配、注释两个标签页各有一份，切换时带过去，保存时只写当前这份；编辑已有规则时打开在它那种的标签页；启用只在表格里切换；逻辑规则填模式 and / or 和子规则：子规则是标签页里嵌的 LuCI 原生表格（参考 Surge 的子规则表格），列出类型和值，可增删、拖动排序；添加或编辑时叠一层弹窗，和标准规则一样左边选规则类型、右边填值，另有反向匹配，类型多一个「JSON」，写类型表达不了的（多个条件、嵌套 logical）；打开子规则弹窗前先保存逻辑规则这一层（LuCI 叠放弹窗的做法），逻辑规则第一次加子规则时生成 `id`；删除逻辑规则、取消新建的逻辑规则或把它改成标准规则时，它的子规则一起删除；子规则只写匹配条件，动作用外层这条规则的；表格里照 Surge 的写法一行显示：类型为 AND / OR，值为子规则的表达式，如 `((domain_suffix,netflix.com), (NOT,((port,443))))`，反向的子规则包一层 NOT，JSON 写的也换成这种写法；子规则表格里 JSON 的值同样这样显示）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集。设置：按 sing-box 文档顺序列出路由器用得上的 `route` 字段：默认出站 `final`、邻居解析 `find_neighbor`、DHCP 租约文件 `dhcp_lease_files`、默认 HTTP 客户端 `default_http_client`（留空时 sing-box 用第一个 HTTP 客户端，空选项据此显示「第一个 HTTP 客户端」；一个都没定义时显示「未定义 HTTP 客户端」，这时会经默认出站下载，1.14 已废弃、1.16 移除；规则集的「下载方式」和 Hysteria2 realm 的「HTTP 客户端」留空则跟随这里，空选项显示「默认 HTTP 客户端」）、默认域名解析服务器 `default_domain_resolver`（只列直连、且不是 local 的 DNS 服务器：节点连上之前要靠它解析自己的服务器域名，走代理的会卡死，local 会绕回 sing-box）；不列出 `auto_detect_interface`（生成器总是开启）、`default_interface`、`find_process`、多网卡策略（`default_network_strategy`、`default_network_type`、`default_fallback_network_type`、`default_fallback_delay`），以及 OpenBox 在 TProxy 时自动设置的 `default_mark`（取防火墙的 `output_mark`） |
 | 设备 | 访问控制模式与设备列表 |
 | 内核设置 | 二级标签依次为：日志（级别、时间戳）、DNS（默认服务器（不列出 local：OpenBox 运行时 dnsmasq 把查询交回 sing-box，没命中规则的查询会绕回来）、解析策略、乐观缓存、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、HTTP 客户端（顶层 `http_clients` 的列表；弹窗和节点一样分标签页：基本（标签、HTTP 版本 1 / 2 / 3、禁用版本回退、请求头）、HTTP2（版本 2 时显示）、QUIC（版本 3 时显示，含 HTTP2 字段）、TLS（TLS 字段 JSON）、拨号（固定显示出站 `detour` 和域名解析服务器 `domain_resolver`，按 tag 选择，与下方拨号字段 JSON 双向同步，只存 JSON；选了出站时 sing-box 忽略其他拨号字段，域名解析服务器随之隐藏）；供规则页的默认 HTTP 客户端、规则集的下载方式和 Hysteria2 realm 选用）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
-| 配置文件 | 一张表列出全部配置：配置名（点击查看；订阅上次更新失败时下面一行红字写原因）、类型（本地 / 订阅）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单——本地：查看、删除；订阅：查看、更新、删除（使用中的不显示删除）。「查看」在弹窗里只读显示生成的 JSON（两个空格缩进）。「新建…」弹窗：配置名、来源（默认配置 / 远程订阅），远程订阅再填订阅地址、更新间隔（小时）和 User-Agent |
+| 配置文件 | 一张表列出全部配置：配置名（点击查看）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单：查看、删除（使用中的不显示）。「查看」在弹窗里只读显示生成的 JSON（两个空格缩进）。「新建…」弹窗只填配置名，基于内置模板新建。 |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 | 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |
+
+#### 策略页
+
+sing-box 的出站都在这里，从上到下三块：策略组、本地节点、订阅节点；「添加」按钮在各自列表底部（LuCI 默认位置）。当前出站和延迟每 5 秒从运行中的 sing-box 刷新；切换当前出站立即生效，订阅的操作也立即生效（见 3.1.1），其余保存并应用后生效。
+
+- **策略组**：
+  - 列表：名称、类型（手动选择 / 自动测速）、当前出站；可拖动排序。
+  - 当前出站是一个按钮，显示当前出站的名称和延迟（参考 Surge）：点击弹出菜单，第一项是「延迟测试」，下面列出全部成员及 sing-box 测得的延迟；手动选择组在菜单里切换，自动测速组只列出。「延迟测试」经 clash API 的 `/group/{name}/delay` 一次并发测完全部成员，测速地址和超时取插件设置；没有响应的显示「超时」，直到再次测通；延迟按 <300 ms / <800 ms / 更高分绿、橙、红三色；当前出站是组时，沿着它的当前出站找到实际的节点，显示那个节点的延迟。
+  - sing-box 未运行时当前出站显示「未运行」；运行中但还没有这个组（新加的组）显示「保存并应用后生效」。
+  - 全局代理模式时，全局模式路由规则指向的组（默认隐藏的 Global）显示在列表第一行，只能切换当前出站，不能编辑、删除或拖动；其他模式下不显示。
+  - 弹窗：名称、类型、出站标签、包含订阅节点（和出站标签一样用 LuCI 原生的动态列表，可拖动排序，按这个顺序放入节点；下拉框只列开启的订阅）、节点筛选（正则，不区分大小写，按订阅节点的原名匹配，只作用于包含进来的节点；保存时检查正则是否有效）、默认出站（手动选择；第一项「第一个成员」，只列出当前的成员）、测速地址、测速间隔（分钟）、闲置超时（分钟）、容差（毫秒）（以上四项为自动测速）、中断现有连接。
+  - 出站标签用 LuCI 原生的动态列表，可拖动排序，生成时按这个顺序。下拉框依次为：节点、各订阅（显示为「订阅名（订阅）」，是一个策略，不列出它的单个节点）、Direct、策略组（不列出本组）。
+  - 保存时检查循环引用：列出的组若已直接或经其他组包含本组，列表标红并提示「在策略组中发现了循环引用：<组名>」（参考 Surge），不能保存；判断与生成器的防环一致，默认出站也不列出这样的成员。
+- **本地节点**（手动添加的节点）：
+  - 上方工具栏：「延迟测试」（测 Global 组，即测配置自己的节点；订阅节点在各订阅的「详情」里测）和右侧的「共 N 个」。
+  - 列表：名称、协议、服务器（地址:端口）、延迟（任一组测得的结果）；不能拖动排序；增删改。
+  - 弹窗分标签页：基本、TLS、传输、多路复用、QUIC、拨号；按协议显示对应字段（见 3.2 的节点示例），一页的字段全部隐藏时这一页不显示。
+- **订阅节点**（见 3.1.1）：
+  - 一张表，每行一个订阅，按订阅在配置里的顺序：名称、类型（手动选择 / 自动测速）、当前出站（同策略组：显示当前节点和延迟，点击弹出成员菜单，手动选择的在此切换；sing-box 未运行时显示「未运行」，订阅没有节点时显示「-」）、订阅地址（过长时截断，悬停显示完整地址）、节点数、更新（上次更新的时间，失败时改为红字写原因）。
+  - 操作：「详情」「更新」「编辑」「删除」。「详情」打开弹窗，只读列出这个订阅的节点：名称、协议、服务器（地址:端口）、延迟，上方有「延迟测试」（测这个订阅的组，只测它的节点）和「共 N 个」；「更新」进行中显示「更新中…」。
+  - 底部「添加」打开弹窗（与策略组、节点的弹窗同宽、同样式，不带说明文字）：订阅名、类型（手动选择 / 自动测速）、节点名前缀（占位文字是订阅名）、订阅地址、更新间隔（小时）、User-Agent，按钮为「下载并保存」，下载失败时弹窗里红字写原因、不保存；「编辑」打开同样的弹窗，按钮为「保存」。
+  - 还没有订阅时只显示一句说明和「添加」。
 
 设置放在用户处理那件事时会去找的页面上；很少改、偏技术的 sing-box 全局设置放进「内核设置」。
 

@@ -1,0 +1,122 @@
+{
+  "log": {
+    "level": "info",
+    "output": "/tmp/sing-box.log"
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "https",
+        "tag": "google",
+        "server": "8.8.8.8",
+        "detour": "Proxy"
+      },
+      {
+        "type": "udp",
+        "tag": "local",
+        "server": "223.5.5.5"
+      }
+    ],
+    "rules": [
+      {
+        "rule_set": "geosite-cn",
+        "server": "local"
+      }
+    ],
+    "final": "google"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "selector",
+      "tag": "Proxy",
+      "outbounds": [
+        "Auto",
+        "HK 01",
+        "JP 02",
+        "direct"
+      ]
+    },
+    {
+      "type": "urltest",
+      "tag": "Auto",
+      "outbounds": [
+        "HK 01",
+        "JP 02"
+      ]
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "HK 01",
+      "server": "hk.example.com",
+      "server_port": 8388,
+      "method": "aes-128-gcm",
+      "password": "placeholder-password",
+      "domain_resolver": "google"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "JP 02",
+      "server": "jp.example.com",
+      "server_port": 8388,
+      "method": "aes-128-gcm",
+      "password": "placeholder-password"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "Relay",
+      "server": "relay.example.com",
+      "server_port": 8388,
+      "method": "aes-128-gcm",
+      "password": "placeholder-password",
+      "detour": "HK 01"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "rule_set": "geosite-cn",
+        "outbound": "direct"
+      }
+    ],
+    "rule_set": [
+      {
+        "type": "inline",
+        "tag": "geosite-cn",
+        "rules": [
+          {
+            "domain_suffix": [
+              "cn"
+            ]
+          }
+        ]
+      }
+    ],
+    "final": "Proxy",
+    "default_domain_resolver": "local"
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "0.0.0.0:9090",
+      "external_ui": "ui"
+    }
+  }
+}

@@ -5,10 +5,12 @@
 #
 # Each directory in tests/cases holds the UCI files of a router: openbox, the
 # settings of the device, and openbox_<name>, the profiles; subscriptions/
-# holds the downloaded subscriptions. A case named
-# migrate-* runs migrate.uc on them and compares openbox with "expected"; any
-# other runs generate.uc and compares the JSON with "expected.json".
-# Either way the generated config has to pass "sing-box check".
+# holds the downloaded subscriptions, subscriptions/<profile>/<subscription>.json.
+# A case named migrate-* runs migrate.uc on them and compares openbox with
+# "expected", and a profile with "expected_<package>" when there is one; any
+# other runs generate.uc. Either way the generated config is compared with
+# "expected.json", when there is one for a migration, and has to pass
+# "sing-box check".
 # --update writes the expected files from the current output instead.
 #
 # UCODE and SING_BOX override the commands, which default to the ones in PATH.
@@ -93,10 +95,14 @@ generate() {
 }
 
 run_generate() {
-  dir="$CASES/$1"
-  out="$TMP/$1.json"
+  generate "$CASES/$1" "$TMP/$1.json" || return 1
+  check_json "$CASES/$1" "$TMP/$1.json"
+}
 
-  generate "$dir" "$out" || return 1
+# compare a generated config with expected.json of a case
+check_json() {
+  dir="$1"
+  out="$2"
 
   # stored indented with spaces, as the sources are
   if [ "$update" = 1 ]; then
@@ -119,18 +125,28 @@ run_migrate() {
   rm -rf "$conf"
   mkdir -p "$conf/.uci"
   cp "$dir"/openbox* "$conf/"
+  [ ! -d "$dir/subscriptions" ] || cp -R "$dir/subscriptions" "$conf/"
   openbox "$conf" migrate.uc || return 1
 
-  if [ "$update" = 1 ]; then
-    cp "$conf/openbox" "$dir/expected"
-  else
-    [ -f "$dir/expected" ] || { echo "  no expected" >&2; return 1; }
-    cmp -s "$dir/expected" "$conf/openbox" ||
-      { show_diff "$dir/expected" "$conf/openbox" >&2; return 1; }
-  fi
+  # the device settings, and the profiles a case expects something of
+  for file in "$conf"/openbox*; do
+    expected="$dir/expected"
+    [ "${file##*/}" = openbox ] || expected="$dir/expected_${file##*/}"
+
+    if [ "$update" = 1 ]; then
+      [ "${file##*/}" = openbox ] || [ -f "$expected" ] || continue
+      cp "$file" "$expected"
+    elif [ -f "$expected" ]; then
+      cmp -s "$expected" "$file" || { show_diff "$expected" "$file" >&2; return 1; }
+    elif [ "${file##*/}" = openbox ]; then
+      echo "  no expected" >&2
+      return 1
+    fi
+  done
 
   # the migrated config still makes a valid sing-box config
-  generate "$conf" "$TMP/$1.json"
+  generate "$conf" "$TMP/$1.json" || return 1
+  [ ! -f "$dir/expected.json" ] || check_json "$dir" "$TMP/$1.json"
 }
 
 if [ $# = 0 ]; then

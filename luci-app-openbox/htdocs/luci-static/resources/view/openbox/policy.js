@@ -31,10 +31,38 @@ const callSelect = rpc.declare({
   expect: { '': {} }
 });
 
-const callSubscriptionNodes = rpc.declare({
+const callSubscriptions = rpc.declare({
   object: 'luci.openbox',
-  method: 'subscription_nodes',
-  expect: { nodes: [] }
+  method: 'subscriptions',
+  expect: { subscriptions: [] }
+});
+
+const callSubscriptionAdd = rpc.declare({
+  object: 'luci.openbox',
+  method: 'subscription_add',
+  params: [ 'title', 'type', 'prefix', 'url', 'update_interval', 'user_agent' ],
+  expect: { '': {} }
+});
+
+const callSubscriptionEdit = rpc.declare({
+  object: 'luci.openbox',
+  method: 'subscription_edit',
+  params: [ 'name', 'title', 'type', 'prefix', 'url', 'update_interval', 'user_agent' ],
+  expect: { '': {} }
+});
+
+const callSubscriptionDelete = rpc.declare({
+  object: 'luci.openbox',
+  method: 'subscription_delete',
+  params: [ 'name' ],
+  expect: { '': {} }
+});
+
+const callSubscriptionUpdate = rpc.declare({
+  object: 'luci.openbox',
+  method: 'subscription_update',
+  params: [ 'name' ],
+  expect: { '': {} }
 });
 
 const callDelay = rpc.declare({
@@ -83,12 +111,73 @@ const GROUP_TYPES = {
   urltest: _('Auto by latency')
 };
 
+const ERRORS = {
+  invalid_title: _('Expecting a name.'),
+  exists: _('A subscription or an outbound with this name exists.'),
+  prefix_exists: _('Another subscription names its nodes with this prefix.'),
+  invalid_prefix: _('Invalid prefix.'),
+  invalid_type: _('Invalid type.'),
+  not_found: _('The subscription does not exist.'),
+  invalid_url: _('Expecting an http:// or https:// URL.'),
+  invalid_interval: _('Invalid update interval.'),
+  invalid_user_agent: _('Invalid User-Agent.'),
+  download_failed: _('Download failed.'),
+  invalid_json: _('The download is not a JSON config.'),
+  check_failed: _('sing-box check failed.'),
+  busy: _('Another update is running; try again later.'),
+  write_failed: _('Unable to write the subscription.'),
+  update_failed: _('Update failed.')
+};
+
+function errorText(res) {
+  return ERRORS[res?.error] ?? res?.error ?? _('Unknown error');
+}
+
+function button(title, handler, style) {
+  return E('button', {
+    'type': 'button',
+    'class': 'btn cbi-button cbi-button-%s'.format(style ?? 'neutral'),
+    'click': handler
+  }, title);
+}
+
+// when a subscription was last updated, as a time ago
+function ago(time) {
+  const seconds = Math.max(0, Date.now() / 1000 - time);
+
+  if (seconds < 60)
+    return _('just now');
+  if (seconds < 3600)
+    return _('%d minutes ago').format(Math.floor(seconds / 60));
+  if (seconds < 86400)
+    return _('%d hours ago').format(Math.floor(seconds / 3600));
+
+  return _('%d days ago').format(Math.floor(seconds / 86400));
+}
+
+// the filter of the nodes a group includes, any case; null for one that is
+// no regex
+function nodeFilter(value) {
+  try {
+    return new RegExp(value || '', 'i');
+  }
+  catch (e) {
+    return null;
+  }
+}
+
+// an update interval as hours, as the dialog takes it; another duration is
+// shown as it is
+function intervalHours(interval) {
+  const m = /^(\d+)h$/.exec(interval ?? '');
+  return m ? m[1] : (interval ?? '');
+}
+
 return view.extend({
   load() {
     return Promise.all([
       callOutbounds(),
-      // a profile from a subscription takes its nodes from it
-      openbox.loadProfile().then(() => openbox.isSubscription() ? callSubscriptionNodes() : null)
+      openbox.loadProfile().then(() => callSubscriptions())
     ]);
   },
 
@@ -187,11 +276,22 @@ return view.extend({
     return E('span', { 'class': 'openbox-delay ' + level }, '%d ms'.format(delay));
   },
 
+  // a member of a group as the group shows it: a node of a subscription
+  // without the prefix it has for being one, in the group of the
+  // subscription
+  shortName(tag, name) {
+    const sub = this.subscriptions.find((sub) => sub.tag == tag);
+    const prefix = sub ? (sub.prefix || sub.tag) + ' · ' : null;
+
+    return (prefix && name?.startsWith(prefix)) ? name.slice(prefix.length) : name;
+  },
+
   // the current outbound of a group, which opens the menu of the group
-  renderNow(tag, group) {
-    // a group sing-box does not run yet comes with the next apply
+  renderNow(tag, group, subscription) {
+    // a group sing-box does not run yet comes with the next apply; that of
+    // a subscription comes at once, when it has nodes
     if (!group) {
-      if (this.runtime.available)
+      if (this.runtime.available && !subscription)
         return E('em', {}, _('Takes effect after Save & Apply'));
 
       return E('em', {}, (this.runtime.reason == 'not_running') ? _('Not running') : '-');
@@ -203,7 +303,7 @@ return view.extend({
       'aria-haspopup': 'menu',
       'click': (ev) => this.toggleMenu(tag, ev.currentTarget)
     }, [
-      E('span', { 'class': 'openbox-now-name' }, '%h'.format(group.now)),
+      E('span', { 'class': 'openbox-now-name' }, '%h'.format(this.shortName(tag, group.now))),
       this.renderDelay(group.now, this.testing[tag]),
       E('span', { 'aria-hidden': 'true' }, '▾')
     ]);
@@ -245,7 +345,7 @@ return view.extend({
         'click': selectable ? () => this.handleSelect(tag, name) : null
       }, [
         E('span', { 'class': 'openbox-menu-check' }, (name == group.now) ? '✓' : ''),
-        E('span', { 'class': 'openbox-menu-name' }, '%h'.format(name)),
+        E('span', { 'class': 'openbox-menu-name' }, '%h'.format(this.shortName(tag, name))),
         this.renderDelay(name, testing)
       ]))
     ]);
@@ -317,21 +417,22 @@ return view.extend({
 
   updateCell(section_id) {
     const cell = this.cells[section_id];
-    const tag = openbox.label(uci.get(openbox.profileConfig(), section_id) ?? {});
+    const tag = cell.tag ?? openbox.label(uci.get(openbox.profileConfig(), section_id) ?? {});
     const group = this.runtime.groups?.[tag];
     const key = JSON.stringify([tag, group, this.testing[tag], group && this.delayState(group.now), this.runtime.available, this.runtime.reason]);
 
     if (key != cell.key) {
       cell.key = key;
-      dom.content(cell.node, this.renderNow(tag, group));
+      dom.content(cell.node, this.renderNow(tag, group, cell.tag != null));
     }
   },
 
-  // the delay of a node, measured by the tests of any group
+  // the delay of a node, measured by the tests of any group; shown as being
+  // tested while the group that tests it is, Global or its subscription
   updateDelayCell(section_id) {
     const cell = this.delayCells[section_id];
     const tag = cell.tag ?? openbox.label(uci.get(openbox.profileConfig(), section_id) ?? {});
-    const testing = this.testing[this.globalTag()];
+    const testing = this.testing[cell.group ?? this.globalTag()];
     const key = JSON.stringify([tag, testing, this.delayState(tag)]);
 
     if (key != cell.key) {
@@ -349,8 +450,9 @@ return view.extend({
       if (this.delayCells[section_id].node.isConnected)
         this.updateDelayCell(section_id);
 
-    if (this.testAll)
-      this.testAll.disabled = !this.runtime.groups?.[this.globalTag()] || !!this.testing[this.globalTag()];
+    for (const { button, group } of this.testButtons)
+      if (button.isConnected)
+        button.disabled = !this.runtime.groups?.[group] || !!this.testing[group];
 
     if (this.menu)
       this.renderMenu();
@@ -446,18 +548,24 @@ return view.extend({
     o.onchange = function (ev, section_id) {
       view.refreshDefault(this.section, section_id);
     };
-    // any outbound except the group itself, the nodes of a subscription by
-    // their tags: the nodes, then Direct, then the groups
+    // any outbound except the group itself: the nodes, the subscriptions,
+    // each a group of its nodes, then Direct, then the groups
     o.load = function (section_id) {
       this.keylist = [];
       this.vallist = [];
       openbox.outboundChoices(this, section_id);
-      view.subscriptionNodes.filter((node) => node.type != 'shadowtls')
-        .forEach((node) => this.value(node.tag, node.tag));
 
-      const rank = (value) => isGroup(value) ? 2 : ((uci.get(config, value, 'type') == 'direct') ? 1 : 0);
-      const choices = this.keylist.map((value, i) => [value, this.vallist[i]])
-        .sort((a, b) => rank(a[0]) - rank(b[0]));
+      const pairs = this.keylist.map((value, i) => [value, this.vallist[i]]);
+      const isDirect = (value) => uci.get(config, value, 'type') == 'direct';
+      const subscriptions = view.subscriptions.filter((sub) => sub.enabled)
+        .map((sub) => [sub.name, _('%s (subscription)').format(sub.tag)]);
+      const isSubscription = (value) => view.subscriptions.some((sub) => sub.name == value);
+      const choices = [
+        ...pairs.filter(([value]) => !isGroup(value) && !isDirect(value) && !isSubscription(value)),
+        ...subscriptions,
+        ...pairs.filter(([value]) => !isGroup(value) && isDirect(value)),
+        ...pairs.filter(([value]) => isGroup(value))
+      ];
       this.keylist = choices.map((choice) => choice[0]);
       this.vallist = choices.map((choice) => choice[1]);
 
@@ -474,6 +582,31 @@ return view.extend({
         .find((section) => section && containers.has(section['.name']));
 
       return loop ? _('Circular reference found in policy group: %s').format(openbox.label(loop)) : true;
+    };
+
+    // the nodes of subscriptions, after those listed, as Surge includes
+    // other groups; a list as the outbounds are, in the order the nodes
+    // come in. The filter takes some of them, by their names without the
+    // prefix, any case
+    o = s.option(form.DynamicList, 'include', _('Include subscription nodes'));
+    o.modalonly = true;
+    o.load = function (section_id) {
+      this.keylist = [];
+      this.vallist = [];
+      view.subscriptions.filter((sub) => sub.enabled).forEach((sub) => this.value(sub.name, sub.tag));
+
+      return form.DynamicList.prototype.load.call(this, section_id);
+    };
+    o.onchange = function (ev, section_id) {
+      view.refreshDefault(this.section, section_id);
+    };
+
+    o = s.option(form.Value, 'filter', _('Node filter'));
+    o.placeholder = 'hong kong|japan';
+    o.modalonly = true;
+    o.validate = (section_id, value) => (!value || nodeFilter(value)) ? true : _('Expecting a regular expression');
+    o.onchange = function (ev, section_id) {
+      view.refreshDefault(this.section, section_id);
     };
 
     // one of the members of the group, as they are when the dialog opens
@@ -547,9 +680,10 @@ return view.extend({
 
   // the members of a group as the generator finds them from the options of
   // the group, which get reads: those listed, in their order, but for the
-  // groups that contain it; a hidden one then takes all nodes, Direct and
-  // the groups not hidden; as [ value, label ], one per tag. Those of a
-  // subscription are named by their tags
+  // groups that contain it, a subscription being a group of its nodes; a
+  // hidden one then takes the nodes of the profile, Direct, the groups not
+  // hidden and the subscriptions; as [ value, label ], one per tag. Nodes of
+  // a subscription listed by hand are named by their tags
   groupMembers(section_id, get) {
     const all = uci.sections(openbox.profileConfig(), 'outbound');
     // a group just added has no type until saved
@@ -566,18 +700,34 @@ return view.extend({
         continue;
       if (member && member['.name'] != section_id)
         listed.push([member['.name'], openbox.label(member)]);
-      else if (!member && this.subscriptionNodes.some((node) => node.tag == ref))
+      else if (member)
+        continue;
+      else if (this.findSubscription(ref)) {
+        const sub = this.findSubscription(ref);
+        if (this.isPolicy(sub))
+          listed.push([sub.name, sub.tag]);
+      }
+      else if (this.subscriptionNodes.some((node) => node.tag == ref))
         listed.push([ref, ref]);
+    }
+
+    // then the nodes of the subscriptions it includes, by the filter
+    const filter = nodeFilter(get('filter'));
+    for (const ref of filter ? L.toArray(get('include')) : []) {
+      const sub = this.findSubscription(ref);
+      if (sub?.enabled)
+        sub.usable.filter((node) => node.type != 'shadowtls' && filter.test(node.name ?? node.tag))
+          .forEach((node) => listed.push([node.tag, node.tag]));
     }
 
     // a hidden group, as the one of the global mode, takes everything else
     if (get('hidden') == '1') {
       for (const proxy of proxies.filter((section) => section.type != 'shadowtls'))
         ((proxy.type == 'direct') ? direct : nodes).push([proxy['.name'], openbox.label(proxy)]);
-      for (const node of this.subscriptionNodes.filter((node) => node.type != 'shadowtls'))
-        ((node.type == 'direct') ? direct : nodes).push([node.tag, node.tag]);
       for (const group of groups.filter((group) => group['.name'] != section_id && group.hidden != '1'))
         members.push([group['.name'], openbox.label(group)]);
+      for (const sub of this.subscriptions.filter((sub) => this.isPolicy(sub)))
+        members.push([sub.name, sub.tag]);
     }
 
     return [...listed, ...nodes, ...direct, ...members]
@@ -607,7 +757,7 @@ return view.extend({
   },
 
   renderNodes(m) {
-    const s = m.section(form.GridSection, 'outbound', _('Nodes'));
+    const s = m.section(form.GridSection, 'outbound', _('Local nodes'));
     s.anonymous = true;
     s.addremove = true;
     s.nodescriptions = true;
@@ -624,7 +774,7 @@ return view.extend({
       });
     };
     s.filter = (section_id) => !(uci.get(openbox.profileConfig(), section_id, 'type') in GROUP_TYPES) && !openbox.isHidden(section_id);
-    s.modaltitle = (section_id) => _('Nodes') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New node'));
+    s.modaltitle = (section_id) => _('Local nodes') + ' » ' + (uci.get(openbox.profileConfig(), section_id, 'tag') || _('New node'));
 
     // the dialog in tabs; a tab whose fields are all hidden by the
     // protocol is left out
@@ -649,24 +799,127 @@ return view.extend({
     };
   },
 
-  // the latency test of all nodes, which tests the Global group, and the
-  // count of the nodes
-  testAllItems(count) {
-    this.testAll = E('button', {
+  // a latency test of nodes, and their count: those of the profile with the
+  // Global group, those of a subscription with the group of the
+  // subscription
+  testAllItems(count, group) {
+    group ??= this.globalTag();
+
+    const button = E('button', {
       'type': 'button',
       'class': 'btn cbi-button',
-      'click': () => this.handleTest(this.globalTag())
+      'click': () => this.handleTest(group)
     }, _('Latency test'));
 
-    return [this.testAll, E('span', { 'class': 'openbox-toolbar-end' }, _('%d in total').format(count))];
+    this.testButtons.push({ button: button, group: group });
+
+    return [button, E('span', { 'class': 'openbox-toolbar-end' }, _('%d in total').format(count))];
   },
 
-  // the nodes of a profile from a subscription: they follow the
-  // subscription, so they are only listed, and their latency tested
-  renderSubscriptionNodes(nodes) {
-    const rows = nodes.map((node) => {
+  // the subscriptions of the profile, with the nodes the generator takes of
+  // each: those named as no outbound of the profile and no node of a
+  // subscription before; one switched off gives none
+  setSubscriptions(subscriptions) {
+    const taken = new Set(uci.sections(openbox.profileConfig(), 'outbound').map((section) => openbox.label(section)));
+
+    this.subscriptions = subscriptions;
+    this.subscriptionNodes = [];
+    for (const sub of subscriptions) {
+      sub.usable = sub.enabled ? sub.nodes.filter((node) => !taken.has(node.tag)) : [];
+      sub.usable.forEach((node) => taken.add(node.tag));
+      this.subscriptionNodes.push(...sub.usable);
+    }
+  },
+
+  // whether a subscription is a group of its nodes, as the generator makes
+  // one: switched on, with nodes
+  isPolicy(sub) {
+    return sub.enabled && sub.usable.some((node) => node.type != 'shadowtls');
+  },
+
+  // a subscription by section name, or else by its name
+  findSubscription(ref) {
+    return this.subscriptions.find((sub) => sub.name == ref) ?? this.subscriptions.find((sub) => sub.tag == ref);
+  },
+
+  refreshSubscriptions() {
+    return callSubscriptions().then((subscriptions) => {
+      this.setSubscriptions(subscriptions);
+      this.fillSubscriptions();
+    });
+  },
+
+  // when a subscription was updated, or why its last update failed
+  updateText(sub) {
+    if (sub.last_error)
+      return E('span', { 'style': 'color:#c43c35' }, _('Last update failed: %s').format('%h'.format(sub.last_error)));
+
+    return sub.last_update ? ago(sub.last_update) : E('em', {}, _('Not downloaded'));
+  },
+
+  // the subscriptions, one a row, each a group of its nodes with its
+  // current outbound
+  fillSubscriptions() {
+    const rows = this.subscriptions.map((sub) => E('tr', { 'class': 'tr' }, [
+      E('td', { 'class': 'td' }, '%h'.format(sub.tag)),
+      E('td', { 'class': 'td' }, GROUP_TYPES[sub.type] ?? GROUP_TYPES.selector),
+      E('td', { 'class': 'td' }, (() => {
+        this.cells[sub.name] = { node: E('div'), tag: sub.tag };
+        this.updateCell(sub.name);
+        return this.cells[sub.name].node;
+      })()),
+      E('td', { 'class': 'td', 'style': 'max-width:0' },
+        E('div', { 'title': sub.url ?? '', 'style': 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, '%h'.format(sub.url ?? ''))),
+      E('td', { 'class': 'td', 'style': 'white-space:nowrap' }, sub.downloaded ? _('%d nodes').format(sub.nodes.length) : '-'),
+      E('td', { 'class': 'td' }, this.updateText(sub)),
+      E('td', { 'class': 'td cbi-section-actions' }, E('div', {}, [
+        button(_('Details'), ui.createHandlerFn(this, 'handleDetails', sub)),
+        button(_('Update'), ui.createHandlerFn(this, 'handleUpdate', sub)),
+        button(_('Edit'), ui.createHandlerFn(this, 'handleSubscription', sub), 'edit'),
+        button(_('Delete'), () => this.handleDelete(sub), 'remove')
+      ]))
+    ]));
+
+    dom.content(this.subscriptionTable, [
+      E('tr', { 'class': 'tr table-titles' }, [
+        E('th', { 'class': 'th', 'style': 'width:12%' }, _('Name')),
+        E('th', { 'class': 'th', 'style': 'width:10%' }, _('Type')),
+        E('th', { 'class': 'th' }, _('Current outbound')),
+        E('th', { 'class': 'th', 'style': 'width:20%' }, _('Subscription URL')),
+        E('th', { 'class': 'th', 'style': 'width:80px;white-space:nowrap' }, _('Nodes')),
+        E('th', { 'class': 'th', 'style': 'width:14%' }, _('Update')),
+        E('th', { 'class': 'th cbi-section-actions' })
+      ]),
+      ...(rows.length ? rows : [ E('tr', { 'class': 'tr placeholder' },
+        E('td', { 'class': 'td', 'colspan': 7 }, E('em', {}, _('This section contains no values yet')))) ])
+    ]);
+  },
+
+  // the nodes of a subscription, only listed, with their latency
+  // the dialogs of a subscription open with it as it is now: loaded anew
+  // first, with the button busy meanwhile as LuCI shows its own
+  withSubscription(sub, open) {
+    return this.refreshSubscriptions().then(() => {
+      const current = sub ? this.subscriptions.find((other) => other.name == sub.name) : null;
+      if (sub && !current)
+        return ui.addNotification(null, E('p', ERRORS.not_found), 'danger');
+
+      return open(current);
+    });
+  },
+
+  handleDetails(sub) {
+    return this.withSubscription(sub, (sub) => this.showDetails(sub));
+  },
+
+  handleSubscription(sub) {
+    return this.withSubscription(sub, (sub) => this.showSubscription(sub));
+  },
+
+  showDetails(sub) {
+    const rows = sub.nodes.map((node) => {
       const id = 'subscription:' + node.tag;
-      this.delayCells[id] = { node: E('div'), tag: node.tag };
+      this.delayCells[id] = { node: E('div'), tag: node.tag, group: sub.tag };
       this.updateDelayCell(id);
 
       return E('tr', { 'class': 'tr' }, [
@@ -677,22 +930,177 @@ return view.extend({
       ]);
     });
 
-    const toolbar = E('div', { 'class': 'openbox-toolbar' }, this.testAllItems(nodes.length));
-    this.updateCells();
-
-    return E('div', { 'class': 'cbi-section' }, [
-      E('h3', {}, _('Nodes')),
-      E('div', { 'class': 'cbi-section-descr' }, _('The nodes follow the subscription of this profile; only their latency is tested here.')),
-      toolbar,
-      E('table', { 'class': 'table' }, [
+    ui.showModal(_('Subscription') + ' » ' + '%h'.format(sub.tag), [
+      E('div', { 'class': 'openbox-toolbar' }, this.testAllItems(sub.nodes.length, sub.tag)),
+      // the latency keeps its width while the delays change
+      E('div', { 'style': 'max-height:60vh;overflow:auto' }, E('table', { 'class': 'table', 'style': 'table-layout:fixed' }, [
         E('tr', { 'class': 'tr table-titles' }, [
-          E('th', { 'class': 'th' }, _('Name')),
-          E('th', { 'class': 'th' }, _('Protocol')),
+          E('th', { 'class': 'th', 'style': 'width:30%' }, _('Name')),
+          E('th', { 'class': 'th', 'style': 'width:18%' }, _('Protocol')),
           E('th', { 'class': 'th' }, _('Server')),
-          E('th', { 'class': 'th' }, _('Latency'))
+          E('th', { 'class': 'th', 'style': 'width:96px' }, _('Latency'))
         ]),
         ...rows
+      ])),
+      E('div', { 'class': 'button-row' }, E('button', { 'class': 'btn cbi-button', 'click': ui.hideModal }, _('Close')))
+    ], 'cbi-modal');
+
+    this.updateCells();
+  },
+
+  handleUpdate(sub) {
+    return callSubscriptionUpdate(sub.name).then((res) => {
+      const title = '%h'.format(sub.tag);
+
+      if (!res.result)
+        ui.addNotification(null, [
+          E('p', _('Unable to update %s').format(title) + ': ' + errorText(res)),
+          res.output ? E('pre', { 'style': 'white-space:pre-wrap' }, '%h'.format(res.output)) : ''
+        ], 'danger');
+      else
+        ui.addTimeLimitedNotification(null, E('p', !res.changed ? _('%s is up to date.').format(title)
+          : res.reloaded ? _('%s updated; sing-box was reloaded.').format(title) : _('%s updated.').format(title)), 5000, 'info');
+
+      return this.refreshSubscriptions();
+    });
+  },
+
+  // a new subscription, or one changed; downloaded first when it is new or
+  // has another URL or User-Agent, and not saved when that fails
+  showSubscription(sub) {
+    // checked as the fields of a form are, when shown and while typed: the
+    // name and the prefix its nodes are named with taken by no other
+    // subscription, and the name by no outbound either; a prefix left empty
+    // is the name
+    const others = this.subscriptions.filter((other) => other.name != sub?.name);
+    const outboundTags = uci.sections(openbox.profileConfig(), 'outbound').map((section) => openbox.label(section));
+    const prefixTaken = (value) => others.some((other) => (other.prefix || other.tag) == value);
+
+    const name = new ui.Textfield(sub?.tag ?? '', {
+      optional: false,
+      placeholder: _('Airport A'),
+      validate: (value) => {
+        value = value.trim();
+        if (others.some((other) => other.tag == value) || outboundTags.includes(value))
+          return ERRORS.exists;
+        if (!prefix.getValue().trim() && prefixTaken(value))
+          return ERRORS.prefix_exists;
+        return true;
+      }
+    });
+    const prefix = new ui.Textfield(sub?.prefix ?? '', {
+      placeholder: sub?.tag ?? '',
+      validate: (value) => (value.trim() && prefixTaken(value.trim())) ? ERRORS.prefix_exists : true
+    });
+    const kind = new ui.Select(sub?.type ?? 'selector', GROUP_TYPES, {});
+    const url = new ui.Textfield(sub?.url ?? '', {
+      optional: false,
+      placeholder: 'https://example.com/sing-box.json',
+      validate: (value) => /^https?:\/\/\S+$/.test(value.trim()) ? true : ERRORS.invalid_url
+    });
+    const hours = new ui.Textfield(intervalHours(sub?.update_interval), {
+      placeholder: '24',
+      validate: (value) => /^(\d*|(\d+[smhd])+)$/.test(value.trim()) ? true : ERRORS.invalid_interval
+    });
+    const agent = new ui.Textfield(sub?.user_agent ?? '', { placeholder: 'sing-box/1.14 OpenBox/0.1' });
+    const fields = [ name, prefix, url, hours, agent ];
+    const message = E('div', { 'style': 'color:#c43c35' });
+    const row = (label, widget, suffix) => E('div', { 'class': 'cbi-value' }, [
+      E('label', { 'class': 'cbi-value-title' }, label),
+      E('div', { 'class': 'cbi-value-field' }, suffix
+        ? E('div', { 'style': 'display:flex;align-items:center;gap:6px' }, [ widget.render(), E('span', {}, suffix) ])
+        : widget.render())
+    ]);
+
+    const save = () => {
+      fields.forEach((field) => field.triggerValidation());
+      const invalid = fields.find((field) => !field.isValid());
+      if (invalid) {
+        invalid.node?.querySelector('input')?.focus();
+        return;
+      }
+
+      // hours are kept as a sing-box duration; none updates by hand only
+      const h = hours.getValue().trim();
+      const interval = /^\d+$/.test(h) ? ((+h > 0) ? h + 'h' : '') : h;
+      const values = [ name.getValue().trim(), kind.getValue(), prefix.getValue().trim(), url.getValue().trim(), interval, agent.getValue().trim() ];
+      const call = sub ? callSubscriptionEdit(sub.name, ...values) : callSubscriptionAdd(...values);
+
+      return call.then((res) => {
+        if (!res.result) {
+          dom.content(message, [
+            E('p', {}, '%h'.format(errorText(res))),
+            res.output ? E('pre', { 'style': 'white-space:pre-wrap;font-size:12px' }, '%h'.format(res.output)) : ''
+          ]);
+          return;
+        }
+
+        return this.refreshSubscriptions().then(() => ui.hideModal());
+      });
+    };
+
+    // laid out as the dialogs of the groups and nodes
+    ui.showModal(_('Subscription') + ' » ' + (sub ? '%h'.format(sub.tag) : _('New subscription')), [
+      E('div', { 'class': 'cbi-map' }, E('div', { 'class': 'cbi-section' }, E('div', { 'class': 'cbi-section-node' }, [
+        row(_('Name'), name),
+        row(_('Type'), kind),
+        row(_('Node name prefix'), prefix),
+        row(_('Subscription URL'), url),
+        row(_('Update interval'), hours, _('hours')),
+        row(_('User-Agent'), agent),
+        message
+      ]))),
+      E('div', { 'class': 'button-row' }, [
+        E('button', { 'class': 'btn cbi-button', 'click': ui.hideModal }, _('Close')),
+        ' ',
+        E('button', { 'class': 'btn cbi-button cbi-button-positive important', 'click': ui.createHandlerFn(this, save) },
+          sub ? _('Save') : _('Download and save'))
       ])
+    ], 'cbi-modal');
+
+    // the prefix shows the name it stands for when empty, and the name is
+    // checked again with it
+    const nameInput = name.node.querySelector('input');
+    nameInput.addEventListener('input', () => {
+      prefix.node.querySelector('input').placeholder = nameInput.value.trim();
+      prefix.triggerValidation();
+    });
+    prefix.node.querySelector('input').addEventListener('input', () => name.triggerValidation());
+
+    fields.forEach((field) => field.triggerValidation());
+    nameInput.focus();
+  },
+
+  // the groups that list a subscription no longer do: the page loads them
+  // anew
+  handleDelete(sub) {
+    ui.showModal(_('Delete %s?').format('%h'.format(sub.tag)), [
+      E('p', {}, _('The subscription and what it downloaded are deleted, and the groups that list it no longer do.')),
+      E('div', { 'class': 'right', 'style': 'display:flex;gap:6px;justify-content:flex-end' }, [
+        button(_('Cancel'), ui.hideModal),
+        button(_('Delete'), ui.createHandlerFn(this, () => callSubscriptionDelete(sub.name).then((res) => {
+          ui.hideModal();
+          if (!res.result)
+            return ui.addNotification(null, E('p', _('Unable to delete %s').format('%h'.format(sub.tag)) + ': ' + errorText(res)), 'danger');
+
+          location.reload();
+        })), 'negative')
+      ])
+    ]);
+  },
+
+  // the subscriptions of the profile, beside the nodes; they are changed at
+  // once, not with the form
+  renderSubscriptions() {
+    this.subscriptionTable = E('table', { 'class': 'table' });
+    this.fillSubscriptions();
+
+    return E('div', { 'class': 'cbi-section' }, [
+      E('h3', {}, _('Subscription nodes')),
+      E('div', { 'class': 'cbi-section-descr' }, _('Subscriptions give nodes only, which follow their updates; Details lists them with their latency. Each subscription is a policy as well, which groups and rules may take. Subscriptions are added, edited, deleted and updated at once.')),
+      this.subscriptionTable,
+      E('div', { 'class': 'cbi-section-create' },
+        button(_('Add'), ui.createHandlerFn(this, 'handleSubscription', null), 'add'))
     ]);
   },
 
@@ -712,22 +1120,21 @@ return view.extend({
     // of the Global mode; the generator falls back the same way
     this.mode = uci.get('openbox', 'main', 'mode') ?? uci.get('openbox', 'clash_api', 'default_mode');
 
-    // the nodes of a subscription, members of groups like the others
-    this.subscriptionNodes = data[1] ?? [];
+    // the latency tests of all nodes, on the page and in a dialog
+    this.testButtons = [];
+
+    // the nodes of subscriptions, members of groups like the others
+    this.setSubscriptions(data[1] ?? []);
 
     const m = new form.Map(openbox.profileConfig());
 
     this.renderGroups(m);
-    // the nodes of a subscription, listed apart; null for a local profile
-    const nodes = data[1];
-    if (!nodes)
-      this.renderNodes(m);
+    this.renderNodes(m);
 
     return m.render().then((mapEl) => {
       poll.add(() => this.refresh(), 5);
 
-      return E([], [E('style', {}, STYLE), ...openbox.header(), mapEl,
-      nodes ? this.renderSubscriptionNodes(nodes) : '']);
+      return E([], [E('style', {}, STYLE), ...openbox.header(), mapEl, this.renderSubscriptions()]);
     });
   }
 });

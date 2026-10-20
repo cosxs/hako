@@ -5,7 +5,7 @@ import { connect } from 'ubus';
 import { cursor } from 'uci';
 import { clash_api, clash_request, config_modes } from 'openbox.clash';
 import { dns_inbound } from 'openbox.config';
-import { SUBSCRIPTION_DIR, valid_name, profile_package } from 'openbox.profile';
+import { SUBSCRIPTION_DIR, valid_name, profile_package, subscription_file, subscription_prefix, subscription_node } from 'openbox.profile';
 
 const CONFIG_DIR = '/etc/config';
 // the template of a new profile
@@ -122,20 +122,8 @@ function current_profile() {
   return cursor().get('openbox', 'main', 'profile') || 'default';
 }
 
-// what a profile is: 'subscription' when its nodes come from a
-// subscription, else 'local'; null when there is none
-function profile_kind(name) {
-  if (!valid_name(name) || !access(`${CONFIG_DIR}/${profile_package(name)}`))
-    return null;
-
-  const uci = cursor();
-  uci.load(profile_package(name));
-
-  return uci.get(profile_package(name), 'profile', 'url') ? 'subscription' : 'local';
-}
-
 function profile_exists(name) {
-  return profile_kind(name) != null;
+  return valid_name(name) && access(`${CONFIG_DIR}/${profile_package(name)}`) == true;
 }
 
 // the identifier of a new profile: the time it is made, in milliseconds,
@@ -152,8 +140,7 @@ function new_profile_id() {
 }
 
 // the profiles; the title is what the page shows, any text, and the name
-// is the identifier. A profile from a subscription has its url and update
-// state as well
+// is the identifier
 function list_profiles() {
   const profiles = [];
   const uci = cursor();
@@ -164,18 +151,7 @@ function list_profiles() {
       continue;
 
     uci.load(file);
-    const info = uci.get_all(file, 'profile') ?? {};
-
-    push(profiles, {
-      name: name,
-      title: info.title || name,
-      type: info.url ? 'subscription' : 'local',
-      url: info.url,
-      update_interval: info.update_interval,
-      user_agent: info.user_agent,
-      last_update: info.last_update ? +info.last_update : null,
-      last_error: info.last_error
-    });
+    push(profiles, { name: name, title: uci.get(file, 'profile', 'title') || name });
   }
 
   return sort(profiles, (a, b) => (a.title < b.title) ? -1 : (a.title > b.title) ? 1 : 0);
@@ -192,9 +168,8 @@ function check_title(title) {
   return null;
 }
 
-// a new profile from the template with its title, and these options in its
-// profile section: { name } or { error }
-function create_profile(title, options) {
+// a new profile from the template with its title: { name } or { error }
+function create_profile(title) {
   const error = check_title(title);
   if (error)
     return { error: error };
@@ -209,9 +184,6 @@ function create_profile(title, options) {
   uci.load(pkg);
   uci.set(pkg, 'profile', 'profile');
   uci.set(pkg, 'profile', 'title', trim(title));
-  for (let key, value in options ?? {})
-    if (value != null && value != '')
-      uci.set(pkg, 'profile', key, value);
   uci.commit(pkg);
 
   return { name: name };
@@ -222,13 +194,14 @@ function valid_interval(value) {
   return match(value, /^([0-9]+[smhd])+$/) != null;
 }
 
-// runs subscription.sh update; changed and reloaded tell what it did
-function update_subscription(name) {
-  const path = `${SUBSCRIPTION_DIR}/${name}.json`;
+// runs subscription.sh update for a subscription of a profile; changed and
+// reloaded tell what it did
+function update_subscription(name, id) {
+  const path = subscription_file(name, id);
   const before = readfile(path);
   const running = name == current_profile() && instance_pid() != null;
 
-  const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} 2>&1`);
+  const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} ${id} 2>&1`);
   if (!proc)
     return { result: false, error: 'update_failed', output: '' };
 
@@ -241,6 +214,133 @@ function update_subscription(name) {
   const changed = readfile(path) != before;
 
   return { result: true, output: output, changed: changed, reloaded: changed && running };
+}
+
+// the nodes a subscription downloaded: its outbounds and endpoints that are
+// no groups, direct, block or dns, named with the prefix of the subscription
+function subscription_nodes(name, id, prefix) {
+  const sub = load_json(subscription_file(name, id) ?? '');
+  const nodes = [];
+
+  for (let kind in [ 'outbounds', 'endpoints' ])
+    for (let node in sub?.[kind] ?? [])
+      if (type(node) == 'object' && type(node.tag) == 'string' && !(node.type in [ 'direct', 'block', 'dns', 'selector', 'urltest' ]))
+        push(nodes, {
+          tag: subscription_node(prefix, node.tag),
+          name: node.tag,
+          type: node.type,
+          server: node.server ?? node.peers?.[0]?.address,
+          server_port: node.server_port ?? node.peers?.[0]?.port
+        });
+
+  return { downloaded: sub != null, nodes: nodes };
+}
+
+// the subscriptions of a profile, in their order, with their nodes
+function list_subscriptions(name) {
+  const pkg = profile_package(name);
+  const uci = cursor();
+  const result = [];
+
+  uci.load(pkg);
+  uci.foreach(pkg, 'subscription', (section) => {
+    const content = subscription_nodes(name, section['.name'], subscription_prefix(section));
+
+    push(result, {
+      name: section['.name'],
+      tag: section.tag || section['.name'],
+      type: section.group_type ?? 'selector',
+      prefix: section.prefix,
+      url: section.url,
+      update_interval: section.update_interval,
+      user_agent: section.user_agent,
+      last_update: section.last_update ? +section.last_update : null,
+      last_error: section.last_error,
+      enabled: section.enabled != '0',
+      downloaded: content.downloaded,
+      nodes: content.nodes
+    });
+  });
+
+  return result;
+}
+
+// the options of a subscription from a request: { values } or { error }
+function subscription_values(args) {
+  const tag = args?.title;
+  const url = args?.url;
+  const interval = args?.update_interval ?? '';
+  const agent = args?.user_agent ?? '';
+  const prefix = args?.prefix ?? '';
+  const kind = args?.type ?? 'selector';
+
+  if (type(tag) != 'string' || !length(trim(tag)))
+    return { error: 'invalid_title' };
+
+  if (type(prefix) != 'string' || match(prefix, /[\r\n]/))
+    return { error: 'invalid_prefix' };
+
+  if (!(kind in [ 'selector', 'urltest' ]))
+    return { error: 'invalid_type' };
+
+  if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
+    return { error: 'invalid_url' };
+
+  if (type(interval) != 'string' || (interval != '' && interval != '0' && !valid_interval(interval)))
+    return { error: 'invalid_interval' };
+
+  if (type(agent) != 'string' || match(agent, /[\r\n]/))
+    return { error: 'invalid_user_agent' };
+
+  return { values: {
+    tag: trim(tag),
+    group_type: (kind == 'urltest') ? kind : null,
+    prefix: length(trim(prefix)) ? trim(prefix) : null,
+    url: url,
+    update_interval: (interval != '' && interval != '0') ? interval : null,
+    user_agent: length(trim(agent)) ? trim(agent) : null
+  } };
+}
+
+// whether another subscription or an outbound of a profile has a name; the
+// groups name both alike
+function name_taken(pkg, tag, except) {
+  const uci = cursor();
+  let taken = false;
+
+  uci.load(pkg);
+  for (let sectionType in [ 'subscription', 'outbound' ])
+    uci.foreach(pkg, sectionType, (section) => {
+      if (section['.name'] != except && (section.tag || section['.name']) == tag)
+        taken = true;
+    });
+
+  return taken;
+}
+
+// whether another subscription of a profile names its nodes with a prefix,
+// its own or its name
+function prefix_taken(pkg, values, except) {
+  const uci = cursor();
+  const prefix = subscription_prefix(values);
+  let taken = false;
+
+  uci.load(pkg);
+  uci.foreach(pkg, 'subscription', (section) => {
+    if (section['.name'] != except && subscription_prefix(section) == prefix)
+      taken = true;
+  });
+
+  return taken;
+}
+
+// the section of a subscription of the profile in use, or null
+function find_subscription(id) {
+  const pkg = profile_package(current_profile());
+  const uci = cursor();
+
+  uci.load(pkg);
+  return (type(id) == 'string' && subscription_file(current_profile(), id) && uci.get(pkg, id) == 'subscription') ? pkg : null;
 }
 
 // the command that generates the config of a profile; the name is checked,
@@ -626,7 +726,7 @@ const methods = {
     }
   },
 
-  // the profiles, local ones and subscriptions, and the one in use
+  // the profiles, and the one in use
   profiles: {
     call: function() {
       return { profile: current_profile(), profiles: list_profiles() };
@@ -663,8 +763,8 @@ const methods = {
     }
   },
 
-  // the profile in use cannot be deleted; one from a subscription goes
-  // with what it downloaded
+  // the profile in use cannot be deleted; a profile goes with what its
+  // subscriptions downloaded
   profile_delete: {
     args: { name: 'name' },
     call: function(req) {
@@ -675,83 +775,163 @@ const methods = {
       if (name == current_profile())
         return { result: false, error: 'in_use' };
 
-      unlink(`${SUBSCRIPTION_DIR}/${name}.json`);
+      // the name is checked, so it is safe in the shell
+      system(`rm -rf ${SUBSCRIPTION_DIR}/${name}`);
 
       return { result: unlink(`${CONFIG_DIR}/${profile_package(name)}`) == true };
     }
   },
 
-  // a new profile whose nodes come from a subscription, downloaded at
-  // once; it is dropped again when the download fails
-  subscription_save: {
-    args: { title: 'title', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
+  // the subscriptions of the profile in use, as the policy page lists them
+  subscriptions: {
+    call: function() {
+      return { subscriptions: list_subscriptions(current_profile()) };
+    }
+  },
+
+  // a new subscription of the profile in use, downloaded at once; it is
+  // dropped again when the download fails
+  subscription_add: {
+    args: { title: 'title', type: 'type', prefix: 'prefix', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
     call: function(req) {
-      const url = req.args?.url;
-      const interval = req.args?.update_interval ?? '';
-      const agent = req.args?.user_agent ?? '';
+      const name = current_profile();
+      const pkg = profile_package(name);
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
 
-      if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
-        return { result: false, error: 'invalid_url' };
+      const checked = subscription_values(req.args);
+      if (checked.error)
+        return { result: false, error: checked.error };
 
-      if (type(interval) != 'string' || (interval != '' && interval != '0' && !valid_interval(interval)))
-        return { result: false, error: 'invalid_interval' };
+      if (name_taken(pkg, checked.values.tag))
+        return { result: false, error: 'exists' };
 
-      if (type(agent) != 'string' || match(agent, /[\r\n]/))
-        return { result: false, error: 'invalid_user_agent' };
+      if (prefix_taken(pkg, checked.values))
+        return { result: false, error: 'prefix_exists' };
 
-      const created = create_profile(req.args?.title, {
-        url: url,
-        update_interval: (interval != '0') ? interval : null,
-        user_agent: trim(agent)
-      });
-      if (created.error)
-        return { result: false, error: created.error };
+      const uci = cursor();
+      uci.load(pkg);
 
-      const res = update_subscription(created.name);
-      res.name = created.name;
+      // named by the time it is added, as profiles are
+      const t0 = clock();
+      let stamp = t0[0] * 1000 + int(t0[1] / 1000000);
+      while (uci.get(pkg, `sub_${stamp}`))
+        stamp++;
+      const id = `sub_${stamp}`;
+
+      uci.set(pkg, id, 'subscription');
+      for (let key, value in checked.values)
+        if (value != null)
+          uci.set(pkg, id, key, value);
+      uci.commit(pkg);
+
+      const res = update_subscription(name, id);
+      res.name = id;
       if (!res.result) {
-        unlink(`${CONFIG_DIR}/${profile_package(created.name)}`);
-        unlink(`${SUBSCRIPTION_DIR}/${created.name}.json`);
+        const again = cursor();
+        again.load(pkg);
+        again.delete(pkg, id);
+        again.commit(pkg);
+        unlink(subscription_file(name, id));
       }
 
       return res;
     }
   },
 
-  // the nodes a profile takes from its subscription, as the policy page
-  // lists them
-  subscription_nodes: {
+  // changes a subscription; with another URL or User-Agent it is downloaded
+  // again first, and kept as it was when that fails. Another name, prefix or
+  // type changes what sing-box runs as well: a running service is reloaded
+  subscription_edit: {
+    args: { name: 'name', title: 'title', type: 'type', prefix: 'prefix', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
+    call: function(req) {
+      const id = req.args?.name;
+      const pkg = find_subscription(id);
+      if (!pkg)
+        return { result: false, error: 'not_found' };
+
+      const checked = subscription_values(req.args);
+      if (checked.error)
+        return { result: false, error: checked.error };
+
+      if (name_taken(pkg, checked.values.tag, id))
+        return { result: false, error: 'exists' };
+
+      if (prefix_taken(pkg, checked.values, id))
+        return { result: false, error: 'prefix_exists' };
+
+      const uci = cursor();
+      uci.load(pkg);
+
+      const old = {};
+      for (let key in [ 'tag', 'group_type', 'prefix', 'url', 'update_interval', 'user_agent', 'last_update', 'last_error' ])
+        old[key] = uci.get(pkg, id, key);
+
+      const values = checked.values;
+      const download = values.url != old.url || values.user_agent != old.user_agent;
+      const renamed = values.tag != old.tag || values.prefix != old.prefix || values.group_type != old.group_type;
+
+      for (let key, value in values)
+        (value != null) ? uci.set(pkg, id, key, value) : uci.delete(pkg, id, key);
+      uci.commit(pkg);
+
+      if (!download)
+        return { result: true, name: id, reloaded: renamed && reload_running() };
+
+      const res = update_subscription(current_profile(), id);
+      res.name = id;
+      if (res.result && renamed && !res.reloaded)
+        res.reloaded = reload_running();
+      if (!res.result) {
+        const again = cursor();
+        again.load(pkg);
+        for (let key, value in old)
+          (value != null) ? again.set(pkg, id, key, value) : again.delete(pkg, id, key);
+        again.commit(pkg);
+      }
+
+      return res;
+    }
+  },
+
+  // a subscription goes with what it downloaded, and the groups that list it
+  // no longer do
+  subscription_delete: {
     args: { name: 'name' },
     call: function(req) {
-      const name = req.args?.name || current_profile();
-      if (profile_kind(name) != 'subscription')
-        return { nodes: [] };
+      const id = req.args?.name;
+      const pkg = find_subscription(id);
+      if (!pkg)
+        return { result: false, error: 'not_found' };
 
-      const sub = load_json(`${SUBSCRIPTION_DIR}/${name}.json`);
-      const nodes = [];
+      const uci = cursor();
+      uci.load(pkg);
+      uci.delete(pkg, id);
+      uci.foreach(pkg, 'outbound', (section) => {
+        const members = section.outbounds;
+        if (type(members) != 'array' || !(id in members))
+          return;
 
-      for (let kind in [ 'outbounds', 'endpoints' ])
-        for (let node in sub?.[kind] ?? [])
-          if (type(node) == 'object' && type(node.tag) == 'string' && !(node.type in [ 'direct', 'block', 'dns', 'selector', 'urltest' ]))
-            push(nodes, {
-              tag: node.tag,
-              type: node.type,
-              server: node.server ?? node.peers?.[0]?.address,
-              server_port: node.server_port ?? node.peers?.[0]?.port
-            });
+        const rest = filter(members, (member) => member != id);
+        length(rest) ? uci.set(pkg, section['.name'], 'outbounds', rest) : uci.delete(pkg, section['.name'], 'outbounds');
+      });
+      uci.commit(pkg);
 
-      return { nodes: nodes };
+      unlink(subscription_file(current_profile(), id));
+      rmdir(`${SUBSCRIPTION_DIR}/${current_profile()}`);
+
+      return { result: true, reloaded: reload_running() };
     }
   },
 
   subscription_update: {
     args: { name: 'name' },
     call: function(req) {
-      const name = req.args?.name;
-      if (profile_kind(name) != 'subscription')
+      const id = req.args?.name;
+      if (!find_subscription(id))
         return { result: false, error: 'not_found' };
 
-      return update_subscription(name);
+      return update_subscription(current_profile(), id);
     }
   },
 

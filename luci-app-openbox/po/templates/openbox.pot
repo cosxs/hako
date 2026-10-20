@@ -1,7 +1,19 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8"
 
+msgid "%d days ago"
+msgstr ""
+
+msgid "%d hours ago"
+msgstr ""
+
 msgid "%d in total"
+msgstr ""
+
+msgid "%d minutes ago"
+msgstr ""
+
+msgid "%d nodes"
 msgstr ""
 
 msgid "%dd %dh %dm"
@@ -14,6 +26,9 @@ msgid "%dm"
 msgstr ""
 
 msgid "%s (inverted)"
+msgstr ""
+
+msgid "%s (subscription)"
 msgstr ""
 
 msgid "%s is up to date."
@@ -49,16 +64,25 @@ msgstr ""
 msgid "A profile with this name exists."
 msgstr ""
 
+msgid "A subscription or an outbound with this name exists."
+msgstr ""
+
 msgid "Action"
 msgstr ""
 
 msgid "Activity"
 msgstr ""
 
+msgid "Add"
+msgstr ""
+
 msgid "Address"
 msgstr ""
 
 msgid "Advanced editing"
+msgstr ""
+
+msgid "Airport A"
 msgstr ""
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
@@ -68,6 +92,9 @@ msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 
 msgstr ""
 
 msgid "Another outbound already uses this name."
+msgstr ""
+
+msgid "Another subscription names its nodes with this prefix."
 msgstr ""
 
 msgid "Another update is running; try again later."
@@ -163,12 +190,6 @@ msgstr ""
 msgid "Continue"
 msgstr ""
 
-msgid "Copied."
-msgstr ""
-
-msgid "Copy"
-msgstr ""
-
 msgid "Core log"
 msgstr ""
 
@@ -217,9 +238,6 @@ msgstr ""
 msgid "Default HTTP client"
 msgstr ""
 
-msgid "Default config"
-msgstr ""
-
 msgid "Default domain resolver"
 msgstr ""
 
@@ -236,6 +254,9 @@ msgid "Destinations in these rule sets bypass sing-box in the firewall."
 msgstr ""
 
 msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
+msgstr ""
+
+msgid "Details"
 msgstr ""
 
 msgid "Dial"
@@ -265,6 +286,9 @@ msgstr ""
 msgid "Domain resolver"
 msgstr ""
 
+msgid "Download and save"
+msgstr ""
+
 msgid "Download bandwidth"
 msgstr ""
 
@@ -272,6 +296,9 @@ msgid "Download failed."
 msgstr ""
 
 msgid "Download via"
+msgstr ""
+
+msgid "Edit"
 msgstr ""
 
 msgid "Enable"
@@ -299,6 +326,9 @@ msgid "Expecting a name."
 msgstr ""
 
 msgid "Expecting a range such as 1000:2000"
+msgstr ""
+
+msgid "Expecting a regular expression"
 msgstr ""
 
 msgid "Expecting a size such as 6MB"
@@ -415,6 +445,9 @@ msgstr ""
 msgid "In use"
 msgstr ""
 
+msgid "Include subscription nodes"
+msgstr ""
+
 msgid "Initial file"
 msgstr ""
 
@@ -446,6 +479,12 @@ msgid "Invalid JSON: %s"
 msgstr ""
 
 msgid "Invalid User-Agent."
+msgstr ""
+
+msgid "Invalid prefix."
+msgstr ""
+
+msgid "Invalid type."
 msgstr ""
 
 msgid "Invalid update interval."
@@ -496,10 +535,10 @@ msgstr ""
 msgid "Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well."
 msgstr ""
 
-msgid "Local"
+msgid "Local file"
 msgstr ""
 
-msgid "Local file"
+msgid "Local nodes"
 msgstr ""
 
 msgid "Log"
@@ -649,16 +688,28 @@ msgstr ""
 msgid "New rule set"
 msgstr ""
 
+msgid "New subscription"
+msgstr ""
+
 msgid "New…"
 msgstr ""
 
 msgid "No HTTP client defined"
 msgstr ""
 
+msgid "Node filter"
+msgstr ""
+
+msgid "Node name prefix"
+msgstr ""
+
 msgid "Nodes"
 msgstr ""
 
 msgid "None"
+msgstr ""
+
+msgid "Not downloaded"
 msgstr ""
 
 msgid "Not installed"
@@ -769,9 +820,6 @@ msgstr ""
 msgid "Profile name"
 msgstr ""
 
-msgid "Profile source"
-msgstr ""
-
 msgid "Profiles"
 msgstr ""
 
@@ -814,9 +862,6 @@ msgstr ""
 msgid "Remote rule sets download with them, chosen as the default on the Rules page or for each rule set."
 msgstr ""
 
-msgid "Remote subscription"
-msgstr ""
-
 msgid "Resolve strategy"
 msgstr ""
 
@@ -850,6 +895,9 @@ msgstr ""
 msgid "STUN servers"
 msgstr ""
 
+msgid "Save"
+msgstr ""
+
 msgid "Server"
 msgstr ""
 
@@ -863,9 +911,6 @@ msgid "Skip certificate verification"
 msgstr ""
 
 msgid "Snell version"
-msgstr ""
-
-msgid "Some providers answer in the format the User-Agent asks for; the default names sing-box and OpenBox."
 msgstr ""
 
 msgid "Source (.json)"
@@ -896,6 +941,12 @@ msgid "Subscription"
 msgstr ""
 
 msgid "Subscription URL"
+msgstr ""
+
+msgid "Subscription nodes"
+msgstr ""
+
+msgid "Subscriptions give nodes only, which follow their updates; Details lists them with their latency. Each subscription is a policy as well, which groups and rules may take. Subscriptions are added, edited, deleted and updated at once."
 msgstr ""
 
 msgid "Switched; sing-box was reloaded."
@@ -967,19 +1018,13 @@ msgstr ""
 msgid "The download is not a JSON config."
 msgstr ""
 
-msgid "The nodes follow the subscription of this profile; only their latency is tested here."
-msgstr ""
-
-msgid "The profile and its nodes, groups and rules are deleted."
-msgstr ""
-
 msgid "The profile does not exist."
 msgstr ""
 
 msgid "The profile in use cannot be deleted."
 msgstr ""
 
-msgid "The profile, its groups and rules, and what its subscription downloaded are deleted."
+msgid "The profile, its nodes, subscriptions, groups and rules are deleted."
 msgstr ""
 
 msgid "The rule applies when the condition does not match."
@@ -991,10 +1036,19 @@ msgstr ""
 msgid "The sub-rule matches when its condition does not."
 msgstr ""
 
+msgid "The subscription and what it downloaded are deleted, and the groups that list it no longer do."
+msgstr ""
+
+msgid "The subscription does not exist."
+msgstr ""
+
 msgid "This protocol always uses TLS."
 msgstr ""
 
 msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
+msgstr ""
+
+msgid "This section contains no values yet"
 msgstr ""
 
 msgid "Timeout"
@@ -1039,9 +1093,6 @@ msgstr ""
 msgid "URL"
 msgstr ""
 
-msgid "Unable to copy; select the URL and copy it by hand."
-msgstr ""
-
 msgid "Unable to delete %s"
 msgstr ""
 
@@ -1067,6 +1118,9 @@ msgid "Unable to use %s"
 msgstr ""
 
 msgid "Unable to write the profile."
+msgstr ""
+
+msgid "Unable to write the subscription."
 msgstr ""
 
 msgid "Unknown error"
@@ -1151,6 +1205,9 @@ msgid "gRPC service name"
 msgstr ""
 
 msgid "hours"
+msgstr ""
+
+msgid "just now"
 msgstr ""
 
 msgid "minutes"

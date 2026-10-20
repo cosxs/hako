@@ -3,8 +3,20 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: zh_Hans\n"
 
+msgid "%d days ago"
+msgstr "%d 天前"
+
+msgid "%d hours ago"
+msgstr "%d 小时前"
+
 msgid "%d in total"
 msgstr "共 %d 个"
+
+msgid "%d minutes ago"
+msgstr "%d 分钟前"
+
+msgid "%d nodes"
+msgstr "%d 个"
 
 msgid "%dd %dh %dm"
 msgstr "%d 天 %d 小时 %d 分钟"
@@ -17,6 +29,9 @@ msgstr "%d 分钟"
 
 msgid "%s (inverted)"
 msgstr "%s（反向）"
+
+msgid "%s (subscription)"
+msgstr "%s（订阅）"
 
 msgid "%s is up to date."
 msgstr "%s 已是最新。"
@@ -51,17 +66,26 @@ msgstr "在 OpenWrt 上运行 sing-box 的简约客户端。"
 msgid "A profile with this name exists."
 msgstr "已有同名配置。"
 
+msgid "A subscription or an outbound with this name exists."
+msgstr "已有同名的订阅或出站。"
+
 msgid "Action"
 msgstr "操作"
 
 msgid "Activity"
 msgstr "活动"
 
+msgid "Add"
+msgstr "添加"
+
 msgid "Address"
 msgstr "地址"
 
 msgid "Advanced editing"
 msgstr "高级编辑"
+
+msgid "Airport A"
+msgstr "机场 A"
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
 msgstr "sing-box <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">无头规则</a>数组。"
@@ -71,6 +95,9 @@ msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box DNS 规则<
 
 msgid "Another outbound already uses this name."
 msgstr "已有其他出站使用此名称。"
+
+msgid "Another subscription names its nodes with this prefix."
+msgstr "已有订阅使用这个节点名前缀。"
 
 msgid "Another update is running; try again later."
 msgstr "另一个更新正在进行，请稍后再试。"
@@ -165,12 +192,6 @@ msgstr "连接复用"
 msgid "Continue"
 msgstr "继续"
 
-msgid "Copied."
-msgstr "已复制。"
-
-msgid "Copy"
-msgstr "复制"
-
 msgid "Core log"
 msgstr "内核日志"
 
@@ -219,9 +240,6 @@ msgstr "默认 DNS 服务器"
 msgid "Default HTTP client"
 msgstr "默认 HTTP 客户端"
 
-msgid "Default config"
-msgstr "默认配置"
-
 msgid "Default domain resolver"
 msgstr "默认域名解析服务器"
 
@@ -239,6 +257,9 @@ msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过
 
 msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
 msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。只能用本地和内联规则集。"
+
+msgid "Details"
+msgstr "详情"
 
 msgid "Dial"
 msgstr "拨号"
@@ -267,6 +288,9 @@ msgstr "已禁用"
 msgid "Domain resolver"
 msgstr "域名解析服务器"
 
+msgid "Download and save"
+msgstr "下载并保存"
+
 msgid "Download bandwidth"
 msgstr "下行带宽"
 
@@ -275,6 +299,9 @@ msgstr "下载失败。"
 
 msgid "Download via"
 msgstr "下载方式"
+
+msgid "Edit"
+msgstr "编辑"
 
 msgid "Enable"
 msgstr "启用"
@@ -302,6 +329,9 @@ msgstr "需要填写配置名。"
 
 msgid "Expecting a range such as 1000:2000"
 msgstr "需要是 1000:2000 这样的范围"
+
+msgid "Expecting a regular expression"
+msgstr "需要是正则表达式"
 
 msgid "Expecting a size such as 6MB"
 msgstr "需要 6MB 这样的大小"
@@ -417,6 +447,9 @@ msgstr "闲置超时"
 msgid "In use"
 msgstr "使用中"
 
+msgid "Include subscription nodes"
+msgstr "包含订阅节点"
+
 msgid "Initial file"
 msgstr "初始文件"
 
@@ -449,6 +482,12 @@ msgstr "JSON 格式错误：%s"
 
 msgid "Invalid User-Agent."
 msgstr "User-Agent 无效。"
+
+msgid "Invalid prefix."
+msgstr "前缀无效。"
+
+msgid "Invalid type."
+msgstr "类型无效。"
 
 msgid "Invalid update interval."
 msgstr "更新间隔无效。"
@@ -498,11 +537,11 @@ msgstr "级别"
 msgid "Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well."
 msgstr "域名或地址列表，供路由规则使用；DNS 规则和接管页的绕过规则集也会引用。"
 
-msgid "Local"
-msgstr "本地"
-
 msgid "Local file"
 msgstr "本地文件"
+
+msgid "Local nodes"
+msgstr "本地节点"
 
 msgid "Log"
 msgstr "日志"
@@ -651,17 +690,29 @@ msgstr "新建配置"
 msgid "New rule set"
 msgstr "新规则集"
 
+msgid "New subscription"
+msgstr "新订阅"
+
 msgid "New…"
 msgstr "新建…"
 
 msgid "No HTTP client defined"
 msgstr "未定义 HTTP 客户端"
 
+msgid "Node filter"
+msgstr "节点筛选"
+
+msgid "Node name prefix"
+msgstr "节点名前缀"
+
 msgid "Nodes"
 msgstr "节点"
 
 msgid "None"
 msgstr "无"
+
+msgid "Not downloaded"
+msgstr "未下载"
 
 msgid "Not installed"
 msgstr "未安装"
@@ -771,9 +822,6 @@ msgstr "私钥密码"
 msgid "Profile name"
 msgstr "配置名"
 
-msgid "Profile source"
-msgstr "来源"
-
 msgid "Profiles"
 msgstr "配置文件"
 
@@ -816,9 +864,6 @@ msgstr "远程"
 msgid "Remote rule sets download with them, chosen as the default on the Rules page or for each rule set."
 msgstr "远程规则集通过它们下载，可在规则页设为默认，或给单个规则集指定。"
 
-msgid "Remote subscription"
-msgstr "远程订阅"
-
 msgid "Resolve strategy"
 msgstr "解析策略"
 
@@ -852,6 +897,9 @@ msgstr "SOCKS 版本"
 msgid "STUN servers"
 msgstr "STUN 服务器"
 
+msgid "Save"
+msgstr "保存"
+
 msgid "Server"
 msgstr "服务器"
 
@@ -866,9 +914,6 @@ msgstr "跳过证书验证"
 
 msgid "Snell version"
 msgstr "Snell 版本"
-
-msgid "Some providers answer in the format the User-Agent asks for; the default names sing-box and OpenBox."
-msgstr "有些服务商按 User-Agent 返回对应格式；默认会带上 sing-box 和 OpenBox 的版本。"
 
 msgid "Source (.json)"
 msgstr "源文件（.json）"
@@ -899,6 +944,12 @@ msgstr "订阅"
 
 msgid "Subscription URL"
 msgstr "订阅地址"
+
+msgid "Subscription nodes"
+msgstr "订阅节点"
+
+msgid "Subscriptions give nodes only, which follow their updates; Details lists them with their latency. Each subscription is a policy as well, which groups and rules may take. Subscriptions are added, edited, deleted and updated at once."
+msgstr "订阅只提供节点，随订阅更新，「详情」里查看节点和延迟。每个订阅也是一个策略，策略组和规则都能选它。订阅的添加、编辑、删除和更新立即生效。"
 
 msgid "Switched; sing-box was reloaded."
 msgstr "已切换，sing-box 已重载。"
@@ -969,20 +1020,14 @@ msgstr "测试中…"
 msgid "The download is not a JSON config."
 msgstr "下载的内容不是 JSON 配置。"
 
-msgid "The nodes follow the subscription of this profile; only their latency is tested here."
-msgstr "节点来自这份配置的订阅，随订阅更新；这里只能测试延迟。"
-
-msgid "The profile and its nodes, groups and rules are deleted."
-msgstr "这份配置连同它的节点、策略组和规则都会删除。"
-
 msgid "The profile does not exist."
 msgstr "配置不存在。"
 
 msgid "The profile in use cannot be deleted."
 msgstr "使用中的配置文件不能删除。"
 
-msgid "The profile, its groups and rules, and what its subscription downloaded are deleted."
-msgstr "这份配置连同它的策略组、规则和订阅下载的内容都会删除。"
+msgid "The profile, its nodes, subscriptions, groups and rules are deleted."
+msgstr "配置及其节点、订阅、策略组和规则都会删除。"
 
 msgid "The rule applies when the condition does not match."
 msgstr "条件不满足时规则生效。"
@@ -993,11 +1038,20 @@ msgstr "sing-box 发布页中的 sing-box_*_openwrt_%s.apk 文件。"
 msgid "The sub-rule matches when its condition does not."
 msgstr "条件不匹配时，这条子规则算匹配。"
 
+msgid "The subscription and what it downloaded are deleted, and the groups that list it no longer do."
+msgstr "订阅和它下载的内容都会删除，列出它的策略组也不再包含它。"
+
+msgid "The subscription does not exist."
+msgstr "订阅不存在。"
+
 msgid "This protocol always uses TLS."
 msgstr "该协议必须使用 TLS。"
 
 msgid "This rule has several conditions, set outside this page. Its action and comment can be changed here; its conditions stay as they are."
 msgstr "这条规则有多个条件，是在页面之外设置的。这里可以改动作和注释，条件保持原样。"
+
+msgid "This section contains no values yet"
+msgstr "尚无任何配置"
 
 msgid "Timeout"
 msgstr "超时"
@@ -1041,9 +1095,6 @@ msgstr "UDP 中继模式"
 msgid "URL"
 msgstr "URL"
 
-msgid "Unable to copy; select the URL and copy it by hand."
-msgstr "无法复制，请选中地址手动复制。"
-
 msgid "Unable to delete %s"
 msgstr "无法删除 %s"
 
@@ -1070,6 +1121,9 @@ msgstr "无法使用 %s"
 
 msgid "Unable to write the profile."
 msgstr "无法写入配置。"
+
+msgid "Unable to write the subscription."
+msgstr "无法写入订阅。"
 
 msgid "Unknown error"
 msgstr "未知错误"
@@ -1154,6 +1208,9 @@ msgstr "gRPC 服务名"
 
 msgid "hours"
 msgstr "小时"
+
+msgid "just now"
+msgstr "刚刚"
 
 msgid "minutes"
 msgstr "分钟"

@@ -1,0 +1,40 @@
+{
+  "outbounds": [
+    {
+      "type": "selector",
+      "tag": "Proxy",
+      "outbounds": [
+        "JP 02",
+        "US 03"
+      ]
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "JP 02",
+      "server": "jp2.example.net",
+      "server_port": 8388,
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "bXlwYXNzd29yZDEyMzQ1Ng=="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 03",
+      "server": "us3.example.net",
+      "server_port": 8388,
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "bXlwYXNzd29yZDEyMzQ1Ng==",
+      "detour": "HK 01"
+    },
+    {
+      "type": "trojan",
+      "tag": "Direct",
+      "server": "x.example.net",
+      "server_port": 443,
+      "password": "p"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

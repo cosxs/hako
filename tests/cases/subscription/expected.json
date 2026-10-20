@@ -136,7 +136,7 @@
     },
     {
       "type": "shadowsocks",
-      "tag": "HK 01",
+      "tag": "机场 A · HK 01",
       "server": "hk.example.com",
       "server_port": 8388,
       "method": "aes-128-gcm",
@@ -144,7 +144,7 @@
     },
     {
       "type": "shadowsocks",
-      "tag": "JP 02",
+      "tag": "机场 A · JP 02",
       "server": "jp.example.com",
       "server_port": 8388,
       "method": "aes-128-gcm",
@@ -152,20 +152,65 @@
     },
     {
       "type": "shadowsocks",
-      "tag": "Relay",
+      "tag": "机场 A · Relay",
       "server": "relay.example.com",
       "server_port": 8388,
       "method": "aes-128-gcm",
       "password": "placeholder-password",
-      "detour": "HK 01"
+      "detour": "机场 A · HK 01"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "B · JP 02",
+      "server": "jp2.example.net",
+      "server_port": 8388,
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "bXlwYXNzd29yZDEyMzQ1Ng=="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "B · US 03",
+      "server": "us3.example.net",
+      "server_port": 8388,
+      "method": "2022-blake3-aes-128-gcm",
+      "password": "bXlwYXNzd29yZDEyMzQ1Ng=="
     },
     {
       "type": "selector",
       "tag": "Proxy",
       "outbounds": [
-        "HK 01",
-        "JP 02",
-        "Relay",
+        "Auto",
+        "机场 A",
+        "B · US 03",
+        "Direct"
+      ]
+    },
+    {
+      "type": "urltest",
+      "tag": "Auto",
+      "outbounds": [
+        "机场 B"
+      ]
+    },
+    {
+      "type": "selector",
+      "tag": "B · Direct",
+      "outbounds": [
+        "Direct"
+      ]
+    },
+    {
+      "type": "urltest",
+      "tag": "Japan",
+      "outbounds": [
+        "机场 A · JP 02",
+        "B · JP 02"
+      ]
+    },
+    {
+      "type": "selector",
+      "tag": "Broken filter",
+      "outbounds": [
         "Direct"
       ]
     },
@@ -173,11 +218,31 @@
       "type": "selector",
       "tag": "Global",
       "outbounds": [
-        "HK 01",
-        "JP 02",
-        "Relay",
         "Direct",
-        "Proxy"
+        "Proxy",
+        "Auto",
+        "B · Direct",
+        "Japan",
+        "Broken filter",
+        "机场 A",
+        "机场 B"
+      ]
+    },
+    {
+      "type": "selector",
+      "tag": "机场 A",
+      "outbounds": [
+        "机场 A · HK 01",
+        "机场 A · JP 02",
+        "机场 A · Relay"
+      ]
+    },
+    {
+      "type": "urltest",
+      "tag": "机场 B",
+      "outbounds": [
+        "B · JP 02",
+        "B · US 03"
       ]
     }
   ],
@@ -227,6 +292,12 @@
           "cn-mainland-ip"
         ],
         "outbound": "Direct"
+      },
+      {
+        "domain_suffix": [
+          "netflix.com"
+        ],
+        "outbound": "机场 A"
       }
     ],
     "rule_set": [

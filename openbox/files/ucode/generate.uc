@@ -11,7 +11,7 @@
 
 import { cursor } from 'uci';
 import { readfile } from 'fs';
-import { DEVICE, SUBSCRIPTION_DIR, current_profile, profile_source } from 'openbox.profile';
+import { DEVICE, current_profile, profile_source, subscription_file, subscription_prefix, subscription_node } from 'openbox.profile';
 
 // OPENBOX_CONFDIR and OPENBOX_SAVEDIR point the tests at their own config
 const uci = cursor(getenv('OPENBOX_CONFDIR'), getenv('OPENBOX_SAVEDIR'));
@@ -638,50 +638,104 @@ for (let section in sections) {
   }
 }
 
-// a profile made from a subscription takes its nodes from what the
-// subscription downloaded: the outbounds and endpoints that are no groups,
-// direct, block or dns; a tag the profile has already is skipped
+// the subscriptions of the profile, in their order, take their nodes from
+// what they downloaded: the outbounds and endpoints that are no groups,
+// direct, block or dns, named with the prefix of the subscription. One then
+// named as an outbound of the profile, or as a node of a subscription
+// before, is skipped. A subscription is a policy as well: a group of its
+// nodes, named as the subscription, which groups and rules take as any
+// other. One switched off gives no nodes and no group
 const NOT_NODES = [ 'direct', 'block', 'dns', 'selector', 'urltest' ];
+const subscriptions = [];
 const subNodes = [];
 
-if (puci.get(PROFILE, 'profile', 'url')) {
+const taken = {};
+for (let section in sections)
+  taken[tag(section)] = 'the profile has an outbound of that name';
+
+puci.foreach(PROFILE, 'subscription', (section) => {
+  const name = section.tag || section['.name'];
+  const subscription = { section: section, name: name, nodes: null };
+  push(subscriptions, subscription);
+  if (section.enabled == '0')
+    return;
+
   let sub = null;
   try {
-    sub = json(readfile(`${SUBSCRIPTION_DIR}/${current_profile(uci)}.json`) ?? '');
+    sub = json(readfile(subscription_file(current_profile(uci), section['.name']) ?? '') ?? '');
   }
   catch (e) {}
 
   if (type(sub) != 'object')
-    warn('openbox: the subscription of the profile has not been downloaded\n');
+    warn(`openbox: subscription '${name}' has not been downloaded\n`);
 
-  const taken = {};
-  for (let section in sections)
-    taken[tag(section)] = true;
-
+  const prefix = subscription_prefix(section);
+  const nodes = [];
+  const named = {};
   for (let kind in [ 'outbounds', 'endpoints' ]) {
     for (let node in sub?.[kind] ?? []) {
       if (type(node) != 'object' || type(node.tag) != 'string' || node.type in NOT_NODES)
         continue;
 
-      if (taken[node.tag]) {
-        warn(`openbox: skipping node '${node.tag}' of the subscription: the profile has an outbound of that name\n`);
+      const nodeTag = subscription_node(prefix, node.tag);
+      if (taken[nodeTag]) {
+        warn(`openbox: skipping node '${nodeTag}' of subscription '${name}': ${taken[nodeTag]}\n`);
         continue;
       }
 
-      taken[node.tag] = true;
-      push(subNodes, { tag: node.tag, type: node.type, node: node, endpoint: kind == 'endpoints' });
+      taken[nodeTag] = `subscription '${name}' has a node of that name`;
+      named[node.tag] = nodeTag;
+      push(nodes, { tag: nodeTag, original: node.tag, type: node.type, node: node, endpoint: kind == 'endpoints' });
+      node.tag = nodeTag;
     }
   }
 
-  // a node connects through another node only; groups of the subscription
-  // are not taken
-  const nodeTags = map(subNodes, (n) => n.tag);
-  for (let n in subNodes) {
-    if (n.node.detour != null && !(n.node.detour in nodeTags)) {
-      warn(`openbox: node '${n.tag}' of the subscription: dropping detour '${n.node.detour}', not a node\n`);
+  // a node connects through another node of its subscription only, named
+  // as that one is now; groups of the subscription are not taken
+  for (let n in nodes) {
+    if (n.node.detour == null)
+      continue;
+
+    if (named[n.node.detour])
+      n.node.detour = named[n.node.detour];
+    else {
+      warn(`openbox: node '${n.tag}' of subscription '${name}': dropping detour '${n.node.detour}', not a node of the subscription\n`);
       delete n.node.detour;
     }
   }
+
+  subscription.nodes = nodes;
+  for (let n in nodes)
+    push(subNodes, n);
+});
+
+// the group of a subscription, of its nodes but the shadowtls ones, which
+// only carry another node; none without nodes, or when its name is taken
+for (let sub in subscriptions) {
+  sub.members = map(filter(sub.nodes ?? [], (n) => n.type != 'shadowtls'), (n) => n.tag);
+  if (sub.nodes == null || !length(sub.members))
+    continue;
+
+  if (taken[sub.name]) {
+    warn(`openbox: subscription '${sub.name}' is no policy: ${taken[sub.name]}\n`);
+    continue;
+  }
+
+  taken[sub.name] = `subscription '${sub.name}' is named so`;
+  sub.group = sub.name;
+}
+
+// a subscription by section name, or else by its name
+function find_subscription(ref) {
+  for (let s in subscriptions)
+    if (s.section['.name'] == ref)
+      return s;
+
+  for (let s in subscriptions)
+    if (s.name == ref)
+      return s;
+
+  return null;
 }
 
 function sub_node(ref) {
@@ -706,7 +760,7 @@ function find(candidates, ref) {
 
 function resolve(ref) {
   const section = find(groups, ref) ?? find(proxies, ref);
-  return section ? tag(section) : sub_node(ref)?.tag;
+  return section ? tag(section) : (find_subscription(ref)?.group ?? sub_node(ref)?.tag);
 }
 
 // dial fields: sing-box rejects a detour to a plain direct outbound, and
@@ -780,10 +834,47 @@ function group_path(from, to, seen) {
   return null;
 }
 
-// the members in the order of outbounds, as listed in LuCI. A hidden group,
-// as the one of the global mode, then takes everything else: the nodes, then
-// Direct, a hidden node, then every group not hidden; not the shadowtls nodes
-// a subscription may have, which only carry another node. A group listed
+// the nodes of the subscriptions a group includes, whose names without the
+// prefix match its filter, any case; not the shadowtls nodes, which only
+// carry another node. A filter that is no regex takes none, rather than
+// nodes the group is not meant for
+function included_nodes(group, where) {
+  const refs = list(group.include);
+  if (!length(refs))
+    return [];
+
+  let filter = null;
+  if (length(group.filter ?? '')) {
+    try {
+      filter = regexp(group.filter, 'i');
+    }
+    catch (e) {
+      warn(`openbox: ${where}: taking no nodes of subscriptions: filter '${group.filter}' is no regex\n`);
+      return [];
+    }
+  }
+
+  const result = [];
+  for (let ref in refs) {
+    const sub = find_subscription(ref);
+    if (!sub)
+      warn(`openbox: ${where}: no subscription '${ref}' to include\n`);
+    else if (sub.nodes == null)
+      warn(`openbox: ${where}: not including subscription '${sub.name}': it is switched off\n`);
+    else
+      for (let n in sub.nodes)
+        if (n.type != 'shadowtls' && (!filter || match(n.original, filter)))
+          push(result, n.tag);
+  }
+
+  return result;
+}
+
+// the members in the order of outbounds, as listed in LuCI; a subscription
+// listed is its group. Then the nodes of the subscriptions it includes. A
+// hidden group, as the one of the global mode, then takes the nodes of the
+// profile, then Direct, a hidden node, then every group not hidden, then the
+// groups of the subscriptions. A group listed
 // that already contains this one, directly or through others, is dropped:
 // sing-box checks such a loop only when it starts, and then fails. So none
 // takes a hidden one either
@@ -798,18 +889,36 @@ function group_members(group) {
       warn(`openbox: ${where}: dropping '${ref}': it contains this group (${join(' -> ', map(loop, tag))}), a loop\n`);
     else if (member && member != group)
       push(listed, tag(member));
+    else if (member)
+      continue;
+    else if (find_subscription(ref)) {
+      const sub = find_subscription(ref);
+      if (sub.group)
+        push(listed, sub.group);
+      else
+        warn(`openbox: ${where}: dropping '${ref}': subscription '${sub.name}' ${(sub.nodes == null) ? 'is switched off' : 'is no policy'}\n`);
+    }
     else if (sub_node(ref))
       push(listed, ref);
+    else
+      warn(`openbox: ${where}: dropping '${ref}': no such outbound or subscription\n`);
   }
 
+  for (let nodeTag in included_nodes(group, where))
+    push(listed, nodeTag);
+
   if (bool(group.hidden)) {
-    for (let proxy in [ ...proxies, ...subNodes ])
+    for (let proxy in proxies)
       if (proxy.type != 'shadowtls')
         push(proxy.type == 'direct' ? direct : nodes, tag(proxy));
 
     for (let other in groups)
       if (!bool(other.hidden))
         push(members, tag(other));
+
+    for (let sub in subscriptions)
+      if (sub.group)
+        push(members, sub.group);
   }
 
   const result = uniq([ ...listed, ...nodes, ...direct, ...members ]);
@@ -849,6 +958,22 @@ function group_outbound(group) {
 }
 
 const groupOutbounds = map(groups, group_outbound);
+
+// the groups of the subscriptions: manual, or auto by latency with the test
+// URL of the plugin settings
+const subscriptionGroups = [];
+for (let sub in subscriptions) {
+  if (!sub.group)
+    continue;
+
+  const auto = sub.section.group_type == 'urltest';
+  push(subscriptionGroups, {
+    type: auto ? 'urltest' : 'selector',
+    tag: sub.group,
+    outbounds: sub.members,
+    url: auto ? uci.get(DEVICE, 'latency', 'url') : null
+  });
+}
 
 // dns servers
 
@@ -1136,7 +1261,8 @@ const config = {
   outbounds: [
     ...proxyOutbounds,
     ...map(filter(subNodes, (n) => !n.endpoint), (n) => n.node),
-    ...groupOutbounds
+    ...groupOutbounds,
+    ...subscriptionGroups
   ],
   // only the nodes of a subscription may be endpoints
   endpoints: length(filter(subNodes, (n) => n.endpoint))
