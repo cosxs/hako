@@ -241,7 +241,7 @@ return view.extend({
     // tabs as the one of a node
 
     o = s.taboption('http_client', form.SectionValue, '_http_clients', form.GridSection, 'http_client', _('HTTP clients'),
-      _('Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set.'));
+      _('Remote rule sets download with them, chosen as the default on the Rules page or for each rule set.'));
     const hs = o.subsection;
     hs.anonymous = true;
     hs.addremove = true;

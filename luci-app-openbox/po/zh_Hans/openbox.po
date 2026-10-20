@@ -813,8 +813,8 @@ msgstr "重载"
 msgid "Remote"
 msgstr "远程"
 
-msgid "Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set."
-msgstr "远程规则集通过它们下载，可在路由规则页设为默认，或给单个规则集指定。"
+msgid "Remote rule sets download with them, chosen as the default on the Rules page or for each rule set."
+msgstr "远程规则集通过它们下载，可在规则页设为默认，或给单个规则集指定。"
 
 msgid "Remote subscription"
 msgstr "远程订阅"
@@ -824,9 +824,6 @@ msgstr "解析策略"
 
 msgid "Route rules"
 msgstr "路由规则"
-
-msgid "Route settings"
-msgstr "路由设置"
 
 msgid "Rule sets"
 msgstr "规则集"
@@ -860,6 +857,9 @@ msgstr "服务器"
 
 msgid "Session receive window"
 msgstr "会话接收窗口"
+
+msgid "Settings"
+msgstr "设置"
 
 msgid "Skip certificate verification"
 msgstr "跳过证书验证"

@@ -811,7 +811,7 @@ msgstr ""
 msgid "Remote"
 msgstr ""
 
-msgid "Remote rule sets download with them, chosen as the default on the Route rules page or for each rule set."
+msgid "Remote rule sets download with them, chosen as the default on the Rules page or for each rule set."
 msgstr ""
 
 msgid "Remote subscription"
@@ -821,9 +821,6 @@ msgid "Resolve strategy"
 msgstr ""
 
 msgid "Route rules"
-msgstr ""
-
-msgid "Route settings"
 msgstr ""
 
 msgid "Rule sets"
@@ -857,6 +854,9 @@ msgid "Server"
 msgstr ""
 
 msgid "Session receive window"
+msgstr ""
+
+msgid "Settings"
 msgstr ""
 
 msgid "Skip certificate verification"

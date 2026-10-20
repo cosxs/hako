@@ -10,7 +10,7 @@ const PAGES = [
   [ 'activity', _('Activity') ],
   [ 'takeover', _('Takeover') ],
   [ 'policy', _('Policies') ],
-  [ 'rules', _('Route rules') ],
+  [ 'rules', _('Rules') ],
   [ 'core', _('Core settings') ],
   [ 'profiles', _('Profiles') ],
   [ 'logs', _('Logs') ],

@@ -220,7 +220,7 @@ return view.extend({
   // router has a use for, in the order of sing-box; auto_detect_interface,
   // which the takeover needs, the generator always turns on
   renderSettings(m) {
-    const s = m.section(form.NamedSection, 'route', 'route', _('Route settings'));
+    const s = m.section(form.NamedSection, 'route', 'route', _('Settings'));
 
     // where traffic no rule matched goes
     let o = s.option(form.ListValue, 'final', _('Default outbound'));
