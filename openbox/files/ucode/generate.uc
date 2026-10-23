@@ -93,12 +93,13 @@ const LOG_FIELDS = {
 };
 
 const CLASH_API_FIELDS = {
-  external_controller: 'string', secret: 'string', default_mode: 'string',
+  external_controller: 'string', external_ui: 'string', external_ui_download_url: 'string',
+  external_ui_download_detour: 'outbound', secret: 'string', default_mode: 'string',
   access_control_allow_origin: 'list', access_control_allow_private_network: 'bool'
 };
 
 const CACHE_FILE_FIELDS = {
-  enabled: 'bool', path: 'string', cache_id: 'string', store_fakeip: 'bool'
+  enabled: 'bool', path: 'string', cache_id: 'string', store_fakeip: 'bool', store_dns: 'bool'
 };
 
 // "outbound" and "dns_server" fields refer to another section by name or tag
@@ -1154,18 +1155,48 @@ function http_client(section) {
 
 const httpClientObjects = map(httpClients, http_client);
 
+// the sing-box API, as services of type api: the fields used most are
+// options, the others written as JSON and put over them
+function api_service(section) {
+  return clean(merge({
+    type: 'api',
+    tag: tag(section),
+    listen: section.listen,
+    listen_port: number(section.listen_port),
+    secret: section.secret,
+    access_control_allow_origin: nonempty(section.access_control_allow_origin),
+    access_control_allow_private_network: bool(section.access_control_allow_private_network) || null,
+    dashboard: bool(section.dashboard) ? {
+      enabled: true,
+      path: section.dashboard_path,
+      download_url: section.dashboard_download_url,
+      http_client: section.dashboard_http_client ? resolve_http_client(section.dashboard_http_client) : null,
+      update_interval: section.dashboard_update_interval
+    } : null,
+    tls: json_fields(section, 'tls_fields')
+  }, json_fields(section, 'extra_fields') ?? {}));
+}
+
+const serviceObjects = filter(map(enabled_sections('service'), api_service), (object) => {
+  if (!object.listen_port)
+    warn(`openbox: skipping service ${object.tag}: needs a port\n`);
+
+  return !!object.listen_port;
+});
+
 const ruleSetObjects = elements('rule_set', RULE_SET_FIELDS, (ruleSet) =>
   (ruleSet.type == 'remote' && !ruleSet.url) ? 'needs url' :
   (ruleSet.type == 'local' && !ruleSet.path) ? 'needs path' :
   (ruleSet.type == 'inline' && type(ruleSet.rules) != 'array') ? 'needs rules' : null, true);
 
-// with no http client, sing-box makes the requests of remote rule sets and
-// realms through the default outbound, which it no longer does from 1.16:
-// then one is added that goes the same way, through route.final, or directly
-// when that is a direct outbound
+// with no http client, sing-box makes the requests of remote rule sets,
+// realms and the dashboard of the API through the default outbound, which
+// it no longer does from 1.16: then one is added that goes the same way,
+// through route.final, or directly when that is a direct outbound
 if (!length(httpClientObjects) &&
     (length(filter(ruleSetObjects, (ruleSet) => ruleSet.type == 'remote')) ||
-     length(filter(proxyObjects, (object) => object.realm)))) {
+     length(filter(proxyObjects, (object) => object.realm)) ||
+     length(filter(serviceObjects, (object) => object.dashboard?.enabled)))) {
   const outbound = puci.get(PROFILE, 'route', 'final');
   push(httpClientObjects, {
     tag: 'Default',
@@ -1276,6 +1307,7 @@ const config = {
     rules: routeRules,
     rule_set: ruleSetObjects
   }),
+  services: length(serviceObjects) ? serviceObjects : null,
   experimental: {
     clash_api: mirror('experimental', 'clash_api', CLASH_API_FIELDS, refs),
     cache_file: mirror('experimental', 'cache_file', CACHE_FILE_FIELDS, refs)

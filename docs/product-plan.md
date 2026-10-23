@@ -158,6 +158,7 @@ config subscription 'sub_1792230866123'  # 示例：订阅（见 3.1.1），Open
     # option enabled '0'           # 停用：不生成它的节点
 
 config log 'log'                   # → log
+    # option disabled '1'          # 关闭日志：sing-box 启动后不再输出，日志页看不到内核日志
     option level 'warn'            # info 及更低级别会为每个连接记录日志
     option timestamp '1'
 
@@ -230,11 +231,18 @@ config experimental 'clash_api'    # → experimental.clash_api；删除此 sect
     option external_controller '127.0.0.1:9090'
     option secret ''
     option default_mode 'Rule'     # 固定为 Rule，界面不提供；实际模式由活动页的出站模式（main.mode）决定
+    # option external_ui '/etc/openbox/ui'  # Web 面板目录，经 /ui 访问；相对路径基于 /var/run/openbox（重启清空）；为空时下载
+    # option external_ui_download_url ''    # 面板的 ZIP 地址，默认 Yacd-meta
+    # option external_ui_download_detour 'proxy'  # 下载面板的出站，按 section 名或 tag；默认走默认出站
+    # list access_control_allow_origin 'http://127.0.0.1'  # CORS 允许的来源，默认全部
+    # option access_control_allow_private_network '1'
 
 config experimental 'cache_file'   # → experimental.cache_file，保存出站模式、各组的选择与 FakeIP 映射
     option enabled '1'
     option path '/etc/openbox/cache.db'
     option store_fakeip '1'
+    # option cache_id ''           # 同一文件里分开存放本配置的数据
+    # option store_dns '1'         # 保存 DNS 缓存（1.14 起）；store_rdrc、rdrc_timeout 在 1.14 已弃用，不提供
 
 config inbound 'tun'               # → inbounds[]；enabled 即接管总开关，默认开启（TUN）
     option enabled '1'
@@ -312,6 +320,19 @@ config http_client 'via_proxy'     # 示例 → http_clients[]，供远程规则
                                    # stream_receive_window、connection_receive_window、max_concurrent_streams
     option tls_fields ''           # TLS 字段，JSON 对象 → tls
     option dial_fields '{"detour": "Proxy"}'  # 拨号字段，JSON 对象，原样合并；经哪个出站就写在 detour 里，留空为直连
+
+config service 'dashboard'         # 示例 → services[]，只提供 sing-box API（type 固定为 api，不存）；
+    option enabled '1'             # 其他服务类型不提供
+    option tag 'API'
+    option listen '127.0.0.1'
+    option listen_port '9091'      # 必填，没有时跳过并警告
+    option secret ''
+    list   access_control_allow_origin ''
+    option access_control_allow_private_network '0'
+    option dashboard '1'           # 面板 → dashboard 对象，经 /dashboard/ 访问；dashboard_path、dashboard_download_url、
+                                   # dashboard_http_client（按 section 名）、dashboard_update_interval
+    option tls_fields ''           # TLS 字段，JSON 对象 → tls
+    option extra_fields ''         # 其余字段，JSON 对象，原样合并并覆盖上面的字段（如监听字段）
 
 config outbound 'direct'           # → outbounds[]
     option tag 'Direct'
@@ -466,6 +487,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 | 入站 | 启用的 `config inbound`：`tun`，或 `tproxy` 加 `direct`（DNS）；另有可单独启用的 `mixed`（代理端口，`username` / `password` 生成为 `users`）；启用 TProxy 时 `route.default_mark` 取 `firewall.output_mark`。都关闭时不生成入站，sing-box 只提供出站模式和组切换 |
 | 路由规则 | `config route_rule` 按顺序生成；默认动作 `route` 必须有有效的 `outbound`，否则跳过并警告；逻辑规则写作 `type 'logical'`、`mode`（and / or）和一个 `id`；它的子规则是单独的 `config route_subrule`，用 `option rule '<id>'` 指向它，按配置里的顺序生成为 `rules`；子规则只有匹配条件（字段同标准规则，外加 `invert`），或者用 `json` 原样写一条（多个条件、嵌套 logical）；没有条件的子规则跳过并警告，没有子规则的逻辑规则也跳过并警告；`hidden` 只用于界面，不生成；`final` 取 `route.final` 指向的节点或组 |
 | 规则集 | `config rule_set` → `route.rule_set`；`config http_client` → `http_clients`，供远程规则集下载；引用的 HTTP 客户端不存在时去掉引用并警告，改用默认的；一个 HTTP 客户端都没定义、又有远程规则集或 Hysteria2 realm 时，生成器补一个 tag 为 `Default` 的，经 `route.final` 出去（`route.final` 是 Direct 出站时直连），和 sing-box 1.16 前的隐式默认一致 |
+| sing-box API | 启用的 `config service` → `services`，类型都是 `api`；没有端口的跳过并警告；面板要下载而一个 HTTP 客户端都没有时，同样补 `Default` |
 | clash API | 存在 `config experimental 'clash_api'` 时生成 |
 | DNS | `config dns 'dns'` 加上所有 `config dns_server` 和按顺序的 `config dns_rule`；发往服务器的动作（`route`、`evaluate`）必须有有效的 `server`；`dns.custom_rules`（JSON 数组）原样插到第一条 `evaluate` 规则之前，JSON 无效时跳过并警告；规则里的 `strategy` 已被 sing-box 1.14 弃用，不再生成 |
 | NTP | `config ntp 'ntp'`；默认关闭，路由器时钟不可靠时再开启 |
@@ -587,7 +609,7 @@ openbox/
 | 策略 | 策略组、节点和订阅节点，见下方「策略页」 |
 | 规则 | 从上到下平铺三块：设置、规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值；弹窗分「标准规则」「逻辑规则」两个标签页（参考 Surge 的标准规则和 AND/OR 规则），保存时停在哪个标签页，规则就是哪种（逻辑规则写入 `type 'logical'`，不留自己的匹配条件；标准规则不留 `mode`、`id` 和子规则）；动作、出站、拒绝方式、反向匹配、注释两个标签页各有一份，切换时带过去，保存时只写当前这份；编辑已有规则时打开在它那种的标签页；启用只在表格里切换；逻辑规则填模式 and / or 和子规则：子规则是标签页里嵌的 LuCI 原生表格（参考 Surge 的子规则表格），列出类型和值，可增删、拖动排序；添加或编辑时叠一层弹窗，和标准规则一样左边选规则类型、右边填值，另有反向匹配，类型多一个「JSON」，写类型表达不了的（多个条件、嵌套 logical）；打开子规则弹窗前先保存逻辑规则这一层（LuCI 叠放弹窗的做法），逻辑规则第一次加子规则时生成 `id`；删除逻辑规则、取消新建的逻辑规则或把它改成标准规则时，它的子规则一起删除；子规则只写匹配条件，动作用外层这条规则的；表格里照 Surge 的写法一行显示：类型为 AND / OR，值为子规则的表达式，如 `((domain_suffix,netflix.com), (NOT,((port,443))))`，反向的子规则包一层 NOT，JSON 写的也换成这种写法；子规则表格里 JSON 的值同样这样显示）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集。设置：按 sing-box 文档顺序列出路由器用得上的 `route` 字段：默认出站 `final`、邻居解析 `find_neighbor`、DHCP 租约文件 `dhcp_lease_files`、默认 HTTP 客户端 `default_http_client`（留空时 sing-box 用第一个 HTTP 客户端，空选项据此显示「第一个 HTTP 客户端」；一个都没定义时显示「未定义 HTTP 客户端」，这时会经默认出站下载，1.14 已废弃、1.16 移除；规则集的「下载方式」和 Hysteria2 realm 的「HTTP 客户端」留空则跟随这里，空选项显示「默认 HTTP 客户端」）、默认域名解析服务器 `default_domain_resolver`（只列直连、且不是 local 的 DNS 服务器：节点连上之前要靠它解析自己的服务器域名，走代理的会卡死，local 会绕回 sing-box）；不列出 `auto_detect_interface`（生成器总是开启）、`default_interface`、`find_process`、多网卡策略（`default_network_strategy`、`default_network_type`、`default_fallback_network_type`、`default_fallback_delay`），以及 OpenBox 在 TProxy 时自动设置的 `default_mark`（取防火墙的 `output_mark`） |
 | 设备 | 访问控制模式与设备列表 |
-| 内核设置 | 二级标签依次为：日志（级别、时间戳）、DNS（默认服务器（不列出 local：OpenBox 运行时 dnsmasq 把查询交回 sing-box，没命中规则的查询会绕回来）、解析策略、乐观缓存、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、HTTP 客户端（顶层 `http_clients` 的列表；弹窗和节点一样分标签页：基本（标签、HTTP 版本 1 / 2 / 3、禁用版本回退、请求头）、HTTP2（版本 2 时显示）、QUIC（版本 3 时显示，含 HTTP2 字段）、TLS（TLS 字段 JSON）、拨号（固定显示出站 `detour` 和域名解析服务器 `domain_resolver`，按 tag 选择，与下方拨号字段 JSON 双向同步，只存 JSON；选了出站时 sing-box 忽略其他拨号字段，域名解析服务器随之隐藏）；供规则页的默认 HTTP 客户端、规则集的下载方式和 Hysteria2 realm 选用）、实验性（clash API 监听地址和密钥、缓存文件；默认出站模式不在界面上提供）。只用于生成配置；配置来源为原生 JSON 时不生效 |
+| 内核设置 | 二级标签依次为：日志（禁用、级别、时间戳；禁用时隐藏后两项并保留其值）、DNS（默认服务器（不列出 local：OpenBox 运行时 dnsmasq 把查询交回 sing-box，没命中规则的查询会绕回来）、解析策略、乐观缓存、DNS 服务器列表（不显示 FakeIP 和内置的 local；类型按官方文档写作 TCP、UDP、TLS、QUIC、HTTPS、HTTP/3）、DNS 规则（子标题下一个输入框，填 sing-box 原生 JSON 数组，保存时检查 JSON 格式））、NTP（启用、服务器、端口、同步间隔、出站）、HTTP 客户端（顶层 `http_clients` 的列表；弹窗和节点一样分标签页：基本（标签、HTTP 版本 1 / 2 / 3、禁用版本回退、请求头）、HTTP2（版本 2 时显示）、QUIC（版本 3 时显示，含 HTTP2 字段）、TLS（TLS 字段 JSON）、拨号（固定显示出站 `detour` 和域名解析服务器 `domain_resolver`，按 tag 选择，与下方拨号字段 JSON 双向同步，只存 JSON；选了出站时 sing-box 忽略其他拨号字段，域名解析服务器随之隐藏）；供规则页的默认 HTTP 客户端、规则集的下载方式和 Hysteria2 realm 选用）、API（sing-box API，即类型为 `api` 的 `services`；表格列出启用（可直接勾选）、标签、地址；弹窗分标签页：基本（标签、监听地址（默认 127.0.0.1）、端口、密钥、允许的来源、允许私有网络访问、面板及其目录、下载地址、HTTP 客户端、更新间隔）、TLS（TLS 字段 JSON）、更多字段（其余字段 JSON，覆盖上面的字段））、实验性（再分两个子标签：Clash API（监听地址、密钥、外部面板及其下载地址和下载出站、允许的来源、允许私有网络访问；默认出站模式不在界面上提供）、缓存文件（启用、路径、缓存 ID、保存 FakeIP、保存 DNS 缓存）；都写在 `openbox` 里）。只用于生成配置；配置来源为原生 JSON 时不生效 |
 | 配置文件 | 一张表列出全部配置：配置名（点击查看）、使用中标签；操作列只有「使用」（使用中的不显示）和「更多」菜单：查看、删除（使用中的不显示）。「查看」在弹窗里只读显示生成的 JSON（两个空格缩进）。「新建…」弹窗只填配置名，基于内置模板新建。 |
 | 日志 | 日志设置（自动清理、保留天数）；插件日志和内核日志 |
 | 插件设置 | OpenBox 自己的设置，按子标签分组。测速：测速地址、测速超时 |

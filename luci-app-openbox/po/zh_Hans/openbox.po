@@ -48,6 +48,9 @@ msgstr "0-RTT 握手"
 msgid "A <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box route rule</a> as JSON, with conditions only, for what a type above cannot write: several conditions, or a logical rule."
 msgstr "一条 <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 路由规则</a>的 JSON，只写条件，用于上面的类型写不了的：多个条件，或逻辑规则。"
 
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, as of an inbound."
+msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段</a>的 JSON 对象，按入站的写法。"
+
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
 msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段</a>组成的 JSON 对象，会覆盖上面的参数。"
 
@@ -56,6 +59,18 @@ msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS 字段<
 
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
 msgstr "<a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 拨号字段</a>组成的 JSON 对象。"
+
+msgid "A JSON object of further fields, such as the listen fields; they go over the ones above."
+msgstr "其余字段的 JSON 对象，如监听字段；与上面的字段重复时以这里为准。"
+
+msgid "A ZIP archive of the web UI."
+msgstr "Web 面板的 ZIP 压缩包。"
+
+msgid "A directory of a web UI, served at /ui; relative to %s, which is cleared on reboot. Downloaded when empty."
+msgstr "Web 面板所在的目录，通过 /ui 访问；相对路径基于 %s，该目录重启后清空。目录为空时自动下载。"
+
+msgid "A gRPC server, gRPC-Web as well, to watch and control sing-box, with a dashboard of its own. See the <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box documentation</a>."
+msgstr "用于查看和控制 sing-box 的 gRPC 服务（也支持 gRPC-Web），自带面板。参见 <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box 文档</a>。"
 
 msgid "A local file used at start while the rule set has not been downloaded yet."
 msgstr "启动时规则集还没下载下来，先用这个本地文件。"
@@ -86,6 +101,15 @@ msgstr "高级编辑"
 
 msgid "Airport A"
 msgstr "机场 A"
+
+msgid "Allow private network"
+msgstr "允许私有网络访问"
+
+msgid "Allowed origins"
+msgstr "允许的来源"
+
+msgid "Allows web pages of public sites to call the API on a private address."
+msgstr "允许公网网站的网页访问私有地址上的 API。"
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
 msgstr "sing-box <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">无头规则</a>数组。"
@@ -132,11 +156,11 @@ msgstr "绕过的 IPv6 地址"
 msgid "Bypass rule sets"
 msgstr "绕过的规则集"
 
+msgid "Cache ID"
+msgstr "缓存 ID"
+
 msgid "Cache file"
 msgstr "缓存文件"
-
-msgid "Cache file path"
-msgstr "缓存文件路径"
 
 msgid "Cancel"
 msgstr "取消"
@@ -149,12 +173,6 @@ msgstr "加密算法"
 
 msgid "Circular reference found in policy group: %s"
 msgstr "在策略组中发现了循环引用：%s"
-
-msgid "Clash API listen address"
-msgstr "Clash API 监听地址"
-
-msgid "Clash API secret"
-msgstr "Clash API 密钥"
 
 msgid "Clean up logs automatically"
 msgstr "自动清理日志"
@@ -231,6 +249,15 @@ msgstr "DNS 规则"
 msgid "DNS servers"
 msgstr "DNS 服务器"
 
+msgid "Dashboard"
+msgstr "面板"
+
+msgid "Dashboard directory"
+msgstr "面板目录"
+
+msgid "Dashboard download URL"
+msgstr "面板下载地址"
+
 msgid "Default"
 msgstr "默认"
 
@@ -272,6 +299,9 @@ msgstr "直连（默认）"
 
 msgid "Direct connection"
 msgstr "直接连接"
+
+msgid "Disable"
+msgstr "禁用"
 
 msgid "Disable Chrome parrot"
 msgstr "禁用 Chrome 指纹模仿"
@@ -350,6 +380,15 @@ msgstr "需要 http:// 或 https:// 开头的地址。"
 
 msgid "Experimental"
 msgstr "实验性"
+
+msgid "External UI"
+msgstr "外部面板"
+
+msgid "External UI download URL"
+msgstr "外部面板下载地址"
+
+msgid "External UI download outbound"
+msgstr "外部面板下载出站"
 
 msgid "FakeIP"
 msgstr "FakeIP"
@@ -504,6 +543,18 @@ msgstr "日志保留"
 msgid "Keepalive period"
 msgstr "保活周期"
 
+msgid "Keeps the DNS cache across restarts."
+msgstr "重启后保留 DNS 缓存。"
+
+msgid "Keeps the FakeIP addresses given out, so they still lead to their domains after a restart."
+msgstr "保存已分配的 FakeIP 地址，重启后仍对应原来的域名。"
+
+msgid "Keeps the choices of groups and the outbound mode across restarts."
+msgstr "重启后保留策略组的选择和出站模式。"
+
+msgid "Keeps the data of this config apart from that of others in the same file."
+msgstr "在同一个缓存文件中，将本配置的数据与其他配置分开存放。"
+
 msgid "Key exchange algorithms"
 msgstr "密钥交换算法"
 
@@ -533,6 +584,9 @@ msgstr "留空时不需要密码。"
 
 msgid "Level"
 msgstr "级别"
+
+msgid "Listen address"
+msgstr "监听地址"
 
 msgid "Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well."
 msgstr "域名或地址列表，供路由规则使用；DNS 规则和接管页的绕过规则集也会引用。"
@@ -657,6 +711,9 @@ msgstr "模式"
 msgid "More"
 msgstr "更多"
 
+msgid "More fields"
+msgstr "更多字段"
+
 msgid "Multiple conditions"
 msgstr "多个条件"
 
@@ -671,6 +728,9 @@ msgstr "邻居解析"
 
 msgid "Network protocols"
 msgstr "网络协议"
+
+msgid "New API"
+msgstr "新 API"
 
 msgid "New DNS server"
 msgstr "新 DNS 服务器"
@@ -900,11 +960,20 @@ msgstr "STUN 服务器"
 msgid "Save"
 msgstr "保存"
 
+msgid "Secret"
+msgstr "密钥"
+
+msgid "Served at /dashboard/, downloaded when its directory is empty."
+msgstr "通过 /dashboard/ 访问，目录为空时自动下载。"
+
 msgid "Server"
 msgstr "服务器"
 
 msgid "Session receive window"
 msgstr "会话接收窗口"
+
+msgid "Set one when the address is reachable from other devices."
+msgstr "其他设备能访问该地址时，请设置密钥。"
 
 msgid "Settings"
 msgstr "设置"
@@ -929,6 +998,12 @@ msgstr "状态"
 
 msgid "Stop"
 msgstr "停止"
+
+msgid "Store DNS cache"
+msgstr "保存 DNS 缓存"
+
+msgid "Store FakeIP"
+msgstr "保存 FakeIP"
 
 msgid "Stream receive window"
 msgstr "流接收窗口"
@@ -956,6 +1031,9 @@ msgstr "已切换，sing-box 已重载。"
 
 msgid "Switched; used when OpenBox starts."
 msgstr "已切换，OpenBox 启动时使用。"
+
+msgid "Switching the outbound mode, choosing in groups and testing latency use it; empty turns the Clash API off."
+msgstr "切换出站模式、策略组选择和延迟测试都依赖它；留空则关闭 Clash API。"
 
 msgid "Sync interval"
 msgstr "同步间隔"
@@ -1019,6 +1097,9 @@ msgstr "测试中…"
 
 msgid "The download is not a JSON config."
 msgstr "下载的内容不是 JSON 配置。"
+
+msgid "The origins of web pages allowed to call the API (CORS); all when empty."
+msgstr "允许调用 API 的网页来源（CORS），留空则允许全部。"
 
 msgid "The profile does not exist."
 msgstr "配置不存在。"
@@ -1242,6 +1323,8 @@ msgstr "未安装 sing-box"
 msgid "sing-box too old"
 msgstr "sing-box 版本过低"
 
+msgid "sing-box writes no log once it has started, and the Logs page shows none of it."
+msgstr "sing-box 启动后不再输出日志，日志页也不会显示内核日志。"
+
 msgid "uTLS fingerprint"
 msgstr "uTLS 指纹"
-

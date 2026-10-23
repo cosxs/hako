@@ -46,6 +46,9 @@ msgstr ""
 msgid "A <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box route rule</a> as JSON, with conditions only, for what a type above cannot write: several conditions, or a logical rule."
 msgstr ""
 
+msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, as of an inbound."
+msgstr ""
+
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box TLS fields</a>, which overrides the options above."
 msgstr ""
 
@@ -53,6 +56,18 @@ msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing
 msgstr ""
 
 msgid "A JSON object of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box dial fields</a>."
+msgstr ""
+
+msgid "A JSON object of further fields, such as the listen fields; they go over the ones above."
+msgstr ""
+
+msgid "A ZIP archive of the web UI."
+msgstr ""
+
+msgid "A directory of a web UI, served at /ui; relative to %s, which is cleared on reboot. Downloaded when empty."
+msgstr ""
+
+msgid "A gRPC server, gRPC-Web as well, to watch and control sing-box, with a dashboard of its own. See the <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">sing-box documentation</a>."
 msgstr ""
 
 msgid "A local file used at start while the rule set has not been downloaded yet."
@@ -83,6 +98,15 @@ msgid "Advanced editing"
 msgstr ""
 
 msgid "Airport A"
+msgstr ""
+
+msgid "Allow private network"
+msgstr ""
+
+msgid "Allowed origins"
+msgstr ""
+
+msgid "Allows web pages of public sites to call the API on a private address."
 msgstr ""
 
 msgid "An array of <a href=\"%s\" target=\"_blank\" rel=\"noreferrer\">headless rules</a> of sing-box."
@@ -130,10 +154,10 @@ msgstr ""
 msgid "Bypass rule sets"
 msgstr ""
 
-msgid "Cache file"
+msgid "Cache ID"
 msgstr ""
 
-msgid "Cache file path"
+msgid "Cache file"
 msgstr ""
 
 msgid "Cancel"
@@ -146,12 +170,6 @@ msgid "Ciphers"
 msgstr ""
 
 msgid "Circular reference found in policy group: %s"
-msgstr ""
-
-msgid "Clash API listen address"
-msgstr ""
-
-msgid "Clash API secret"
 msgstr ""
 
 msgid "Clean up logs automatically"
@@ -229,6 +247,15 @@ msgstr ""
 msgid "DNS servers"
 msgstr ""
 
+msgid "Dashboard"
+msgstr ""
+
+msgid "Dashboard directory"
+msgstr ""
+
+msgid "Dashboard download URL"
+msgstr ""
+
 msgid "Default"
 msgstr ""
 
@@ -269,6 +296,9 @@ msgid "Direct (default)"
 msgstr ""
 
 msgid "Direct connection"
+msgstr ""
+
+msgid "Disable"
 msgstr ""
 
 msgid "Disable Chrome parrot"
@@ -347,6 +377,15 @@ msgid "Expecting an http:// or https:// URL."
 msgstr ""
 
 msgid "Experimental"
+msgstr ""
+
+msgid "External UI"
+msgstr ""
+
+msgid "External UI download URL"
+msgstr ""
+
+msgid "External UI download outbound"
 msgstr ""
 
 msgid "FakeIP"
@@ -502,6 +541,18 @@ msgstr ""
 msgid "Keepalive period"
 msgstr ""
 
+msgid "Keeps the DNS cache across restarts."
+msgstr ""
+
+msgid "Keeps the FakeIP addresses given out, so they still lead to their domains after a restart."
+msgstr ""
+
+msgid "Keeps the choices of groups and the outbound mode across restarts."
+msgstr ""
+
+msgid "Keeps the data of this config apart from that of others in the same file."
+msgstr ""
+
 msgid "Key exchange algorithms"
 msgstr ""
 
@@ -530,6 +581,9 @@ msgid "Leave empty to use the proxy without a password."
 msgstr ""
 
 msgid "Level"
+msgstr ""
+
+msgid "Listen address"
 msgstr ""
 
 msgid "Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well."
@@ -655,6 +709,9 @@ msgstr ""
 msgid "More"
 msgstr ""
 
+msgid "More fields"
+msgstr ""
+
 msgid "Multiple conditions"
 msgstr ""
 
@@ -668,6 +725,9 @@ msgid "Neighbor resolution"
 msgstr ""
 
 msgid "Network protocols"
+msgstr ""
+
+msgid "New API"
 msgstr ""
 
 msgid "New DNS server"
@@ -898,10 +958,19 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
+msgid "Secret"
+msgstr ""
+
+msgid "Served at /dashboard/, downloaded when its directory is empty."
+msgstr ""
+
 msgid "Server"
 msgstr ""
 
 msgid "Session receive window"
+msgstr ""
+
+msgid "Set one when the address is reachable from other devices."
 msgstr ""
 
 msgid "Settings"
@@ -926,6 +995,12 @@ msgid "Status"
 msgstr ""
 
 msgid "Stop"
+msgstr ""
+
+msgid "Store DNS cache"
+msgstr ""
+
+msgid "Store FakeIP"
 msgstr ""
 
 msgid "Stream receive window"
@@ -953,6 +1028,9 @@ msgid "Switched; sing-box was reloaded."
 msgstr ""
 
 msgid "Switched; used when OpenBox starts."
+msgstr ""
+
+msgid "Switching the outbound mode, choosing in groups and testing latency use it; empty turns the Clash API off."
 msgstr ""
 
 msgid "Sync interval"
@@ -1016,6 +1094,9 @@ msgid "Testing…"
 msgstr ""
 
 msgid "The download is not a JSON config."
+msgstr ""
+
+msgid "The origins of web pages allowed to call the API (CORS); all when empty."
 msgstr ""
 
 msgid "The profile does not exist."
@@ -1240,6 +1321,8 @@ msgstr ""
 msgid "sing-box too old"
 msgstr ""
 
-msgid "uTLS fingerprint"
+msgid "sing-box writes no log once it has started, and the Logs page shows none of it."
 msgstr ""
 
+msgid "uTLS fingerprint"
+msgstr ""
