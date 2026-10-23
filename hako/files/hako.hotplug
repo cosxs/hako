@@ -1,0 +1,7 @@
+#!/bin/sh
+# set up the tproxy firewall again when a LAN interface comes up, as its
+# device may have changed; nothing happens unless that firewall is set up
+
+[ "$ACTION" = ifup ] || exit 0
+
+/etc/init.d/hako refresh_firewall "$INTERFACE"

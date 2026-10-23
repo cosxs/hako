@@ -1,0 +1,20 @@
+{
+  "luci-app-hako": {
+    "description": "Grant access to Hako",
+    "read": {
+      "uci": [ "hako", "hako_*" ],
+      "ubus": {
+        "luci.hako": [ "status", "outbounds", "core_latest", "core_install_status", "log_read", "profiles", "profile_view", "subscriptions" ]
+      }
+    },
+    "write": {
+      "uci": [ "hako", "hako_*" ],
+      "ubus": {
+        "luci.hako": [ "control", "mode_set", "select", "delay", "core_install", "profile_create", "profile_delete", "profile_use", "subscription_add", "subscription_edit", "subscription_delete", "subscription_update" ]
+      },
+      "file": {
+        "/tmp/hako-core-upload.apk": [ "write" ]
+      }
+    }
+  }
+}

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Remove OpenBox together with its config, profiles and logs. The sing-box core is kept.
-#   wget -O - https://github.com/cosxs/openbox/raw/main/uninstall.sh | sh
+# Remove Hako together with its config, profiles and logs. The sing-box core is kept.
+#   wget -O - https://github.com/cosxs/hako/raw/main/uninstall.sh | sh
 
 # shellcheck disable=SC2046
-apk del $(apk info 2> /dev/null | grep '^luci-i18n-openbox-') luci-app-openbox openbox
+apk del $(apk info 2> /dev/null | grep '^luci-i18n-hako-') luci-app-hako hako
 
-rm -rf /etc/config/openbox /etc/openbox /var/run/openbox /var/log/openbox
+rm -rf /etc/config/hako /etc/config/hako_* /etc/hako /var/run/hako /var/log/hako
 
-echo "OpenBox removed."
+echo "Hako removed."

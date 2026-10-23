@@ -107,7 +107,7 @@
     {
       "type": "tun",
       "tag": "tun-in",
-      "interface_name": "openbox-tun",
+      "interface_name": "hako-tun",
       "address": [
         "172.19.0.1/30"
       ],
@@ -214,7 +214,7 @@
         "tag": "cn-mainland-ip",
         "type": "local",
         "format": "binary",
-        "path": "/usr/share/openbox/rule-set/cn-mainland-ip.srs"
+        "path": "/usr/share/hako/rule-set/cn-mainland-ip.srs"
       },
       {
         "tag": "ads",
@@ -237,7 +237,7 @@
     },
     "cache_file": {
       "enabled": true,
-      "path": "/etc/openbox/cache.db",
+      "path": "/etc/hako/cache.db",
       "store_fakeip": true
     }
   }

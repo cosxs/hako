@@ -1,0 +1,10 @@
+#!/bin/sh
+# bring /etc/config/hako, which upgrades keep, to the current version
+ucode /usr/share/hako/ucode/migrate.uc
+
+# the first install: the default profile, made from the template, is in use
+if ! ls /etc/config/hako_* > /dev/null 2>&1; then
+  cp /usr/share/hako/template/hako_template /etc/config/hako_default
+fi
+
+exit 0

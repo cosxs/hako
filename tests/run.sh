@@ -3,10 +3,10 @@
 #
 # Usage: tests/run.sh [--update] [case...]
 #
-# Each directory in tests/cases holds the UCI files of a router: openbox, the
-# settings of the device, and openbox_<name>, the profiles; subscriptions/
+# Each directory in tests/cases holds the UCI files of a router: hako, the
+# settings of the device, and hako_<name>, the profiles; subscriptions/
 # holds the downloaded subscriptions, subscriptions/<profile>/<subscription>.json.
-# A case named migrate-* runs migrate.uc on them and compares openbox with
+# A case named migrate-* runs migrate.uc on them and compares hako with
 # "expected", and a profile with "expected_<package>" when there is one; any
 # other runs generate.uc. Either way the generated config is compared with
 # "expected.json", when there is one for a migration, and has to pass
@@ -20,7 +20,7 @@ SING_BOX=${SING_BOX:-sing-box}
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CASES="$ROOT/tests/cases"
-SCRIPTS="$ROOT/openbox/files/ucode"
+SCRIPTS="$ROOT/hako/files/ucode"
 
 update=0
 if [ "$1" = "--update" ]; then
@@ -38,9 +38,9 @@ done
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-# the shared modules, imported as openbox.<name> as they are once installed
+# the shared modules, imported as hako.<name> as they are once installed
 mkdir -p "$TMP/lib"
-ln -s "$SCRIPTS" "$TMP/lib/openbox"
+ln -s "$SCRIPTS" "$TMP/lib/hako"
 
 # JSON with sorted keys, so the order of fields does not matter
 normalize() {
@@ -68,16 +68,16 @@ show_diff() {
   fi
 }
 
-# run a script of OpenBox on the UCI files in a directory, with its own
+# run a script of Hako on the UCI files in a directory, with its own
 # directory for uncommitted changes
-openbox() {
-  OPENBOX_CONFDIR="$1" OPENBOX_SAVEDIR="$1/.uci" OPENBOX_SUBSCRIPTION_DIR="$1/subscriptions" \
-    OPENBOX_TEMPLATE_DIR="$ROOT/openbox/files/template" "$UCODE" -L "$TMP/lib/*.uc" "$SCRIPTS/$2"
+hako() {
+  HAKO_CONFDIR="$1" HAKO_SAVEDIR="$1/.uci" HAKO_SUBSCRIPTION_DIR="$1/subscriptions" \
+    HAKO_TEMPLATE_DIR="$ROOT/hako/files/template" "$UCODE" -L "$TMP/lib/*.uc" "$SCRIPTS/$2"
 }
 
 # generate the config of a UCI directory into a file and check it
 generate() {
-  if ! openbox "$1" generate.uc > "$2" 2> "$2.err"; then
+  if ! hako "$1" generate.uc > "$2" 2> "$2.err"; then
     cat "$2.err" >&2
     return 1
   fi
@@ -90,7 +90,7 @@ generate() {
   # sing-box reads the local rule sets, which may not be installed
   rm -rf "$TMP/sing-box"
   mkdir -p "$TMP/sing-box"
-  sed "s|\"/usr/share/openbox/rule-set/|\"$ROOT/openbox/files/rule-set/|" "$2" > "$TMP/sing-box/config.json"
+  sed "s|\"/usr/share/hako/rule-set/|\"$ROOT/hako/files/rule-set/|" "$2" > "$TMP/sing-box/config.json"
   "$SING_BOX" check -c "$TMP/sing-box/config.json" -D "$TMP/sing-box"
 }
 
@@ -124,21 +124,21 @@ run_migrate() {
 
   rm -rf "$conf"
   mkdir -p "$conf/.uci"
-  cp "$dir"/openbox* "$conf/"
+  cp "$dir"/hako* "$conf/"
   [ ! -d "$dir/subscriptions" ] || cp -R "$dir/subscriptions" "$conf/"
-  openbox "$conf" migrate.uc || return 1
+  hako "$conf" migrate.uc || return 1
 
   # the device settings, and the profiles a case expects something of
-  for file in "$conf"/openbox*; do
+  for file in "$conf"/hako*; do
     expected="$dir/expected"
-    [ "${file##*/}" = openbox ] || expected="$dir/expected_${file##*/}"
+    [ "${file##*/}" = hako ] || expected="$dir/expected_${file##*/}"
 
     if [ "$update" = 1 ]; then
-      [ "${file##*/}" = openbox ] || [ -f "$expected" ] || continue
+      [ "${file##*/}" = hako ] || [ -f "$expected" ] || continue
       cp "$file" "$expected"
     elif [ -f "$expected" ]; then
       cmp -s "$expected" "$file" || { show_diff "$expected" "$file" >&2; return 1; }
-    elif [ "${file##*/}" = openbox ]; then
+    elif [ "${file##*/}" = hako ]; then
       echo "  no expected" >&2
       return 1
     fi
@@ -158,7 +158,7 @@ fi
 
 failed=0
 for name in "$@"; do
-  if [ ! -f "$CASES/$name/openbox" ]; then
+  if [ ! -f "$CASES/$name/hako" ]; then
     echo "FAIL $name: no such case"
     failed=$((failed + 1))
     continue

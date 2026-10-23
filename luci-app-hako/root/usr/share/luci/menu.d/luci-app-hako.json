@@ -1,0 +1,66 @@
+{
+  "admin/services/hako": {
+    "title": "Hako",
+    "order": 60,
+    "action": {
+      "type": "view",
+      "path": "hako/activity"
+    },
+    "depends": {
+      "acl": [
+        "luci-app-hako"
+      ],
+      "uci": {
+        "hako": true
+      }
+    }
+  },
+  "admin/services/hako/activity": {
+    "action": {
+      "type": "view",
+      "path": "hako/activity"
+    }
+  },
+  "admin/services/hako/takeover": {
+    "action": {
+      "type": "view",
+      "path": "hako/takeover"
+    }
+  },
+  "admin/services/hako/policy": {
+    "action": {
+      "type": "view",
+      "path": "hako/policy"
+    }
+  },
+  "admin/services/hako/rules": {
+    "action": {
+      "type": "view",
+      "path": "hako/rules"
+    }
+  },
+  "admin/services/hako/core": {
+    "action": {
+      "type": "view",
+      "path": "hako/core"
+    }
+  },
+  "admin/services/hako/profiles": {
+    "action": {
+      "type": "view",
+      "path": "hako/profiles"
+    }
+  },
+  "admin/services/hako/logs": {
+    "action": {
+      "type": "view",
+      "path": "hako/logs"
+    }
+  },
+  "admin/services/hako/settings": {
+    "action": {
+      "type": "view",
+      "path": "hako/settings"
+    }
+  }
+}

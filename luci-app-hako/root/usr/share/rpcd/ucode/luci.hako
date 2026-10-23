@@ -1,0 +1,988 @@
+'use strict';
+
+import { readfile, writefile, unlink, access, popen, open, stat, lsdir, mkdtemp, rmdir } from 'fs';
+import { connect } from 'ubus';
+import { cursor } from 'uci';
+import { clash_api, clash_request, config_modes } from 'hako.clash';
+import { dns_inbound } from 'hako.config';
+import { SUBSCRIPTION_DIR, valid_name, profile_package, subscription_file, subscription_prefix, subscription_node } from 'hako.profile';
+
+const CONFIG_DIR = '/etc/config';
+// the template of a new profile
+const PROFILE_TEMPLATE = '/usr/share/hako/template/hako_template';
+const GENERATOR = '/usr/share/hako/ucode/generate.uc';
+const RUN_DIR = '/var/run/hako';
+const RUN_CONFIG = `${RUN_DIR}/config.json`;
+const CORE = '/usr/bin/sing-box';
+const COMMON = '/usr/share/hako/common.sh';
+const CORE_INSTALL = '/usr/share/hako/core-install.sh';
+const SUBSCRIPTION = '/usr/share/hako/subscription.sh';
+// the page gives up on a call after 20 seconds: leave time for sing-box check
+const SUBSCRIPTION_TIMEOUT = 10;
+// the exit codes of subscription.sh
+const SUBSCRIPTION_ERRORS = [ null, 'not_found', 'download_failed', 'invalid_json', 'check_failed', 'busy', 'write_failed' ];
+// how long a latency test of a group may take, unless latency.timeout says
+// otherwise: the members are tested at the same time, and those without an
+// answer by then failed. The page gives up on a call after 20 seconds
+const DELAY_TIMEOUT = 5000;
+const DELAY_TIMEOUT_MAX = 15000;
+const CORE_UPLOAD = '/tmp/hako-core-upload.apk';
+const INSTALL_LOG = `${RUN_DIR}/core-install.log`;
+const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
+const LOG_DIR = '/var/log/hako';
+const LOG_NAMES = [ 'app', 'core' ];
+const LOG_BYTES = 256 * 1024;
+
+function command_output(cmd) {
+  const proc = popen(cmd);
+  if (!proc)
+    return null;
+
+  const out = proc.read('all');
+  proc.close();
+
+  return out;
+}
+
+// the oldest sing-box Hako supports, CORE_MIN_VERSION of common.sh
+function core_min_version() {
+  return match(readfile(COMMON) ?? '', /\nCORE_MIN_VERSION="([^"]+)"/)?.[1];
+}
+
+// whether version A >= B, comparing the numeric x.y.z parts as common.sh does
+function version_ge(a, b) {
+  const x = split(a, '.'), y = split(b, '.');
+
+  for (let i = 0; i < 3; i++) {
+    const m = int(x[i] ?? 0) || 0, n = int(y[i] ?? 0) || 0;
+    if (m != n)
+      return m > n;
+  }
+
+  return true;
+}
+
+function core_info() {
+  const min_version = core_min_version();
+
+  if (!access(CORE, 'x'))
+    return { installed: false, min_version: min_version };
+
+  const out = command_output(`${CORE} version 2>/dev/null`) ?? '';
+  const version = match(out, /sing-box version (\S+)/)?.[1];
+  const tags = match(out, /Tags: (\S+)/)?.[1];
+
+  return {
+    installed: true,
+    version: version,
+    min_version: min_version,
+    supported: version ? version_ge(version, min_version) : false,
+    tags: tags ? split(tags, ',') : [],
+    // the service of the sing-box package runs or starts at boot
+    service_active: system('. /usr/share/hako/common.sh; core_service_active') == 0
+  };
+}
+
+function instance_pid() {
+  const ubus = connect();
+  const services = ubus.call('service', 'list', { name: 'hako' });
+  ubus.disconnect();
+
+  for (let name, instance in services?.hako?.instances ?? {})
+    if (instance.running)
+      return instance.pid;
+
+  return null;
+}
+
+// seconds since the process started, from /proc/<pid>/stat field 22 (in USER_HZ ticks)
+function process_uptime(pid) {
+  const stat = readfile(`/proc/${pid}/stat`);
+  const uptime = readfile('/proc/uptime');
+  if (!stat || !uptime)
+    return null;
+
+  const fields = split(substr(stat, rindex(stat, ')') + 2), ' ');
+  const started = +fields[19] / 100;
+
+  return int(+split(uptime, ' ')[0] - started);
+}
+
+function load_json(path) {
+  try {
+    return json(readfile(path) ?? '');
+  }
+  catch (e) {
+    return null;
+  }
+}
+
+// the profile in use
+function current_profile() {
+  return cursor().get('hako', 'main', 'profile') || 'default';
+}
+
+function profile_exists(name) {
+  return valid_name(name) && access(`${CONFIG_DIR}/${profile_package(name)}`) == true;
+}
+
+// the identifier of a new profile: the time it is made, in milliseconds,
+// one more while that is taken
+function new_profile_id() {
+  const t0 = clock();
+  const now = t0[0] * 1000 + int(t0[1] / 1000000);
+
+  for (let t = now; t < now + 1000; t++)
+    if (!profile_exists(`${t}`))
+      return `${t}`;
+
+  return null;
+}
+
+// the profiles; the title is what the page shows, any text, and the name
+// is the identifier
+function list_profiles() {
+  const profiles = [];
+  const uci = cursor();
+
+  for (let file in lsdir(CONFIG_DIR) ?? []) {
+    const name = match(file, /^hako_(.+)$/)?.[1];
+    if (!valid_name(name))
+      continue;
+
+    uci.load(file);
+    push(profiles, { name: name, title: uci.get(file, 'profile', 'title') || name });
+  }
+
+  return sort(profiles, (a, b) => (a.title < b.title) ? -1 : (a.title > b.title) ? 1 : 0);
+}
+
+// the title of a new profile: some text, and not the one of another
+function check_title(title) {
+  if (type(title) != 'string' || !length(trim(title)))
+    return 'invalid_title';
+
+  if (length(filter(list_profiles(), (profile) => profile.title == trim(title))))
+    return 'exists';
+
+  return null;
+}
+
+// a new profile from the template with its title: { name } or { error }
+function create_profile(title) {
+  const error = check_title(title);
+  if (error)
+    return { error: error };
+
+  const name = new_profile_id();
+  const pkg = name ? profile_package(name) : null;
+  const template = readfile(PROFILE_TEMPLATE);
+  if (!pkg || template == null || !writefile(`${CONFIG_DIR}/${pkg}`, template))
+    return { error: 'write_failed' };
+
+  const uci = cursor();
+  uci.load(pkg);
+  uci.set(pkg, 'profile', 'profile');
+  uci.set(pkg, 'profile', 'title', trim(title));
+  uci.commit(pkg);
+
+  return { name: name };
+}
+
+// whether the value is a sing-box duration of s, m, h and d parts
+function valid_interval(value) {
+  return match(value, /^([0-9]+[smhd])+$/) != null;
+}
+
+// runs subscription.sh update for a subscription of a profile; changed and
+// reloaded tell what it did
+function update_subscription(name, id) {
+  const path = subscription_file(name, id);
+  const before = readfile(path);
+  const running = name == current_profile() && instance_pid() != null;
+
+  const proc = popen(`FETCH_TIMEOUT=${SUBSCRIPTION_TIMEOUT} ${SUBSCRIPTION} update ${name} ${id} 2>&1`);
+  if (!proc)
+    return { result: false, error: 'update_failed', output: '' };
+
+  const output = trim(proc.read('all') ?? '');
+  const code = proc.close();
+
+  if (code != 0)
+    return { result: false, error: SUBSCRIPTION_ERRORS[code] ?? 'update_failed', output: output };
+
+  const changed = readfile(path) != before;
+
+  return { result: true, output: output, changed: changed, reloaded: changed && running };
+}
+
+// the nodes a subscription downloaded: its outbounds and endpoints that are
+// no groups, direct, block or dns, named with the prefix of the subscription
+function subscription_nodes(name, id, prefix) {
+  const sub = load_json(subscription_file(name, id) ?? '');
+  const nodes = [];
+
+  for (let kind in [ 'outbounds', 'endpoints' ])
+    for (let node in sub?.[kind] ?? [])
+      if (type(node) == 'object' && type(node.tag) == 'string' && !(node.type in [ 'direct', 'block', 'dns', 'selector', 'urltest' ]))
+        push(nodes, {
+          tag: subscription_node(prefix, node.tag),
+          name: node.tag,
+          type: node.type,
+          server: node.server ?? node.peers?.[0]?.address,
+          server_port: node.server_port ?? node.peers?.[0]?.port
+        });
+
+  return { downloaded: sub != null, nodes: nodes };
+}
+
+// the subscriptions of a profile, in their order, with their nodes
+function list_subscriptions(name) {
+  const pkg = profile_package(name);
+  const uci = cursor();
+  const result = [];
+
+  uci.load(pkg);
+  uci.foreach(pkg, 'subscription', (section) => {
+    const content = subscription_nodes(name, section['.name'], subscription_prefix(section));
+
+    push(result, {
+      name: section['.name'],
+      tag: section.tag || section['.name'],
+      type: section.group_type ?? 'selector',
+      prefix: section.prefix,
+      url: section.url,
+      update_interval: section.update_interval,
+      user_agent: section.user_agent,
+      last_update: section.last_update ? +section.last_update : null,
+      last_error: section.last_error,
+      enabled: section.enabled != '0',
+      downloaded: content.downloaded,
+      nodes: content.nodes
+    });
+  });
+
+  return result;
+}
+
+// the options of a subscription from a request: { values } or { error }
+function subscription_values(args) {
+  const tag = args?.title;
+  const url = args?.url;
+  const interval = args?.update_interval ?? '';
+  const agent = args?.user_agent ?? '';
+  const prefix = args?.prefix ?? '';
+  const kind = args?.type ?? 'selector';
+
+  if (type(tag) != 'string' || !length(trim(tag)))
+    return { error: 'invalid_title' };
+
+  if (type(prefix) != 'string' || match(prefix, /[\r\n]/))
+    return { error: 'invalid_prefix' };
+
+  if (!(kind in [ 'selector', 'urltest' ]))
+    return { error: 'invalid_type' };
+
+  if (type(url) != 'string' || !match(url, /^https?:\/\/[^[:space:]\/]+[^[:space:]]*$/))
+    return { error: 'invalid_url' };
+
+  if (type(interval) != 'string' || (interval != '' && interval != '0' && !valid_interval(interval)))
+    return { error: 'invalid_interval' };
+
+  if (type(agent) != 'string' || match(agent, /[\r\n]/))
+    return { error: 'invalid_user_agent' };
+
+  return { values: {
+    tag: trim(tag),
+    group_type: (kind == 'urltest') ? kind : null,
+    prefix: length(trim(prefix)) ? trim(prefix) : null,
+    url: url,
+    update_interval: (interval != '' && interval != '0') ? interval : null,
+    user_agent: length(trim(agent)) ? trim(agent) : null
+  } };
+}
+
+// whether another subscription or an outbound of a profile has a name; the
+// groups name both alike
+function name_taken(pkg, tag, except) {
+  const uci = cursor();
+  let taken = false;
+
+  uci.load(pkg);
+  for (let sectionType in [ 'subscription', 'outbound' ])
+    uci.foreach(pkg, sectionType, (section) => {
+      if (section['.name'] != except && (section.tag || section['.name']) == tag)
+        taken = true;
+    });
+
+  return taken;
+}
+
+// whether another subscription of a profile names its nodes with a prefix,
+// its own or its name
+function prefix_taken(pkg, values, except) {
+  const uci = cursor();
+  const prefix = subscription_prefix(values);
+  let taken = false;
+
+  uci.load(pkg);
+  uci.foreach(pkg, 'subscription', (section) => {
+    if (section['.name'] != except && subscription_prefix(section) == prefix)
+      taken = true;
+  });
+
+  return taken;
+}
+
+// the section of a subscription of the profile in use, or null
+function find_subscription(id) {
+  const pkg = profile_package(current_profile());
+  const uci = cursor();
+
+  uci.load(pkg);
+  return (type(id) == 'string' && subscription_file(current_profile(), id) && uci.get(pkg, id) == 'subscription') ? pkg : null;
+}
+
+// the command that generates the config of a profile; the name is checked,
+// so it is safe in the shell
+function generate_command(name) {
+  return `HAKO_PROFILE=${name} ucode ${GENERATOR}`;
+}
+
+// the config sing-box would run with a profile, the one in use by default
+function pending_config(name) {
+  name ??= current_profile();
+  if (!profile_exists(name))
+    return null;
+
+  try {
+    return json(command_output(`${generate_command(name)} 2>/dev/null`) ?? '');
+  }
+  catch (e) {
+    return null;
+  }
+}
+
+// how traffic is taken over, derived from the inbounds of the profile
+function takeover(config) {
+  const result = { tun: null, tproxy: null, redirect: null, dns: null, mixed: null };
+
+  for (let inbound in config?.inbounds ?? []) {
+    switch (inbound.type) {
+    case 'tun':
+      if (!result.tun)
+        result.tun = inbound.tag ?? inbound.type;
+
+      // sing-box hijacks DNS itself when it sets up the routes
+      if (inbound.auto_route && inbound.dns_mode != 'disabled' && !result.dns)
+        result.dns = { tag: inbound.tag ?? inbound.type };
+      break;
+
+    case 'tproxy':
+    case 'redirect':
+      if (!result[inbound.type])
+        result[inbound.type] = inbound.tag ?? inbound.type;
+      break;
+
+    // a proxy port for devices set up by hand, beside the takeover
+    case 'mixed':
+      if (!result.mixed)
+        result.mixed = { tag: inbound.tag ?? inbound.type, port: inbound.listen_port };
+      break;
+
+    }
+  }
+
+  // the dns inbound comes before the DNS hijack of tun
+  const dns = dns_inbound(config);
+  if (dns)
+    result.dns = { tag: dns.tag, port: dns.port };
+
+  return result;
+}
+
+// the clash API of the running sing-box, or why it is not available
+function running_clash_api() {
+  if (!instance_pid())
+    return { error: 'not_running' };
+
+  const api = clash_api(load_json(RUN_CONFIG));
+  if (!api)
+    return { error: 'no_clash_api' };
+
+  return { api: api };
+}
+
+function clash_mode(api) {
+  const resp = clash_request(api, 'GET', '/configs');
+  if (resp?.status != 200)
+    return null;
+
+  return { mode: resp.data?.mode, modes: resp.data?.['mode-list'] ?? [] };
+}
+
+// a sing-box duration such as "5s" or "500ms" in milliseconds, null when it
+// is not one
+function duration_ms(value) {
+  const units = { ms: 1, s: 1000, m: 60000 };
+  let total = 0, rest = value ?? '';
+
+  if (type(rest) != 'string' || !length(rest))
+    return null;
+
+  while (length(rest)) {
+    const part = match(rest, /^([0-9]+)(ms|s|m)/);
+    if (!part)
+      return null;
+
+    total += +part[1] * units[part[2]];
+    rest = substr(rest, length(part[0]));
+  }
+
+  return total;
+}
+
+// percent-encode a path segment, for group and outbound names
+function escape_path(value) {
+  return join('', map(split(value, ''), (c) => match(c, /^[A-Za-z0-9._~-]$/) ? c : sprintf('%%%02X', ord(c))));
+}
+
+// a directory of its own for the files of one call, so calls at the same
+// time never read each other's; removed with its files by remove_temp()
+function make_temp() {
+  system(`mkdir -p ${RUN_DIR}`);
+  return mkdtemp(`${RUN_DIR}/check-XXXXXX`);
+}
+
+function remove_temp(dir) {
+  for (let name in lsdir(dir) ?? [])
+    unlink(`${dir}/${name}`);
+  rmdir(dir);
+}
+
+// sing-box check on a config file, with what it printed but without the
+// colors of its log; passes when sing-box is not installed yet. The log goes
+// into dir when given (left to the caller), else into a directory of its own
+function check_config(path, dir) {
+  if (!access(CORE, 'x'))
+    return { result: true, output: '' };
+
+  const temp = dir ?? make_temp();
+  if (!temp)
+    return { result: false, output: 'cannot create a temporary file' };
+
+  const passed = system(`${CORE} check -c ${path} -D ${RUN_DIR} > ${temp}/check.log 2>&1`) == 0;
+  const output = replace(readfile(`${temp}/check.log`) ?? '', regexp('\x1b\\[[0-9;]*m', 'g'), '');
+  if (!dir)
+    remove_temp(temp);
+
+  return { result: passed, output: trim(output) };
+}
+
+function reload_running() {
+  return instance_pid() != null && system('/etc/init.d/hako reload >/dev/null 2>&1') == 0;
+}
+
+function install_running() {
+  return access(INSTALL_LOG) && !access(INSTALL_EXIT);
+}
+
+const methods = {
+  status: {
+    call: function() {
+      const uci = cursor();
+      const pid = instance_pid();
+      const config = pid ? load_json(RUN_CONFIG) : pending_config();
+      const api = clash_api(config);
+
+      return {
+        enabled: uci.get('hako', 'main', 'enabled') == '1',
+        running: pid != null,
+        uptime: pid ? process_uptime(pid) : null,
+        profile: current_profile(),
+        profile_title: filter(list_profiles(), (profile) => profile.name == current_profile())[0]?.title ?? current_profile(),
+        version: trim(readfile('/usr/share/hako/version') ?? '') || null,
+        core: core_info(),
+        takeover: takeover(config),
+        // the mode sing-box runs with, and those the activity page
+        // switches between
+        clash_api: api ? {
+          mode: (pid ? clash_mode(api)?.mode : null) ?? api.default_mode,
+          modes: config_modes(config, api)
+        } : null
+      };
+    }
+  },
+
+  control: {
+    args: { action: 'action' },
+    call: function(req) {
+      const action = req.args?.action;
+
+      // takeover: stop and disable the service of the sing-box package,
+      // then enable and start Hako as below
+      if (action == 'takeover')
+        system('/etc/init.d/hako takeover_core >/dev/null 2>&1');
+
+      // enable: turn the service on in UCI, then start it
+      if (action in [ 'enable', 'takeover' ]) {
+        const uci = cursor();
+        uci.set('hako', 'main', 'enabled', '1');
+        uci.commit('hako');
+
+        return { result: system('/etc/init.d/hako start >/dev/null 2>&1') == 0 };
+      }
+
+      if (!(action in [ 'start', 'stop', 'restart', 'reload' ]))
+        return { result: false, error: 'invalid action' };
+
+      return { result: system(`/etc/init.d/hako ${action} >/dev/null 2>&1`) == 0 };
+    }
+  },
+
+  // sets the outbound mode right away: it is kept in main.mode and a
+  // running service is reloaded, which sets it on sing-box and, as the mode
+  // decides what bypasses sing-box, regenerates the config and firewall
+  mode_set: {
+    args: { mode: 'mode' },
+    call: function(req) {
+      const uci = cursor();
+      const config = pending_config();
+      const api = clash_api(config);
+      if (!api)
+        return { result: false, error: 'no_clash_api' };
+
+      const wanted = req.args?.mode;
+      const mode = filter(config_modes(config, api), (m) => type(wanted) == 'string' && lc(m) == lc(wanted))[0];
+      if (!mode)
+        return { result: false, error: 'invalid_mode' };
+
+      uci.set('hako', 'main', 'mode', mode);
+      uci.commit('hako');
+
+      return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  // the outbounds of the running sing-box: their names, the groups with
+  // their current outbound, and the last measured delay of each
+  outbounds: {
+    call: function() {
+      const running = running_clash_api();
+      if (running.error)
+        return { available: false, reason: running.error };
+
+      const resp = clash_request(running.api, 'GET', '/proxies');
+      if (resp?.status != 200)
+        return { available: false, reason: 'unreachable' };
+
+      const names = [], groups = {}, delays = {};
+
+      for (let name, proxy in resp.data?.proxies ?? {}) {
+        // GLOBAL is added by the clash API itself
+        if (name == 'GLOBAL')
+          continue;
+
+        const history = proxy.history ?? [];
+        const delay = length(history) ? history[length(history) - 1].delay : 0;
+
+        push(names, name);
+
+        if (delay > 0)
+          delays[name] = delay;
+
+        if (type(proxy.all) == 'array')
+          groups[name] = { type: lc(proxy.type), now: proxy.now, all: proxy.all };
+      }
+
+      return { available: true, names: names, groups: groups, delays: delays };
+    }
+  },
+
+  // switch the outbound of a selector group
+  select: {
+    args: { group: 'group', outbound: 'outbound' },
+    call: function(req) {
+      const running = running_clash_api();
+      if (running.error)
+        return { result: false, error: running.error };
+
+      const group = req.args?.group, outbound = req.args?.outbound;
+      if (!group || !outbound)
+        return { result: false, error: 'invalid arguments' };
+
+      const resp = clash_request(running.api, 'PUT', `/proxies/${escape_path(group)}`,
+        sprintf('%J', { name: outbound }));
+
+      return { result: resp?.status == 204 };
+    }
+  },
+
+  // tests the latency of the members of a group at once: the delays of
+  // those that answered, by name. sing-box keeps them as the measured
+  // delays, and an auto group may switch to the fastest member
+  delay: {
+    args: { group: 'group' },
+    call: function(req) {
+      const running = running_clash_api();
+      if (running.error)
+        return { result: false, error: running.error };
+
+      const group = req.args?.group;
+      if (type(group) != 'string' || !length(group))
+        return { result: false, error: 'invalid arguments' };
+
+      // the test URL and timeout of the plugin settings; sing-box tests
+      // an auto group with its own URL
+      const uci = cursor();
+      const url = uci.get('hako', 'latency', 'url');
+      const timeout = min(duration_ms(uci.get('hako', 'latency', 'timeout')) || DELAY_TIMEOUT, DELAY_TIMEOUT_MAX);
+      let query = `timeout=${timeout}`;
+      if (url)
+        query += `&url=${escape_path(url)}`;
+
+      const resp = clash_request(running.api, 'GET', `/group/${escape_path(group)}/delay?${query}`);
+
+      if (resp?.status != 200)
+        return { result: false, error: resp?.data?.message ?? 'unreachable' };
+
+      return { result: true, delays: resp.data ?? {} };
+    }
+  },
+
+  log_read: {
+    args: { name: 'name', offset: 0 },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!(name in LOG_NAMES))
+        return { error: 'invalid log' };
+
+      const path = `${LOG_DIR}/${name}.log`;
+      const size = stat(path)?.size ?? 0;
+
+      // a log smaller than the offset was rotated or emptied: start over
+      let offset = +(req.args?.offset ?? 0);
+      if (offset > size)
+        offset = 0;
+
+      const start = (size - offset > LOG_BYTES) ? size - LOG_BYTES : offset;
+      let content = '';
+
+      if (size > start) {
+        const file = open(path);
+        if (file) {
+          file.seek(start);
+          content = file.read('all') ?? '';
+          file.close();
+        }
+
+        // skip the partial first line when starting mid-file
+        if (start > offset)
+          content = substr(content, index(content, '\n') + 1);
+      }
+
+      return { content: content, size: size };
+    }
+  },
+
+  // the latest GitHub release for this device
+  core_latest: {
+    call: function() {
+      const out = trim(command_output(`${CORE_INSTALL} latest 2>&1`) ?? '');
+
+      try {
+        return json(out);
+      }
+      catch (e) {
+        return { error: out };
+      }
+    }
+  },
+
+  // installs the core from the latest GitHub release or the uploaded apk in the
+  // background; progress is read with core_install_status
+  core_install: {
+    args: { source: 'source' },
+    call: function(req) {
+      const source = req.args?.source;
+      let cmd;
+
+      if (source == 'github')
+        cmd = `${CORE_INSTALL} github`;
+      else if (source == 'upload')
+        cmd = `${CORE_INSTALL} upload ${CORE_UPLOAD}`;
+      else
+        return { result: false, error: 'invalid source' };
+
+      if (install_running())
+        return { result: false, error: 'busy' };
+
+      system(`mkdir -p ${RUN_DIR}`);
+      unlink(INSTALL_EXIT);
+      writefile(INSTALL_LOG, '');
+      system(`( ${cmd} >> ${INSTALL_LOG} 2>&1; echo $? > ${INSTALL_EXIT} ) </dev/null >/dev/null 2>&1 &`);
+
+      return { result: true };
+    }
+  },
+
+  // the profiles, and the one in use
+  profiles: {
+    call: function() {
+      return { profile: current_profile(), profiles: list_profiles() };
+    }
+  },
+
+  // a new profile from the template, with its title
+  profile_create: {
+    args: { title: 'title' },
+    call: function(req) {
+      const res = create_profile(req.args?.title);
+      return res.error ? { result: false, error: res.error } : { result: true, name: res.name };
+    }
+  },
+
+  // the config a profile makes, with the warnings of the generator about
+  // what it skipped
+  profile_view: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name || current_profile();
+      if (!profile_exists(name))
+        return { error: 'not_found' };
+
+      const temp = make_temp();
+      if (!temp)
+        return { error: 'generate_failed', warnings: 'cannot create a temporary file' };
+
+      const content = command_output(`${generate_command(name)} 2> ${temp}/generate.log`);
+      const warnings = trim(readfile(`${temp}/generate.log`) ?? '');
+      remove_temp(temp);
+
+      return content ? { content: content, warnings: warnings } : { error: 'generate_failed', warnings: warnings };
+    }
+  },
+
+  // the profile in use cannot be deleted; a profile goes with what its
+  // subscriptions downloaded
+  profile_delete: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
+
+      if (name == current_profile())
+        return { result: false, error: 'in_use' };
+
+      // the name is checked, so it is safe in the shell
+      system(`rm -rf ${SUBSCRIPTION_DIR}/${name}`);
+
+      return { result: unlink(`${CONFIG_DIR}/${profile_package(name)}`) == true };
+    }
+  },
+
+  // the subscriptions of the profile in use, as the policy page lists them
+  subscriptions: {
+    call: function() {
+      return { subscriptions: list_subscriptions(current_profile()) };
+    }
+  },
+
+  // a new subscription of the profile in use, downloaded at once; it is
+  // dropped again when the download fails
+  subscription_add: {
+    args: { title: 'title', type: 'type', prefix: 'prefix', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
+    call: function(req) {
+      const name = current_profile();
+      const pkg = profile_package(name);
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
+
+      const checked = subscription_values(req.args);
+      if (checked.error)
+        return { result: false, error: checked.error };
+
+      if (name_taken(pkg, checked.values.tag))
+        return { result: false, error: 'exists' };
+
+      if (prefix_taken(pkg, checked.values))
+        return { result: false, error: 'prefix_exists' };
+
+      const uci = cursor();
+      uci.load(pkg);
+
+      // named by the time it is added, as profiles are
+      const t0 = clock();
+      let stamp = t0[0] * 1000 + int(t0[1] / 1000000);
+      while (uci.get(pkg, `sub_${stamp}`))
+        stamp++;
+      const id = `sub_${stamp}`;
+
+      uci.set(pkg, id, 'subscription');
+      for (let key, value in checked.values)
+        if (value != null)
+          uci.set(pkg, id, key, value);
+      uci.commit(pkg);
+
+      const res = update_subscription(name, id);
+      res.name = id;
+      if (!res.result) {
+        const again = cursor();
+        again.load(pkg);
+        again.delete(pkg, id);
+        again.commit(pkg);
+        unlink(subscription_file(name, id));
+      }
+
+      return res;
+    }
+  },
+
+  // changes a subscription; with another URL or User-Agent it is downloaded
+  // again first, and kept as it was when that fails. Another name, prefix or
+  // type changes what sing-box runs as well: a running service is reloaded
+  subscription_edit: {
+    args: { name: 'name', title: 'title', type: 'type', prefix: 'prefix', url: 'url', update_interval: 'update_interval', user_agent: 'user_agent' },
+    call: function(req) {
+      const id = req.args?.name;
+      const pkg = find_subscription(id);
+      if (!pkg)
+        return { result: false, error: 'not_found' };
+
+      const checked = subscription_values(req.args);
+      if (checked.error)
+        return { result: false, error: checked.error };
+
+      if (name_taken(pkg, checked.values.tag, id))
+        return { result: false, error: 'exists' };
+
+      if (prefix_taken(pkg, checked.values, id))
+        return { result: false, error: 'prefix_exists' };
+
+      const uci = cursor();
+      uci.load(pkg);
+
+      const old = {};
+      for (let key in [ 'tag', 'group_type', 'prefix', 'url', 'update_interval', 'user_agent', 'last_update', 'last_error' ])
+        old[key] = uci.get(pkg, id, key);
+
+      const values = checked.values;
+      const download = values.url != old.url || values.user_agent != old.user_agent;
+      const renamed = values.tag != old.tag || values.prefix != old.prefix || values.group_type != old.group_type;
+
+      for (let key, value in values)
+        (value != null) ? uci.set(pkg, id, key, value) : uci.delete(pkg, id, key);
+      uci.commit(pkg);
+
+      if (!download)
+        return { result: true, name: id, reloaded: renamed && reload_running() };
+
+      const res = update_subscription(current_profile(), id);
+      res.name = id;
+      if (res.result && renamed && !res.reloaded)
+        res.reloaded = reload_running();
+      if (!res.result) {
+        const again = cursor();
+        again.load(pkg);
+        for (let key, value in old)
+          (value != null) ? again.set(pkg, id, key, value) : again.delete(pkg, id, key);
+        again.commit(pkg);
+      }
+
+      return res;
+    }
+  },
+
+  // a subscription goes with what it downloaded, and the groups that list it
+  // no longer do
+  subscription_delete: {
+    args: { name: 'name' },
+    call: function(req) {
+      const id = req.args?.name;
+      const pkg = find_subscription(id);
+      if (!pkg)
+        return { result: false, error: 'not_found' };
+
+      const uci = cursor();
+      uci.load(pkg);
+      uci.delete(pkg, id);
+      uci.foreach(pkg, 'outbound', (section) => {
+        const members = section.outbounds;
+        if (type(members) != 'array' || !(id in members))
+          return;
+
+        const rest = filter(members, (member) => member != id);
+        length(rest) ? uci.set(pkg, section['.name'], 'outbounds', rest) : uci.delete(pkg, section['.name'], 'outbounds');
+      });
+      uci.commit(pkg);
+
+      unlink(subscription_file(current_profile(), id));
+      rmdir(`${SUBSCRIPTION_DIR}/${current_profile()}`);
+
+      return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  subscription_update: {
+    args: { name: 'name' },
+    call: function(req) {
+      const id = req.args?.name;
+      if (!find_subscription(id))
+        return { result: false, error: 'not_found' };
+
+      return update_subscription(current_profile(), id);
+    }
+  },
+
+  // switches to a profile; its config must pass the check, and a running
+  // service is reloaded with it
+  profile_use: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!profile_exists(name))
+        return { result: false, error: 'not_found' };
+
+      const temp = make_temp();
+      if (!temp)
+        return { result: false, error: 'generate_failed' };
+
+      const path = `${temp}/check.json`;
+      if (system(`${generate_command(name)} > ${path} 2>/dev/null`) != 0) {
+        remove_temp(temp);
+        return { result: false, error: 'generate_failed' };
+      }
+
+      const check = check_config(path, temp);
+      remove_temp(temp);
+
+      if (!check.result) {
+        check.error = 'check_failed';
+        return check;
+      }
+
+      const uci = cursor();
+      uci.set('hako', 'main', 'profile', name);
+      uci.commit('hako');
+
+      return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  core_install_status: {
+    call: function() {
+      const exit = readfile(INSTALL_EXIT);
+      const log = readfile(INSTALL_LOG) ?? '';
+      const lines = split(trim(log), '\n');
+
+      return {
+        running: install_running(),
+        success: exit != null ? +trim(exit) == 0 : null,
+        log: join('\n', slice(lines, -30))
+      };
+    }
+  }
+};
+
+return { 'luci.hako': methods };

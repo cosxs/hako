@@ -1,0 +1,157 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+USE_PROCD=1
+
+. /usr/share/hako/common.sh
+
+extra_command 'rotate_logs' 'Move the logs of previous days into dated files'
+extra_command 'refresh_firewall' 'Set up the tproxy firewall again, e.g. after a LAN interface came up'
+extra_command 'takeover_core' 'Stop and disable the service of the sing-box package so Hako can run it'
+
+CRON_TAG="#hako"
+RUNNER="/usr/share/hako/run.sh"
+SUBSCRIPTION="/usr/share/hako/subscription.sh"
+CRONTAB="/etc/crontabs/root"
+
+# while the service is running: rotate the logs daily at midnight, and
+# update the subscriptions whose interval is up hourly
+set_cron() {
+	mkdir -p "${CRONTAB%/*}"
+	touch "$CRONTAB"
+	sed -i "/$CRON_TAG\$/d" "$CRONTAB"
+
+	[ "$1" = 1 ] || return 0
+	echo "0 0 * * * /etc/init.d/hako rotate_logs $CRON_TAG" >> "$CRONTAB"
+	echo "30 * * * * $SUBSCRIPTION due >/dev/null 2>&1 $CRON_TAG" >> "$CRONTAB"
+}
+
+start_service() {
+	mkdir -p "$RUN_DIR" "$LOG_DIR"
+	rotate_logs
+
+	config_load hako
+
+	local enabled
+	config_get_bool enabled main enabled 0
+
+	if [ "$enabled" != 1 ]; then
+		rm -f "$RUN_CONFIG"
+		set_cron 0
+		firewall_down
+		dnsmasq_down
+		return 0
+	fi
+
+	if [ ! -x "$CORE" ]; then
+		log "sing-box not found: $CORE"
+		return 1
+	fi
+
+	if ! version_ge "$(core_version)" "$CORE_MIN_VERSION"; then
+		log "sing-box $CORE_MIN_VERSION or later is required"
+		return 1
+	fi
+
+	# any sing-box of a supported version is used, also one built into the
+	# firmware; but while the service of its package runs or starts at boot,
+	# Hako does not start, until it is told to take it over
+	if core_service_active; then
+		log "the service of the sing-box package runs or starts at boot; take it over on the Activity page"
+		return 1
+	fi
+
+	local config_changed=
+	if prepare_config; then
+		log "start"
+	elif [ -f "$RUN_CONFIG" ]; then
+		# reloading a running service: keep the config it is running with
+		log "keep running with the previous config"
+	else
+		return 1
+	fi
+
+	# the runner sets up the tproxy firewall while sing-box runs and removes
+	# it as soon as sing-box exits, crashed or stopped
+	procd_open_instance
+	procd_set_param command "$RUNNER"
+	procd_set_param file "$RUN_CONFIG"
+	procd_set_param respawn
+	procd_close_instance
+
+	set_cron 1
+
+	# a new config makes procd restart the instance, and the runner sets the
+	# outbound mode and the tproxy firewall itself
+	[ -n "$config_changed" ] && return 0
+
+	# a reload that leaves sing-box running: set the outbound mode on it, and
+	# the tproxy firewall again if its rules changed (rule sets are bypassed
+	# except in Global mode)
+	apply_mode
+	if [ -f "$FIREWALL_STATE" ] && uses_tproxy &&
+	   ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
+		firewall_up
+	fi
+}
+
+takeover_core() {
+	core_service_off
+}
+
+# called by hotplug when an interface comes up: its device may have changed
+refresh_firewall() {
+	[ -f "$FIREWALL_STATE" ] || return 0
+
+	if [ -n "$1" ] && ! uci -q get hako.firewall.interface | grep -qw "$1"; then
+		return 0
+	fi
+
+	firewall_up
+}
+
+# writes the config to run into $RUN_CONFIG, generated from the profile in
+# use; it must pass "sing-box check" first. Sets config_changed when it
+# differs from the previous one, or there was none.
+prepare_config() {
+	local staged="$RUN_DIR/config.new.json"
+
+	if ! ucode "$GENERATOR" > "$staged" 2>> "$APP_LOG"; then
+		log "failed to generate the config"
+		rm -f "$staged"
+		return 1
+	fi
+
+	if ! "$CORE" check -c "$staged" -D "$RUN_DIR" >> "$CORE_LOG" 2>&1; then
+		log "config check failed, see the core log"
+		rm -f "$staged"
+		return 1
+	fi
+
+	if ! cmp -s "$staged" "$RUN_CONFIG"; then
+		config_changed=1
+	fi
+	mv -f "$staged" "$RUN_CONFIG"
+}
+
+stop_service() {
+	rm -f "$RUN_CONFIG"
+	set_cron 0
+	log "stop"
+}
+
+service_started() {
+	flush_dns_cache
+}
+
+service_stopped() {
+	firewall_down
+	dnsmasq_down
+	flush_dns_cache
+}
+
+# changes to the device settings and to the profile in use are applied
+service_triggers() {
+	procd_add_reload_trigger hako "hako_$(uci -q get hako.main.profile)"
+}
