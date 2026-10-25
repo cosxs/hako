@@ -1,0 +1,114 @@
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  redirect,
+  useRouter,
+} from '@tanstack/react-router'
+import { useEffect, type ReactNode } from 'react'
+
+import { AppShell } from '@/components/app-shell'
+import { PAGES, type PagePath } from '@/lib/nav'
+import { hasSession, logout, onSessionExpired } from '@/lib/ubus'
+import { ActivityPage } from '@/pages/activity'
+import { LoginPage } from '@/pages/login'
+import { PendingPage } from '@/pages/pending'
+
+// a session that is no longer accepted sends the app back to the login
+function Root() {
+  const router = useRouter()
+  const queryClient = useQueryClient()
+
+  useEffect(() => onSessionExpired(() => {
+    queryClient.clear()
+    router.navigate({ to: '/login', search: { redirect: router.state.location.pathname } })
+  }), [router, queryClient])
+
+  return <Outlet />
+}
+
+function Login() {
+  const router = useRouter()
+  const { redirect: to } = loginRoute.useSearch()
+  return <LoginPage onLogin={() => router.history.push(to ?? '/')} />
+}
+
+function Shell() {
+  const router = useRouter()
+  const queryClient = useQueryClient()
+
+  const leave = async () => {
+    await logout()
+    queryClient.clear()
+    router.navigate({ to: '/login', search: {} })
+  }
+
+  return <AppShell onLogout={leave} />
+}
+
+const rootRoute = createRootRoute({ component: Root })
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
+    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
+  beforeLoad: () => {
+    if (hasSession()) throw redirect({ to: '/' })
+  },
+  component: Login,
+})
+
+// every other page needs a session
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
+  beforeLoad: ({ location }) => {
+    if (!hasSession()) throw redirect({ to: '/login', search: { redirect: location.pathname } })
+  },
+  component: Shell,
+})
+
+const indexRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/',
+  beforeLoad: () => {
+    throw redirect({ to: '/activity' })
+  },
+})
+
+// a page of the sidebar, by its path; those not moved yet link to LuCI
+function pageRoute<P extends PagePath>(path: P, component?: () => ReactNode) {
+  const page = PAGES.find((item) => item.path === path)!
+  return createRoute({
+    getParentRoute: () => appRoute,
+    path,
+    component: component ?? (() => <PendingPage page={page} />),
+  })
+}
+
+const pageRoutes = [
+  pageRoute('/activity', ActivityPage),
+  pageRoute('/takeover'),
+  pageRoute('/policy'),
+  pageRoute('/rules'),
+  pageRoute('/core'),
+  pageRoute('/profiles'),
+  pageRoute('/logs'),
+  pageRoute('/settings'),
+] as const
+
+const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, ...pageRoutes])])
+
+// hash routes: the router's web server has no fallback to index.html, so a
+// page reloaded at /hako/#/policy still finds the app
+export const router = createRouter({ routeTree, history: createHashHistory() })
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
