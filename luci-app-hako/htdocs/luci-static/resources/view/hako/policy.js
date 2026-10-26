@@ -486,6 +486,7 @@ return view.extend({
   renderGroups(m) {
     const s = m.section(form.GridSection, 'outbound', _('Policy groups'));
     s.anonymous = true;
+    hako.named(s, 'group');
     s.addremove = true;
     s.sortable = true;
     s.nodescriptions = true;
@@ -759,6 +760,7 @@ return view.extend({
   renderNodes(m) {
     const s = m.section(form.GridSection, 'outbound', _('Local nodes'));
     s.anonymous = true;
+    hako.named(s, 'node');
     s.addremove = true;
     s.nodescriptions = true;
 

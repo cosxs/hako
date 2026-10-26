@@ -103,11 +103,86 @@ function subscription_sections(uci) {
   }
 }
 
+// what a section of a type that others refer to is named as, with a number
+// counting those of its kind
+const NAMED_KINDS = {
+  outbound: (section) => (section.type in [ 'selector', 'urltest' ]) ? 'group' : 'node',
+  dns_server: () => 'dns', http_client: () => 'http_client', rule_set: () => 'rule_set'
+};
+
+// renames the references in the options of a package, old name to new: a
+// value or an item of a list naming one. A tag is a name of its own, and
+// fields written as JSON, as the detour of dial fields, go to sing-box as
+// they are and name tags
+function rename_refs(uci, pkg, renamed) {
+  const rename = (value) => renamed[value] ?? value;
+
+  uci.foreach(pkg, null, (section) => {
+    for (let key, value in section) {
+      if (substr(key, 0, 1) == '.' || key == 'tag')
+        continue;
+
+      if (type(value) == 'array') {
+        const changed = map(value, rename);
+        if (join('\n', changed) != join('\n', value))
+          uci.set(pkg, section['.name'], key, changed);
+      }
+      else if (rename(value) != value)
+        uci.set(pkg, section['.name'], key, rename(value));
+    }
+  });
+}
+
+// 3: the sections others refer to get a name. UCI names an anonymous one by
+// its position in the package, so deleting or moving a section before it
+// renamed it and broke what referred to it. One without a tag keeps its
+// old name as its tag, which sing-box and fields written as JSON know it by
+function named_sections(uci) {
+  for (let name in profiles()) {
+    const pkg = profile_package(name);
+    uci.load(pkg);
+
+    const anonymous = [];
+    for (let sectionType in keys(NAMED_KINDS))
+      uci.foreach(pkg, sectionType, (section) => {
+        if (section['.anonymous'])
+          push(anonymous, section);
+      });
+
+    const renamed = {};
+    const count = {};
+    for (let section in anonymous) {
+      const kind = NAMED_KINDS[section['.type']](section);
+      count[kind] = (count[kind] ?? 0) + 1;
+      let id = `${kind}_${count[kind]}`;
+      while (uci.get(pkg, id) != null)
+        id = `${kind}_${++count[kind]}`;
+
+      if (!section.tag)
+        uci.set(pkg, section['.name'], 'tag', section['.name']);
+      uci.rename(pkg, section['.name'], id);
+      renamed[section['.name']] = id;
+    }
+
+    if (!length(anonymous))
+      continue;
+
+    rename_refs(uci, pkg, renamed);
+    uci.save(pkg);
+    uci.commit(pkg);
+
+    // the device settings refer to the profile in use
+    if (name == (uci.get(CONFIG, 'main', 'profile') || 'default'))
+      rename_refs(uci, CONFIG, renamed);
+  }
+}
+
 // MIGRATIONS[i] moves version i + 1 to i + 2. Version 1 is the baseline:
 // the device settings in hako and each profile in a package of its own;
 // configs from before it are not migrated
 const MIGRATIONS = [
-  subscription_sections
+  subscription_sections,
+  named_sections
 ];
 
 const latest = length(MIGRATIONS) + 1;

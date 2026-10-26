@@ -103,6 +103,16 @@ return baseclass.extend({
       .forEach((section) => option.value(section['.name'], this.label(section)));
   },
 
+  // sections of a type that others refer to by section name are added with
+  // a name, kind and the time: UCI names an anonymous one by its position
+  // in the package, which deleting or moving a section before it changes
+  named(section, kind) {
+    const handleAdd = section.handleAdd;
+    section.handleAdd = function(ev, name) {
+      return handleAdd.call(this, ev, name ?? `${kind}_${Date.now()}`);
+    };
+  },
+
   // the outbounds to choose from, stored by section name: groups first,
   // then subscriptions, each a group of its nodes, then nodes and direct
   // outbounds; except leaves one out
