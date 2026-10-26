@@ -32,7 +32,7 @@ function globalTag(profile: Profile | undefined) {
   return section ? label(section) : null
 }
 
-export function NodesSection({ profile }: { profile: Profile | undefined }) {
+export function NodesSection({ profile, subscriptions }: { profile: Profile | undefined; subscriptions: Subscription[] | undefined }) {
   const { group, delay, testing, test } = usePolicyRuntime()
   // the dialog, mounted anew each time it opens: section null to add one,
   // copy to add one like it
@@ -75,7 +75,7 @@ export function NodesSection({ profile }: { profile: Profile | undefined }) {
       ))}
       <AddTile label="添加节点" onClick={profile ? () => openDialog(null) : undefined} />
       {dialog && profile && (
-        <NodeDialog profile={profile} section={dialog.section} copy={dialog.copy} onOpenChange={(open) => !open && setDialog(null)} />
+        <NodeDialog profile={profile} subscriptions={subscriptions ?? []} section={dialog.section} copy={dialog.copy} onOpenChange={(open) => !open && setDialog(null)} />
       )}
       <DeleteOutboundDialog profile={profile} section={deleting} kind="节点" onOpenChange={(open) => !open && setDeleting(null)} />
     </Section>
