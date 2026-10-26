@@ -196,7 +196,7 @@ export function GroupDialog({
   for (const ref of values.outbounds) defaults[ref] = describe(profile, subscriptions, ref).label
   for (const node of matched) defaults[node.tag] = node.tag
 
-  const title = editing ? `策略组 » ${label(editing)}` : '策略组 » 新策略组'
+  const title = editing ? '编辑策略组' : '新增策略组'
 
   return (
     <Dialog open onOpenChange={onOpenChange}>

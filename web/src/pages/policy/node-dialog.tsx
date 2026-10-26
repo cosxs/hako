@@ -423,7 +423,7 @@ export function NodeDialog({
           }}
         >
           <DialogHeader className="gap-3.5 border-b px-6 pt-5 pb-3.5">
-            <DialogTitle>{editing ? `节点 » ${label(editing)}` : '节点 » 新节点'}</DialogTitle>
+            <DialogTitle>{editing ? '编辑节点' : '新增节点'}</DialogTitle>
             <DialogDescription className="sr-only">保存后立即生效。</DialogDescription>
             <Tabs value={current} onValueChange={(next) => setTab(next as Tab)}>
               <TabsList>

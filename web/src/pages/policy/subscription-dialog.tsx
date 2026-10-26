@@ -141,7 +141,7 @@ export function SubscriptionDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>{sub ? `订阅 » ${sub.tag}` : '订阅 » 新订阅'}</DialogTitle>
+            <DialogTitle>{sub ? '编辑订阅' : '新增订阅'}</DialogTitle>
             <DialogDescription>{sub ? '改了地址或 User-Agent 会重新下载，下载失败则不保存。' : '先下载订阅，下载成功才保存。'}</DialogDescription>
           </DialogHeader>
 
