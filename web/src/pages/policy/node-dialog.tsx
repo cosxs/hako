@@ -236,10 +236,12 @@ export function NodeDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+      {/* of one height whatever the tab: the fields scroll between the tabs
+          and the buttons */}
+      <DialogContent className="h-[min(44rem,calc(100dvh-2rem))] grid-rows-1 overflow-hidden sm:max-w-2xl">
         <form
           noValidate
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             form.handleSubmit()
@@ -266,7 +268,7 @@ export function NodeDialog({
             </TabsList>
           </Tabs>
 
-          <div className="grid grid-cols-6 gap-x-4 gap-y-5">
+          <div className="-m-1 grid min-h-0 flex-1 auto-rows-min grid-cols-6 gap-x-4 gap-y-5 overflow-y-auto p-1">
             {current === 'tls' && tlsRequired(type) && (
               <Field orientation="horizontal" className="col-span-6 justify-between">
                 <FieldContent>

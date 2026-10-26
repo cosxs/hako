@@ -200,10 +200,12 @@ export function GroupDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      {/* of one height whatever the type: the fields scroll between the title
+          and the buttons */}
+      <DialogContent className="h-[min(44rem,calc(100dvh-2rem))] grid-rows-1 overflow-hidden sm:max-w-xl">
         <form
           noValidate
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             form.handleSubmit()
@@ -214,7 +216,7 @@ export function GroupDialog({
             <DialogDescription>{auto ? '自动选用延迟最低的成员。' : '在策略页或活动里手动选择用哪个成员。'}</DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
+          <FieldGroup className="-m-1 min-h-0 flex-1 overflow-y-auto p-1">
             <div className="grid grid-cols-2 gap-4">
               <form.Field name="name">
                 {(field) => (
