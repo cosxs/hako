@@ -24,6 +24,15 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: '../luci-app-hako/htdocs/hako',
       emptyOutDir: true,
+      rolldownOptions: {
+        output: {
+          // React and the router and queries of every page in a chunk of
+          // their own, which a new version of the app leaves cached
+          codeSplitting: {
+            groups: [{ name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|@tanstack[\\/](react-router|router-core|history|store|react-store|react-query|query-core))[\\/]/ }],
+          },
+        },
+      },
     },
   }
 })

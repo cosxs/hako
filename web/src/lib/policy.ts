@@ -28,6 +28,22 @@ export const NODE_TYPES: Record<string, string> = {
   direct: 'Direct',
 }
 
+// the protocols the dialog of a node has fields for
+export const NODE_PROTOCOLS: Record<string, string> = {
+  shadowsocks: 'Shadowsocks',
+  vmess: 'VMess',
+  vless: 'VLESS',
+  trojan: 'Trojan',
+  hysteria2: 'Hysteria2',
+  tuic: 'TUIC',
+  anytls: 'AnyTLS',
+  naive: 'NaiveProxy',
+  snell: 'Snell',
+  ssh: 'SSH',
+  socks: 'SOCKS',
+  http: 'HTTP',
+}
+
 export function isGroup(section: UciSection) {
   return typeof section.type === 'string' && section.type in GROUP_TYPES
 }

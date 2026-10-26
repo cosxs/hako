@@ -4,19 +4,19 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
   redirect,
   useRouter,
+  type RouteComponent,
 } from '@tanstack/react-router'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 
 import { AppShell } from '@/components/app-shell'
 import { PAGES, type PagePath } from '@/lib/nav'
 import { hasSession, logout, onSessionExpired } from '@/lib/ubus'
-import { ActivityPage } from '@/pages/activity'
 import { LoginPage } from '@/pages/login'
 import { PendingPage } from '@/pages/pending'
-import { PolicyPage } from '@/pages/policy'
 
 // a session that is no longer accepted sends the app back to the login
 function Root() {
@@ -81,8 +81,9 @@ const indexRoute = createRoute({
   },
 })
 
-// a page of the sidebar, by its path; those not moved yet link to LuCI
-function pageRoute<P extends PagePath>(path: P, component?: () => ReactNode) {
+// a page of the sidebar, by its path, loaded when first shown; those not
+// moved yet link to LuCI
+function pageRoute<P extends PagePath>(path: P, component?: RouteComponent) {
   const page = PAGES.find((item) => item.path === path)!
   return createRoute({
     getParentRoute: () => appRoute,
@@ -92,9 +93,9 @@ function pageRoute<P extends PagePath>(path: P, component?: () => ReactNode) {
 }
 
 const pageRoutes = [
-  pageRoute('/activity', ActivityPage),
+  pageRoute('/activity', lazyRouteComponent(() => import('@/pages/activity'), 'ActivityPage')),
   pageRoute('/takeover'),
-  pageRoute('/policy', PolicyPage),
+  pageRoute('/policy', lazyRouteComponent(() => import('@/pages/policy'), 'PolicyPage')),
   pageRoute('/rules'),
   pageRoute('/core'),
   pageRoute('/profiles'),

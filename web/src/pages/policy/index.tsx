@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import { Alert, AlertTitle } from '@/components/reui/alert'
 import { profileQuery, subscriptionsQuery } from '@/lib/policy'
 import { ModeSwitch } from '@/pages/policy/mode-switch'
+import { preloadDialogs } from '@/pages/policy/dialog-loaders'
 import { PolicyRuntimeProvider } from '@/pages/policy/runtime'
 import { GroupsSection, NodesSection, SubscriptionsSection } from '@/pages/policy/sections'
 
@@ -12,6 +14,9 @@ export function PolicyPage() {
   const profile = useQuery(profileQuery)
   const subscriptions = useQuery(subscriptionsQuery)
   const error = profile.error ?? subscriptions.error
+
+  // the dialogs come after the page, in the background
+  useEffect(preloadDialogs, [])
 
   return (
     <PolicyRuntimeProvider>

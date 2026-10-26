@@ -1,18 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { statusQuery } from '@/lib/hako'
-import { NODE_PROTOCOLS } from '@/lib/node-fields'
-import { GROUP_TYPES, isGroup, label, NODE_TYPES, shortName, updateSubscription, type Profile, type Subscription } from '@/lib/policy'
+import { GROUP_TYPES, isGroup, label, NODE_PROTOCOLS, NODE_TYPES, shortName, updateSubscription, type Profile, type Subscription } from '@/lib/policy'
 import type { UciSection } from '@/lib/uci'
 import { Members } from '@/pages/policy/members'
 import { usePolicyRuntime } from '@/pages/policy/runtime'
 import { DeleteOutboundDialog } from '@/pages/policy/delete-outbound-dialog'
-import { GroupDialog } from '@/pages/policy/group-dialog'
-import { NodeDialog } from '@/pages/policy/node-dialog'
-import { DeleteSubscriptionDialog, SubscriptionDialog } from '@/pages/policy/subscription-dialog'
+import { DeleteSubscriptionDialog } from '@/pages/policy/delete-subscription-dialog'
+import { GroupDialog, NodeDialog, SubscriptionDialog } from '@/pages/policy/lazy-dialogs'
 import { AddTile, LatencyText, Section, SectionAction, Tile } from '@/pages/policy/tile'
 
 function TestItem({ tag }: { tag: string | null }) {
@@ -75,7 +73,9 @@ export function NodesSection({ profile, subscriptions }: { profile: Profile | un
       ))}
       <AddTile label="添加节点" onClick={profile ? () => openDialog(null) : undefined} />
       {dialog && profile && (
-        <NodeDialog profile={profile} subscriptions={subscriptions ?? []} section={dialog.section} copy={dialog.copy} onOpenChange={(open) => !open && setDialog(null)} />
+        <Suspense>
+          <NodeDialog profile={profile} subscriptions={subscriptions ?? []} section={dialog.section} copy={dialog.copy} onOpenChange={(open) => !open && setDialog(null)} />
+        </Suspense>
       )}
       <DeleteOutboundDialog profile={profile} section={deleting} kind="节点" onOpenChange={(open) => !open && setDeleting(null)} />
     </Section>
@@ -144,13 +144,15 @@ export function GroupsSection({ profile, subscriptions }: { profile: Profile | u
       })}
       <AddTile label="添加策略组" onClick={profile ? () => openDialog(null) : undefined} />
       {dialog && profile && (
-        <GroupDialog
-          profile={profile}
-          subscriptions={subscriptions ?? []}
-          section={dialog.section}
-          copy={dialog.copy}
-          onOpenChange={(open) => !open && setDialog(null)}
-        />
+        <Suspense>
+          <GroupDialog
+            profile={profile}
+            subscriptions={subscriptions ?? []}
+            section={dialog.section}
+            copy={dialog.copy}
+            onOpenChange={(open) => !open && setDialog(null)}
+          />
+        </Suspense>
       )}
       <DeleteOutboundDialog profile={profile} section={deleting} kind="策略组" onOpenChange={(open) => !open && setDeleting(null)} />
     </Section>
@@ -217,13 +219,15 @@ export function SubscriptionsSection({ profile, subscriptions }: { profile: Prof
       })}
       <AddTile label="添加订阅" onClick={() => openDialog(null)} />
       {dialog && (
-        <SubscriptionDialog
-          open
-          sub={dialog.sub}
-          subscriptions={subscriptions ?? []}
-          outboundTags={profile?.outbounds.map(label) ?? []}
-          onOpenChange={(open) => !open && setDialog(null)}
-        />
+        <Suspense>
+          <SubscriptionDialog
+            open
+            sub={dialog.sub}
+            subscriptions={subscriptions ?? []}
+            outboundTags={profile?.outbounds.map(label) ?? []}
+            onOpenChange={(open) => !open && setDialog(null)}
+          />
+        </Suspense>
       )}
       <DeleteSubscriptionDialog sub={deleting} onOpenChange={(open) => !open && setDeleting(null)} />
     </Section>

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { DURATION, durationField, list } from '@/lib/outbounds'
+import { NODE_PROTOCOLS } from '@/lib/policy'
 import type { UciSection } from '@/lib/uci'
 
 // the fields of the dialog of a node, as the LuCI one has them, in the order
@@ -10,20 +11,7 @@ import type { UciSection } from '@/lib/uci'
 
 export type NodeValues = Record<string, string | string[]>
 
-export const NODE_PROTOCOLS: Record<string, string> = {
-  shadowsocks: 'Shadowsocks',
-  vmess: 'VMess',
-  vless: 'VLESS',
-  trojan: 'Trojan',
-  hysteria2: 'Hysteria2',
-  tuic: 'TUIC',
-  anytls: 'AnyTLS',
-  naive: 'NaiveProxy',
-  snell: 'Snell',
-  ssh: 'SSH',
-  socks: 'SOCKS',
-  http: 'HTTP',
-}
+export { NODE_PROTOCOLS }
 
 // TLS is optional for some protocols and always on for others; naive takes
 // the server name only, and uTLS works over TCP only
