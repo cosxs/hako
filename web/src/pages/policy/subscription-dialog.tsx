@@ -152,7 +152,7 @@ export function SubscriptionDialog({
                 return (
                   <Field>
                     <FieldLabel htmlFor="sub-name">名称</FieldLabel>
-                    <Input id="sub-name" autoFocus placeholder="机场 A" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input id="sub-name" autoFocus value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
                   </Field>
                 )
               }}
@@ -184,11 +184,8 @@ export function SubscriptionDialog({
                   return (
                     <Field>
                       <FieldLabel htmlFor="sub-prefix">节点名前缀</FieldLabel>
-                      <form.Subscribe selector={(state) => state.values.name.trim()}>
-                        {(name) => (
-                          <Input id="sub-prefix" placeholder={name || '不填则用订阅名'} value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                        )}
-                      </form.Subscribe>
+                      <Input id="sub-prefix" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
+                      <FieldDescription>留空则用订阅名。</FieldDescription>
                     </Field>
                   )
                 }}
@@ -201,7 +198,7 @@ export function SubscriptionDialog({
                 return (
                   <Field>
                     <FieldLabel htmlFor="sub-url">订阅地址</FieldLabel>
-                    <Input id="sub-url" className="font-mono" placeholder="https://example.com/sing-box.json" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input id="sub-url" className="font-mono" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
                   </Field>
                 )
               }}
@@ -215,7 +212,7 @@ export function SubscriptionDialog({
                     <Field>
                       <FieldLabel htmlFor="sub-hours">更新间隔</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput id="sub-hours" placeholder="24" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
+                        <InputGroupInput id="sub-hours" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
                         <InputGroupAddon align="inline-end">
                           <InputGroupText>小时</InputGroupText>
                         </InputGroupAddon>
@@ -229,7 +226,7 @@ export function SubscriptionDialog({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor="sub-agent">User-Agent</FieldLabel>
-                    <Input id="sub-agent" placeholder="sing-box/1.14 Hako/0.1" value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input id="sub-agent" value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
                   </Field>
                 )}
               </form.Field>

@@ -1,12 +1,11 @@
 import { revalidateLogic, useForm, useStore, type AnyFieldApi } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronRightIcon, CircleAlertIcon, EyeIcon, EyeOffIcon, PlusIcon, XIcon } from 'lucide-react'
+import { CircleAlertIcon, EyeIcon, EyeOffIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -48,7 +47,8 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
     const items = Object.fromEntries(choices ?? def.choices ?? [])
     control = (
       <Select items={items} value={text} onValueChange={(next) => field.handleChange(String(next ?? ''))}>
-        <SelectTrigger id={id} className="w-full" aria-invalid={invalid}>
+        {/* an empty value is a choice too, shown as the others */}
+        <SelectTrigger id={id} className="w-full data-placeholder:text-foreground" aria-invalid={invalid}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -70,7 +70,6 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
             <Input
               aria-label={def.label}
               className={cn(def.mono && 'font-mono')}
-              placeholder={def.placeholder}
               value={item}
               aria-invalid={invalid}
               onBlur={field.handleBlur}
@@ -93,7 +92,6 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
         id={id}
         rows={def.kind === 'json' ? 6 : 4}
         className="font-mono text-[13px]"
-        placeholder={def.placeholder}
         value={text}
         aria-invalid={invalid}
         onBlur={field.handleBlur}
@@ -107,7 +105,6 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
           id={id}
           type={def.kind === 'password' && !reveal ? 'password' : 'text'}
           className={cn(def.mono && 'font-mono')}
-          placeholder={def.placeholder}
           value={text}
           aria-invalid={invalid}
           onBlur={field.handleBlur}
@@ -128,7 +125,6 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
       <Input
         id={id}
         className={cn(def.mono && 'font-mono')}
-        placeholder={def.placeholder}
         value={text}
         aria-invalid={invalid}
         onBlur={field.handleBlur}
@@ -147,7 +143,7 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
 
 // a node added, changed or copied: section is the one edited, or the one
 // copied when copy is set, or null for a new one. The fields are those of its
-// protocol, by tab, the rare ones under More options; they are checked on
+// protocol, by tab; they are checked on
 // saving, and again as they change after that
 export function NodeDialog({
   profile,
@@ -164,7 +160,6 @@ export function NodeDialog({
   const editing = copy ? null : section
   const taken = profile.outbounds.filter((other) => other['.name'] !== editing?.['.name']).map(label)
   const [tab, setTab] = useState<Tab>('general')
-  const [more, setMore] = useState(false)
 
   const mutation = useMutation({
     mutationFn: (options: Record<string, string | string[]>) => saveOutbound(profile.config, editing, options, 'node'),
@@ -197,13 +192,12 @@ export function NodeDialog({
       },
     },
     onSubmit: ({ value }) => mutation.mutate(nodeOptions(value)),
-    // the first field in error may be on another tab, or under More options
+    // the first field in error may be on another tab
     onSubmitInvalid: ({ value }) => {
       const fields = errors(value)
       const first = NODE_FIELDS.find((def) => fields && def.key in fields)
       if (!first) return
       setTab(first.tab)
-      setMore(!!first.more)
     },
   })
 
@@ -256,7 +250,6 @@ export function NodeDialog({
             value={current}
             onValueChange={(next) => {
               setTab(next as Tab)
-              setMore(false)
             }}
           >
             <TabsList>
@@ -278,16 +271,7 @@ export function NodeDialog({
                 <Switch id="node-tls-required" checked disabled />
               </Field>
             )}
-            {shown.filter((def) => !def.more).map(render)}
-            {shown.some((def) => def.more) && (
-              <Collapsible open={more} onOpenChange={setMore} className="col-span-6 flex flex-col gap-5">
-                <CollapsibleTrigger render={<Button type="button" variant="ghost" size="sm" className="-ml-2.5 self-start" />}>
-                  <ChevronRightIcon className={cn('transition-transform', more && 'rotate-90')} />
-                  更多选项
-                </CollapsibleTrigger>
-                <CollapsibleContent className="grid grid-cols-6 gap-x-4 gap-y-5">{shown.filter((def) => def.more).map(render)}</CollapsibleContent>
-              </Collapsible>
-            )}
+            {shown.map(render)}
           </div>
 
           {failure && (

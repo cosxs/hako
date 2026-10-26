@@ -225,7 +225,6 @@ export function GroupDialog({
                     <Input
                       id="group-name"
                       autoFocus
-                      placeholder="Proxy"
                       value={field.state.value}
                       aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
                       onBlur={field.handleBlur}
@@ -239,7 +238,7 @@ export function GroupDialog({
                   <Field>
                     <FieldLabel htmlFor="group-type">类型</FieldLabel>
                     <Select items={GROUP_TYPES} value={field.state.value} onValueChange={(value) => field.handleChange(String(value))}>
-                      <SelectTrigger id="group-type" className="w-full">
+                      <SelectTrigger id="group-type" className="w-full data-placeholder:text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -345,11 +344,11 @@ export function GroupDialog({
                   </div>
                 )}
               </form.Field>
+              <FieldLabel htmlFor="group-filter">节点筛选</FieldLabel>
               <form.Field name="filter">
                 {(field) => (
                   <Input
-                    aria-label="节点筛选"
-                    placeholder="节点筛选，如 hong kong|japan"
+                    id="group-filter"
                     value={field.state.value}
                     aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
                     onBlur={field.handleBlur}
@@ -370,7 +369,7 @@ export function GroupDialog({
                   <Field>
                     <FieldLabel htmlFor="group-default">默认出站</FieldLabel>
                     <Select items={defaults} value={field.state.value in defaults ? field.state.value : ''} onValueChange={(value) => field.handleChange(String(value ?? ''))}>
-                      <SelectTrigger id="group-default" className="w-full">
+                      <SelectTrigger id="group-default" className="w-full data-placeholder:text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -395,7 +394,6 @@ export function GroupDialog({
                       <Input
                         id="group-url"
                         className="font-mono"
-                        placeholder="https://www.gstatic.com/generate_204"
                         value={field.state.value}
                         aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
                         onBlur={field.handleBlur}
@@ -407,11 +405,11 @@ export function GroupDialog({
                 <div className="grid grid-cols-3 gap-4">
                   {(
                     [
-                      ['interval', '测速间隔', '3', '分钟'],
-                      ['idle', '闲置超时', '30', '分钟'],
-                      ['tolerance', '容差', '50', '毫秒'],
+                      ['interval', '测速间隔', '分钟'],
+                      ['idle', '闲置超时', '分钟'],
+                      ['tolerance', '容差', '毫秒'],
                     ] as const
-                  ).map(([name, text, placeholder, unit]) => (
+                  ).map(([name, text, unit]) => (
                     <form.Field key={name} name={name}>
                       {(field) => (
                         <Field>
@@ -419,7 +417,6 @@ export function GroupDialog({
                           <InputGroup>
                             <InputGroupInput
                               id={`group-${name}`}
-                              placeholder={placeholder}
                               value={field.state.value}
                               aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
                               onBlur={field.handleBlur}
