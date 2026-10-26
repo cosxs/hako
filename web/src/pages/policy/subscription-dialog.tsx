@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -78,7 +78,8 @@ function subscriptionSchema(others: Subscription[], outboundTags: string[]) {
 }
 
 // a new subscription, or one changed; open with sub null to add one. the
-// fields are checked on saving, and again as they change after that
+// fields are checked on saving, and again as they change after that; a
+// field in error shows only as such, without a message
 export function SubscriptionDialog({
   open,
   sub,
@@ -149,10 +150,9 @@ export function SubscriptionDialog({
               {(field) => {
                 const invalid = field.state.meta.isTouched && !field.state.meta.isValid
                 return (
-                  <Field data-invalid={invalid}>
+                  <Field>
                     <FieldLabel htmlFor="sub-name">名称</FieldLabel>
                     <Input id="sub-name" autoFocus placeholder="机场 A" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                    {invalid && <FieldError errors={field.state.meta.errors} />}
                   </Field>
                 )
               }}
@@ -182,14 +182,13 @@ export function SubscriptionDialog({
                 {(field) => {
                   const invalid = field.state.meta.isTouched && !field.state.meta.isValid
                   return (
-                    <Field data-invalid={invalid}>
+                    <Field>
                       <FieldLabel htmlFor="sub-prefix">节点名前缀</FieldLabel>
                       <form.Subscribe selector={(state) => state.values.name.trim()}>
                         {(name) => (
                           <Input id="sub-prefix" placeholder={name || '不填则用订阅名'} value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
                         )}
                       </form.Subscribe>
-                      {invalid && <FieldError errors={field.state.meta.errors} />}
                     </Field>
                   )
                 }}
@@ -200,10 +199,9 @@ export function SubscriptionDialog({
               {(field) => {
                 const invalid = field.state.meta.isTouched && !field.state.meta.isValid
                 return (
-                  <Field data-invalid={invalid}>
+                  <Field>
                     <FieldLabel htmlFor="sub-url">订阅地址</FieldLabel>
                     <Input id="sub-url" className="font-mono" placeholder="https://example.com/sing-box.json" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                    {invalid && <FieldError errors={field.state.meta.errors} />}
                   </Field>
                 )
               }}
@@ -214,7 +212,7 @@ export function SubscriptionDialog({
                 {(field) => {
                   const invalid = field.state.meta.isTouched && !field.state.meta.isValid
                   return (
-                    <Field data-invalid={invalid}>
+                    <Field>
                       <FieldLabel htmlFor="sub-hours">更新间隔</FieldLabel>
                       <InputGroup>
                         <InputGroupInput id="sub-hours" placeholder="24" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
@@ -222,7 +220,7 @@ export function SubscriptionDialog({
                           <InputGroupText>小时</InputGroupText>
                         </InputGroupAddon>
                       </InputGroup>
-                      {invalid ? <FieldError errors={field.state.meta.errors} /> : <FieldDescription>留空则只手动更新。</FieldDescription>}
+                      <FieldDescription>留空则只手动更新。</FieldDescription>
                     </Field>
                   )
                 }}
