@@ -55,7 +55,6 @@ export const TABS = {
   hop: '端口跳跃',
   realm: 'Realm',
   tls: 'TLS',
-  transport: '传输',
   multiplex: '多路复用',
   quic: 'QUIC',
   key: '私钥',
@@ -68,9 +67,9 @@ export type Tab = keyof typeof TABS
 // the tabs of each protocol
 const PROTOCOL_TABS: Record<string, Tab[]> = {
   shadowsocks: ['general', 'multiplex', 'dial'],
-  vmess: ['general', 'tls', 'transport', 'multiplex', 'dial'],
-  vless: ['general', 'tls', 'transport', 'multiplex', 'dial'],
-  trojan: ['general', 'tls', 'transport', 'multiplex', 'dial'],
+  vmess: ['general', 'tls', 'multiplex', 'dial'],
+  vless: ['general', 'tls', 'multiplex', 'dial'],
+  trojan: ['general', 'tls', 'multiplex', 'dial'],
   hysteria2: ['general', 'obfs', 'hop', 'realm', 'tls', 'quic', 'dial'],
   tuic: ['general', 'tls', 'quic', 'dial'],
   anytls: ['general', 'tls', 'dial'],
@@ -92,6 +91,7 @@ export const SECTIONS: { id: string; title: string; tab: Tab; column: 'left' | '
   { id: 'server', title: '服务器信息', tab: 'general', column: 'left' },
   { id: 'options', title: '选项', tab: 'general', column: 'left' },
   { id: 'protocol', title: '', tab: 'general', column: 'right' },
+  { id: 'transport', title: '传输', tab: 'general', column: 'right' },
   { id: 'idle', title: '空闲会话', tab: 'general', column: 'right' },
   { id: 'headers', title: '请求头', tab: 'general', column: 'right' },
   { id: 'obfs', title: '混淆', tab: 'obfs', column: 'left' },
@@ -106,8 +106,6 @@ export const SECTIONS: { id: string; title: string; tab: Tab; column: 'left' | '
   { id: 'tls', title: 'TLS', tab: 'tls', column: 'left' },
   { id: 'reality', title: 'Reality', tab: 'tls', column: 'right' },
   { id: 'tls_json', title: '高级', tab: 'tls', column: 'right' },
-  { id: 'transport', title: '传输', tab: 'transport', column: 'left' },
-  { id: 'transport_headers', title: '请求头', tab: 'transport', column: 'right' },
   { id: 'multiplex', title: '多路复用', tab: 'multiplex', column: 'left' },
   { id: 'brutal', title: 'TCP Brutal', tab: 'multiplex', column: 'right' },
   { id: 'quic', title: 'QUIC', tab: 'quic', column: 'left' },
@@ -118,7 +116,7 @@ export const SECTIONS: { id: string; title: string; tab: Tab; column: 'left' | '
   { id: 'ssh_algorithms', title: '算法', tab: 'advanced', column: 'right' },
   { id: 'dial_chain', title: '代理链', tab: 'dial', column: 'left' },
   { id: 'dial_outbound', title: '出站设置', tab: 'dial', column: 'left' },
-  { id: 'dial_options', title: '选项', tab: 'dial', column: 'right' },
+  { id: 'dial_options', title: '选项', tab: 'dial', column: 'left' },
   { id: 'dial_json', title: '高级', tab: 'dial', column: 'right' },
 ]
 
@@ -186,7 +184,7 @@ export const NODE_FIELDS: NodeField[] = [
 
   // general: the options of the connection
   { key: 'network', option: 'network', label: '网络协议', section: 'options', kind: 'segmented', show: is('shadowsocks', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'snell', 'socks'), choices: NETWORK_CHOICES },
-  { key: 'udp_over_tcp', option: 'udp_over_tcp', label: 'UDP over TCP', section: 'options', kind: 'switch', show: is('socks', 'shadowsocks', 'naive'), description: '用 TCP 承载 UDP。' },
+  { key: 'udp_over_tcp', option: 'udp_over_tcp', label: 'UDP over TCP', section: 'options', kind: 'switch', show: is('socks', 'shadowsocks', 'naive') },
   { key: 'packet_encoding', option: 'packet_encoding', label: 'UDP 包编码', section: 'options', kind: 'select', show: is('vmess', 'vless'), width: 'short', choices: [['', '默认'], ['packetaddr', 'packetaddr'], ['xudp', 'xudp']] },
   { key: 'disable_chrome_parrot', option: 'disable_chrome_parrot', label: '禁用 Chrome 指纹模仿', section: 'options', kind: 'switch', show: is('hysteria2') },
   { key: 'zero_rtt_handshake', option: 'zero_rtt_handshake', label: '0-RTT 握手', section: 'options', kind: 'switch', show: is('tuic') },
@@ -215,8 +213,10 @@ export const NODE_FIELDS: NodeField[] = [
   },
   { key: 'psk', option: 'psk', label: '预共享密钥', section: 'protocol', kind: 'password', show: is('snell'), required: true },
   { key: 'userkey', option: 'userkey', label: '用户密钥', section: 'protocol', kind: 'password', show: is('snell') },
-  { key: 'plugin', option: 'plugin', label: '插件', section: 'protocol', kind: 'select', show: is('shadowsocks'), width: 'short', choices: [['', '无'], ['obfs-local', 'obfs-local'], ['v2ray-plugin', 'v2ray-plugin']] },
-  { key: 'plugin_opts', option: 'plugin_opts', label: '插件选项', section: 'protocol', kind: 'text', show: (v) => is('shadowsocks')(v) && !!str(v, 'plugin'), mono: true },
+  // a plugin is on with its name; turned off, the name and options go
+  { key: 'plugin_enabled', option: '', label: '插件', section: 'protocol', kind: 'switch', show: is('shadowsocks') },
+  { key: 'plugin', option: 'plugin', label: '插件名', section: 'protocol', kind: 'select', show: (v) => is('shadowsocks')(v) && on(v, 'plugin_enabled'), width: 'short', choices: [['obfs-local', 'obfs-local'], ['v2ray-plugin', 'v2ray-plugin']] },
+  { key: 'plugin_opts', option: 'plugin_opts', label: '插件参数', section: 'protocol', kind: 'text', show: (v) => is('shadowsocks')(v) && on(v, 'plugin_enabled'), mono: true },
   { key: 'client_metadata', option: 'client_metadata', label: '客户端元数据', section: 'protocol', kind: 'text', show: is('anytls') },
   { key: 'up_mbps', option: 'up_mbps', label: '上行带宽', section: 'protocol', kind: 'text', show: is('hysteria2'), width: 'short', unit: 'Mbps', check: uint },
   { key: 'down_mbps', option: 'down_mbps', label: '下行带宽', section: 'protocol', kind: 'text', show: is('hysteria2'), width: 'short', unit: 'Mbps', check: uint },
@@ -313,16 +313,16 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'transport_host', option: 'transport_host', label: '主机', section: 'transport', kind: 'list', show: (v) => is(...TRANSPORT_TYPES)(v) && ['httpupgrade', 'http'].includes(str(v, 'transport_type')), mono: true, check: host },
   { key: 'transport_method', option: 'transport_method', label: 'HTTP 方法', section: 'transport', kind: 'text', show: (v) => is(...TRANSPORT_TYPES)(v) && str(v, 'transport_type') === 'http', width: 'short' },
   { key: 'transport_service_name', option: 'transport_service_name', label: 'gRPC 服务名', section: 'transport', kind: 'text', show: (v) => is(...TRANSPORT_TYPES)(v) && str(v, 'transport_type') === 'grpc', mono: true },
-  { key: 'transport_headers', option: 'transport_headers', label: '请求头', section: 'transport_headers', kind: 'list', show: (v) => is(...TRANSPORT_TYPES)(v) && ['ws', 'httpupgrade', 'http'].includes(str(v, 'transport_type')), mono: true, check: header },
+  { key: 'transport_headers', option: 'transport_headers', label: '请求头', section: 'transport', kind: 'list', show: (v) => is(...TRANSPORT_TYPES)(v) && ['ws', 'httpupgrade', 'http'].includes(str(v, 'transport_type')), mono: true, check: header },
 
   // multiplex; the streams are the minimum, with the maximum connections, or
   // the maximum, which takes their place
   { key: 'multiplex_enabled', option: 'multiplex_enabled', label: '启用多路复用', section: 'multiplex', kind: 'switch', show: is(...MULTIPLEX_TYPES) },
   { key: 'multiplex_protocol', option: 'multiplex_protocol', label: '协议', section: 'multiplex', kind: 'segmented', show: multiplexOn, choices: [['', 'h2mux'], ['smux', 'smux'], ['yamux', 'yamux']] },
-  { key: 'multiplex_streams', option: '', label: '流数', section: 'multiplex', kind: 'streams', show: multiplexOn, check: uint, description: '先选按最小还是最大流数，再填数量。' },
+  { key: 'multiplex_streams', option: '', label: '流数', section: 'multiplex', kind: 'streams', show: multiplexOn, check: uint },
   { key: 'multiplex_max_connections', option: 'multiplex_max_connections', label: '最大连接数', section: 'multiplex', kind: 'text', show: (v) => multiplexOn(v) && str(v, 'multiplex_streams_kind') !== 'max', width: 'tiny', check: uint },
   { key: 'multiplex_padding', option: 'multiplex_padding', label: '填充', section: 'multiplex', kind: 'switch', show: multiplexOn },
-  { key: 'multiplex_brutal_enabled', option: 'multiplex_brutal_enabled', label: 'TCP Brutal', section: 'brutal', kind: 'switch', show: multiplexOn, description: '按设定带宽发送，需要服务器支持。' },
+  { key: 'multiplex_brutal_enabled', option: 'multiplex_brutal_enabled', label: 'TCP Brutal', section: 'brutal', kind: 'switch', show: multiplexOn },
   { key: 'multiplex_brutal_up_mbps', option: 'multiplex_brutal_up_mbps', label: '上行带宽', section: 'brutal', kind: 'text', show: (v) => multiplexOn(v) && on(v, 'multiplex_brutal_enabled'), width: 'short', unit: 'Mbps', required: true, check: uint },
   { key: 'multiplex_brutal_down_mbps', option: 'multiplex_brutal_down_mbps', label: '下行带宽', section: 'brutal', kind: 'text', show: (v) => multiplexOn(v) && on(v, 'multiplex_brutal_enabled'), width: 'short', unit: 'Mbps', required: true, check: uint },
 
@@ -351,11 +351,11 @@ export const NODE_FIELDS: NodeField[] = [
 
   // dial: the fields of dial_fields used most as options of their own, the
   // rest as JSON
-  { key: 'dial_detour', option: '', label: '跳板代理', section: 'dial_chain', kind: 'select', show: always, choices: [], description: '经另一个节点或策略组连接这个节点。' },
-  { key: 'dial_bind_interface', option: '', label: '网络接口', section: 'dial_outbound', kind: 'select', show: always, choices: [], description: '从指定的网络接口连出，如 pppoe-wan 或另一条 WAN。' },
+  { key: 'dial_detour', option: '', label: '跳板代理', section: 'dial_chain', kind: 'select', show: always, choices: [] },
+  { key: 'dial_bind_interface', option: '', label: '网络接口', section: 'dial_outbound', kind: 'select', show: always, choices: [] },
   { key: 'dial_connect_timeout', option: '', label: '连接超时', section: 'dial_outbound', kind: 'text', show: always, ...SECONDS },
   { key: 'dial_tcp_fast_open', option: '', label: 'TCP Fast Open', section: 'dial_options', kind: 'switch', show: always },
-  { key: 'dial_tcp_multi_path', option: '', label: 'MPTCP', section: 'dial_options', kind: 'switch', show: always, description: '多路径 TCP，服务器也要支持。' },
+  { key: 'dial_tcp_multi_path', option: '', label: 'MPTCP', section: 'dial_options', kind: 'switch', show: always },
   { key: 'dial_fields', option: 'dial_fields', label: '其他拨号字段（JSON）', section: 'dial_json', kind: 'json', show: always, description: '上面没有的 sing-box 拨号字段，原样写入。' },
 ]
 
@@ -405,6 +405,10 @@ export function nodeValues(section: UciSection | null): NodeValues {
       values[field.key] = field.duration ? durationField(text, field.duration) : text
     } else values[field.key] = field.initial ?? ''
   }
+
+  // the plugin switch on when one is set; turned on, it starts as obfs-local
+  values.plugin_enabled = values.plugin ? '1' : ''
+  values.plugin ||= 'obfs-local'
 
   // the streams by the one of them set
   const max = typeof section?.multiplex_max_streams === 'string' ? section.multiplex_max_streams : ''
