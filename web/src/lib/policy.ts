@@ -42,6 +42,10 @@ export type Profile = {
   // the outbound mode chosen, as main.mode or else the default of the clash API
   mode: string
   outbounds: UciSection[]
+  // every section of the profile, which may refer to an outbound
+  sections: UciSection[]
+  // the outbound the clash API downloads its panel through
+  clashDetour: string | null
   // the group the Global mode sends everything to, by section name
   globalGroup: string | null
 }
@@ -64,6 +68,8 @@ export const profileQuery = queryOptions({
       config,
       mode: String(main.mode ?? clashApi?.default_mode ?? ''),
       outbounds,
+      sections,
+      clashDetour: (clashApi?.external_ui_download_detour as string | undefined) || null,
       globalGroup: global?.['.name'] ?? null,
     }
   },

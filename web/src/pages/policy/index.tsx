@@ -23,7 +23,7 @@ export function PolicyPage() {
       )}
       <div className="flex flex-col gap-9">
         <NodesSection profile={profile.data} />
-        <GroupsSection profile={profile.data} />
+        <GroupsSection profile={profile.data} subscriptions={subscriptions.data} />
         <SubscriptionsSection profile={profile.data} subscriptions={subscriptions.data} />
       </div>
     </PolicyRuntimeProvider>
