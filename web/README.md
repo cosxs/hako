@@ -20,7 +20,9 @@ HAKO_ROUTER=http://127.0.0.1:18081 pnpm dev
 pnpm build
 ```
 
-产物输出到 `../luci-app-hako/htdocs/hako/`，随 luci-app-hako 安装到 `/www/hako/`。构建产物不进 git。
+产物输出到 `../luci-app-hako/root/www/hako/`，随 luci-app-hako 安装到 `/www/hako/`，经 `http://路由器/hako/` 访问。构建产物不进 git。
+
+不放在 `htdocs/` 下：luci.mk 会对 `htdocs/` 里的 JS、CSS 跑 jsmin 和 csstidy，jsmin 会改写模板字符串，损坏 Vite 的产物；`root/` 下的文件原样安装。
 
 ## 目录
 

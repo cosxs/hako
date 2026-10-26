@@ -24,6 +24,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # the SDK has no Node, so the frontend is built here into luci-app-hako
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: build frontend
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          test -f ../luci-app-hako/root/www/hako/index.html
+          # the whole checkout becomes the SDK feed, keep it free of node_modules
+          rm -rf node_modules
+
       - uses: openwrt/gh-action-sdk@v11
         env:
           ARCH: x86_64-${{ matrix.branch }}

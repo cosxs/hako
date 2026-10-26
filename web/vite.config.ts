@@ -21,8 +21,10 @@ export default defineConfig(({ mode }) => {
         '/ubus': { target: router, changeOrigin: true },
       },
     },
+    // Installed from root/ rather than htdocs/: luci.mk runs jsmin and csstidy
+    // on everything under htdocs/, and jsmin rewrites template literals.
     build: {
-      outDir: '../luci-app-hako/htdocs/hako',
+      outDir: '../luci-app-hako/root/www/hako',
       emptyOutDir: true,
       rolldownOptions: {
         output: {

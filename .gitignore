@@ -1,2 +1,2 @@
 # the frontend, built from web/ into the LuCI package
-luci-app-hako/htdocs/hako/
+luci-app-hako/root/www/hako/

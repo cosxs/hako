@@ -25,12 +25,17 @@ wget -O - https://github.com/cosxs/hako/raw/main/uninstall.sh | sh
 
 ## 编译
 
+luci-app-hako 带有全屏界面（`http://路由器/hako/`），源码在 `web/`，用 Node 24 和 pnpm 构建，产物输出到 `luci-app-hako/root/www/hako/`，不进 git。OpenWrt SDK 里没有 Node，所以在 SDK 里打包前，要先在 feed 的源码目录里构建前端：
+
 ```shell
 echo "src-git hako https://github.com/cosxs/hako.git;main" >> feeds.conf.default
 ./scripts/feeds update -a
+(cd feeds/hako/web && pnpm install --frozen-lockfile && pnpm build && rm -rf node_modules)
 ./scripts/feeds install -a
 make package/luci-app-hako/compile
 ```
+
+用本地的仓库时，feed 写成 `src-link hako /path/to/hako`，在该仓库的 `web/` 里构建即可。`node_modules` 构建完就删掉，免得 feed 扫描时遍历它。没有构建就打包，luci-app-hako 里只有 LuCI 页面，没有 `/www/hako/`。CI 会先构建前端再打包。
 
 ## 测试
 
