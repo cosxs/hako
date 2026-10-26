@@ -89,7 +89,9 @@ jobs:
           fetch uci https://github.com/openwrt/uci "$UCI_REF"
           build uci -DBUILD_LUA=OFF
           fetch ucode https://github.com/jow-/ucode "$UCODE_REF"
-          build ucode -DUCI_SUPPORT=ON -DUBUS_SUPPORT=OFF -DULOOP_SUPPORT=OFF -DRTNL_SUPPORT=OFF -DNL80211_SUPPORT=OFF
+          # glibc 2.43 (Ubuntu 26.04) returns const from strchr() on const strings,
+          # which this ucode builds with -Werror
+          build ucode -DCMAKE_C_FLAGS=-Wno-error=discarded-qualifiers -DUCI_SUPPORT=ON -DUBUS_SUPPORT=OFF -DULOOP_SUPPORT=OFF -DRTNL_SUPPORT=OFF -DNL80211_SUPPORT=OFF
           echo "$prefix/bin" >> "$GITHUB_PATH"
 
       - name: install sing-box
