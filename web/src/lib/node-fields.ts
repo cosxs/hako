@@ -74,7 +74,7 @@ const PROTOCOL_TABS: Record<string, Tab[]> = {
   tuic: ['general', 'tls', 'quic', 'dial'],
   anytls: ['general', 'tls', 'dial'],
   naive: ['general', 'tls', 'quic', 'dial'],
-  snell: ['general', 'obfs', 'dial'],
+  snell: ['general', 'dial'],
   ssh: ['general', 'key', 'advanced', 'dial'],
   socks: ['general', 'dial'],
   http: ['general', 'tls', 'dial'],
@@ -92,12 +92,13 @@ export const SECTIONS: { id: string; title: string; tab: Tab; column: 'left' | '
   { id: 'options', title: '选项', tab: 'general', column: 'left' },
   { id: 'protocol', title: '', tab: 'general', column: 'right' },
   { id: 'transport', title: '传输', tab: 'general', column: 'right' },
+  // snell v4 and v5, or v6
+  { id: 'snell_obfs', title: 'HTTP 混淆', tab: 'general', column: 'right' },
+  { id: 'snell_shaping', title: '流量整形', tab: 'general', column: 'right' },
   { id: 'idle', title: '空闲会话', tab: 'general', column: 'right' },
   { id: 'headers', title: '请求头', tab: 'general', column: 'right' },
   { id: 'obfs', title: '混淆', tab: 'obfs', column: 'left' },
   { id: 'gecko', title: 'Gecko', tab: 'obfs', column: 'right' },
-  { id: 'snell_obfs', title: 'HTTP 混淆', tab: 'obfs', column: 'left' },
-  { id: 'snell_shaping', title: '流量整形', tab: 'obfs', column: 'right' },
   { id: 'hop_ranges', title: '端口范围', tab: 'hop', column: 'left' },
   { id: 'hop_interval', title: '跳跃间隔', tab: 'hop', column: 'right' },
   { id: 'realm', title: 'Realm', tab: 'realm', column: 'left' },
@@ -146,7 +147,6 @@ export type NodeField = {
   initial?: string
   // kept when the field hides, as another field shares its option
   retain?: boolean
-  description?: string
 }
 
 const str = (v: NodeValues, key: string) => (typeof v[key] === 'string' ? (v[key] as string) : '')
@@ -188,7 +188,7 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'packet_encoding', option: 'packet_encoding', label: 'UDP 包编码', section: 'options', kind: 'select', show: is('vmess', 'vless'), width: 'short', choices: [['', '默认'], ['packetaddr', 'packetaddr'], ['xudp', 'xudp']] },
   { key: 'disable_chrome_parrot', option: 'disable_chrome_parrot', label: '禁用 Chrome 指纹模仿', section: 'options', kind: 'switch', show: is('hysteria2') },
   { key: 'zero_rtt_handshake', option: 'zero_rtt_handshake', label: '0-RTT 握手', section: 'options', kind: 'switch', show: is('tuic') },
-  { key: 'reuse', option: 'reuse', label: '连接复用', section: 'options', kind: 'switch', show: is('snell'), description: '后续请求复用已有的连接。' },
+  { key: 'reuse', option: 'reuse', label: '连接复用', section: 'options', kind: 'switch', show: is('snell') },
 
   // general: what the protocol takes
   { key: 'snell_version', option: 'version', label: '版本', section: 'protocol', kind: 'segmented', show: is('snell'), choices: [['4', 'v4 / v5'], ['6', 'v6']], initial: '4', retain: true },
@@ -224,7 +224,7 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'brutal_debug', option: 'brutal_debug', label: 'Brutal 调试日志', section: 'protocol', kind: 'switch', show: is('hysteria2') },
   { key: 'congestion_control', option: 'congestion_control', label: '拥塞控制', section: 'protocol', kind: 'segmented', show: is('tuic'), choices: [['', 'cubic'], ['new_reno', 'new_reno'], ['bbr', 'bbr']] },
   { key: 'udp_relay_mode', option: 'udp_relay_mode', label: 'UDP 中继模式', section: 'protocol', kind: 'segmented', show: is('tuic'), choices: [['', 'native'], ['quic', 'quic']] },
-  { key: 'udp_over_stream', option: 'udp_over_stream', label: 'UDP over Stream', section: 'protocol', kind: 'switch', show: (v) => is('tuic')(v) && !str(v, 'udp_relay_mode'), description: '只用于 native 中继模式。' },
+  { key: 'udp_over_stream', option: 'udp_over_stream', label: 'UDP over Stream', section: 'protocol', kind: 'switch', show: (v) => is('tuic')(v) && !str(v, 'udp_relay_mode') },
   { key: 'heartbeat', option: 'heartbeat', label: '心跳间隔', section: 'protocol', kind: 'text', show: is('tuic'), ...SECONDS },
   { key: 'insecure_concurrency', option: 'insecure_concurrency', label: '并发连接数', section: 'protocol', kind: 'text', show: is('naive'), width: 'tiny', check: uint },
   { key: 'naive_stream_receive_window', option: 'stream_receive_window', label: '流接收窗口', section: 'protocol', kind: 'text', show: is('naive'), width: 'short', check: size, retain: true },
@@ -239,7 +239,7 @@ export const NODE_FIELDS: NodeField[] = [
 
   // obfuscation of hysteria2 and snell
   { key: 'obfs_type', option: 'obfs_type', label: '混淆类型', section: 'obfs', kind: 'segmented', show: is('hysteria2'), choices: [['', 'Salamander'], ['gecko', 'Gecko']] },
-  { key: 'obfs_password', option: 'obfs_password', label: '混淆密码', section: 'obfs', kind: 'password', show: is('hysteria2'), description: '留空则不混淆。' },
+  { key: 'obfs_password', option: 'obfs_password', label: '混淆密码', section: 'obfs', kind: 'password', show: is('hysteria2') },
   { key: 'obfs_min_packet_size', option: 'obfs_min_packet_size', label: '最小包长', section: 'gecko', kind: 'text', show: (v) => is('hysteria2')(v) && str(v, 'obfs_type') === 'gecko', width: 'short', unit: '字节', check: uint },
   { key: 'obfs_max_packet_size', option: 'obfs_max_packet_size', label: '最大包长', section: 'gecko', kind: 'text', show: (v) => is('hysteria2')(v) && str(v, 'obfs_type') === 'gecko', width: 'short', unit: '字节', check: uint },
   { key: 'obfs_mode', option: 'obfs_mode', label: 'HTTP 混淆', section: 'snell_obfs', kind: 'segmented', show: (v) => is('snell')(v) && str(v, 'snell_version') !== '6', choices: [['', '无'], ['http', 'HTTP']] },
@@ -247,12 +247,12 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'mode', option: 'mode', label: '流量整形', section: 'snell_shaping', kind: 'select', show: (v) => is('snell')(v) && str(v, 'snell_version') === '6', width: 'short', choices: [['', 'default'], ['unshaped', 'unshaped'], ['unsafe-raw', 'unsafe-raw']] },
 
   // port hopping of hysteria2
-  { key: 'server_ports', option: 'server_ports', label: '端口范围', section: 'hop_ranges', kind: 'list', show: (v) => is('hysteria2')(v) && addressed(v), mono: true, check: (value) => /^\d+:\d+$/.test(value), description: '在这些端口间跳跃，如 20000:30000；不填则只用基本页的端口。' },
+  { key: 'server_ports', option: 'server_ports', label: '端口范围', section: 'hop_ranges', kind: 'list', show: (v) => is('hysteria2')(v) && addressed(v), mono: true, check: (value) => /^\d+:\d+$/.test(value) },
   { key: 'hop_interval', option: 'hop_interval', label: '跳跃间隔', section: 'hop_interval', kind: 'text', show: (v) => is('hysteria2')(v) && addressed(v), ...SECONDS },
-  { key: 'hop_interval_max', option: 'hop_interval_max', label: '最大跳跃间隔', section: 'hop_interval', kind: 'text', show: (v) => is('hysteria2')(v) && addressed(v), ...SECONDS, description: '填写后在两者之间随机。' },
+  { key: 'hop_interval_max', option: 'hop_interval_max', label: '最大跳跃间隔', section: 'hop_interval', kind: 'text', show: (v) => is('hysteria2')(v) && addressed(v), ...SECONDS },
 
   // the realm of hysteria2
-  { key: 'realm_server_url', option: 'realm_server_url', label: 'Realm 服务地址', section: 'realm', kind: 'text', show: is('hysteria2'), mono: true, check: url, description: '填写后不用服务器地址和端口，改经 Realm 连接。' },
+  { key: 'realm_server_url', option: 'realm_server_url', label: 'Realm 服务地址', section: 'realm', kind: 'text', show: is('hysteria2'), mono: true, check: url },
   { key: 'realm_token', option: 'realm_token', label: 'Realm 令牌', section: 'realm', kind: 'password', show: realm },
   { key: 'realm_realm_id', option: 'realm_realm_id', label: 'Realm ID', section: 'realm', kind: 'text', show: realm, required: true },
   { key: 'realm_stun_servers', option: 'realm_stun_servers', label: 'STUN 服务器', section: 'realm', kind: 'list', show: realm, mono: true, required: true },
@@ -285,11 +285,11 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'tls_enabled', option: 'tls_enabled', label: '启用 TLS', section: 'tls', kind: 'switch', show: (v) => TLS_OPTIONAL.includes(str(v, 'type')) },
   { key: 'tls_server_name', option: 'tls_server_name', label: 'TLS 服务器名称', section: 'tls', kind: 'text', show: tlsOn, mono: true, check: host },
   { key: 'tls_utls_fingerprint', option: 'tls_utls_fingerprint', label: 'uTLS 指纹', section: 'tls', kind: 'select', show: (v) => tlsOn(v) && UTLS_TYPES.includes(str(v, 'type')), width: 'short', choices: [['', '无'], ...UTLS_FINGERPRINTS.map((f): [string, string] => [f, f])] },
-  { key: 'tls_insecure', option: 'tls_insecure', label: '跳过证书验证', section: 'tls', kind: 'switch', show: (v) => tlsOn(v) && str(v, 'type') !== 'naive', description: '不检查服务器证书，只在自签证书时打开。' },
+  { key: 'tls_insecure', option: 'tls_insecure', label: '跳过证书验证', section: 'tls', kind: 'switch', show: (v) => tlsOn(v) && str(v, 'type') !== 'naive' },
   { key: 'tls_reality_enabled', option: 'tls_reality_enabled', label: '启用 Reality', section: 'reality', kind: 'switch', show: (v) => tlsOn(v) && str(v, 'type') === 'vless' },
   { key: 'tls_reality_public_key', option: 'tls_reality_public_key', label: 'Reality 公钥', section: 'reality', kind: 'text', show: (v) => tlsOn(v) && str(v, 'type') === 'vless' && on(v, 'tls_reality_enabled'), mono: true, required: true },
   { key: 'tls_reality_short_id', option: 'tls_reality_short_id', label: 'Reality short ID', section: 'reality', kind: 'text', show: (v) => tlsOn(v) && str(v, 'type') === 'vless' && on(v, 'tls_reality_enabled'), width: 'short', mono: true },
-  { key: 'tls_fields', option: 'tls_fields', label: 'TLS 字段（JSON）', section: 'tls_json', kind: 'json', show: tlsOn, description: 'sing-box 的 TLS 字段，会覆盖左边的选项。' },
+  { key: 'tls_fields', option: 'tls_fields', label: 'TLS 字段（JSON）', section: 'tls_json', kind: 'json', show: tlsOn },
 
   // transport
   {
@@ -332,7 +332,7 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'idle_timeout', option: 'idle_timeout', label: '闲置超时', section: 'quic', kind: 'text', show: is(...QUIC_TYPES), ...SECONDS },
   { key: 'keep_alive_period', option: 'keep_alive_period', label: '保活周期', section: 'quic', kind: 'text', show: is(...QUIC_TYPES), ...SECONDS },
   { key: 'disable_path_mtu_discovery', option: 'disable_path_mtu_discovery', label: '禁用路径 MTU 发现', section: 'quic', kind: 'switch', show: is(...QUIC_TYPES) },
-  { key: 'quic', option: 'quic', label: 'QUIC', section: 'quic', kind: 'switch', show: is('naive'), description: '改用 HTTP/3 连接。' },
+  { key: 'quic', option: 'quic', label: 'QUIC', section: 'quic', kind: 'switch', show: is('naive') },
   { key: 'quic_congestion_control', option: 'quic_congestion_control', label: '拥塞控制', section: 'quic', kind: 'segmented', show: (v) => is('naive')(v) && on(v, 'quic'), choices: [['', 'cubic'], ['bbr', 'bbr'], ['bbr2', 'bbr2'], ['reno', 'reno']] },
   { key: 'quic_stream_receive_window', option: 'stream_receive_window', label: '流接收窗口', section: 'quic_window', kind: 'text', show: is(...QUIC_TYPES), width: 'short', check: size, retain: true },
   { key: 'connection_receive_window', option: 'connection_receive_window', label: '连接接收窗口', section: 'quic_window', kind: 'text', show: is(...QUIC_TYPES), width: 'short', check: size },
@@ -356,7 +356,7 @@ export const NODE_FIELDS: NodeField[] = [
   { key: 'dial_connect_timeout', option: '', label: '连接超时', section: 'dial_outbound', kind: 'text', show: always, ...SECONDS },
   { key: 'dial_tcp_fast_open', option: '', label: 'TCP Fast Open', section: 'dial_options', kind: 'switch', show: always },
   { key: 'dial_tcp_multi_path', option: '', label: 'MPTCP', section: 'dial_options', kind: 'switch', show: always },
-  { key: 'dial_fields', option: 'dial_fields', label: '其他拨号字段（JSON）', section: 'dial_json', kind: 'json', show: always, description: '上面没有的 sing-box 拨号字段，原样写入。' },
+  { key: 'dial_fields', option: 'dial_fields', label: '其他拨号字段（JSON）', section: 'dial_json', kind: 'json', show: always },
 ]
 
 // a protocol that always uses TLS shows it on

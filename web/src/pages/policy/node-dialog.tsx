@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Field, FieldContent, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -62,13 +62,12 @@ function Row({ id, def, children, align = 'center' }: { id?: string; def: NodeFi
   return (
     <Field
       orientation="horizontal"
-      className={cn('gap-4 py-2.5', align === 'center' && !def.description ? 'items-center has-[>[data-slot=field-content]]:items-center' : 'items-start')}
+      className={cn('gap-4 py-2.5', align === 'center' ? 'items-center has-[>[data-slot=field-content]]:items-center' : 'items-start')}
     >
       <FieldContent className="min-w-0 gap-0.5">
         <FieldLabel htmlFor={id} className="font-normal">
           {def.label}
         </FieldLabel>
-        {def.description && <FieldDescription className="text-xs">{def.description}</FieldDescription>}
       </FieldContent>
       {children}
     </Field>
@@ -119,7 +118,6 @@ function NodeInput({ field, def, invalid, choices }: { field: AnyFieldApi; def: 
           onBlur={field.handleBlur}
           onChange={(event) => field.handleChange(event.target.value)}
         />
-        {def.description && <FieldDescription className="text-xs">{def.description}</FieldDescription>}
       </Field>
     )
 
@@ -380,12 +378,11 @@ export function NodeDialog({
       const rows = NODE_FIELDS.filter((def) => def.section === item.id && def.show(values)).map(render)
       // a protocol that always uses TLS shows it on
       const required = item.id === 'tls' && tlsRequired(type) && (
-        <Field key="tls-required" orientation="horizontal" className="items-start gap-4 py-2.5">
+        <Field key="tls-required" orientation="horizontal" className="items-center gap-4 py-2.5 has-[>[data-slot=field-content]]:items-center">
           <FieldContent className="min-w-0 gap-0.5">
             <FieldLabel htmlFor="node-tls-required" className="font-normal">
               启用 TLS
             </FieldLabel>
-            <FieldDescription className="text-xs">{NODE_PROTOCOLS[type]} 总是使用 TLS。</FieldDescription>
           </FieldContent>
           <Switch id="node-tls-required" checked disabled />
         </Field>
