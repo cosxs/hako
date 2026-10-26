@@ -28,7 +28,7 @@ export function SectionAction({ children, busy, disabled, onClick }: { children:
 }
 
 // a node, group or subscription as a tile: what it is, its name, and a
-// last line; clicking it opens its menu
+// last line; clicking it opens its menu, on its right
 export function Tile({ caption, name, foot, children }: { caption: ReactNode; name: string; foot: ReactNode; children: ReactNode }) {
   return (
     <DropdownMenu>
@@ -44,7 +44,11 @@ export function Tile({ caption, name, foot, children }: { caption: ReactNode; na
         <span className="truncate text-[15px] font-semibold">{name}</span>
         <span className="mt-auto flex min-w-0 items-center gap-1.5 text-sm">{foot}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-[60vh] w-72">{children}</DropdownMenuContent>
+      {/* beside the tile, as tall as the window lets it be: a long list of
+          members scrolls in it */}
+      <DropdownMenuContent side="right" align="start" className="w-72">
+        {children}
+      </DropdownMenuContent>
     </DropdownMenu>
   )
 }
