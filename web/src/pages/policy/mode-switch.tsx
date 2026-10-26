@@ -17,24 +17,28 @@ export function ModeSwitch() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['hako'] }),
   })
 
+  // until the status is in, the default modes hold the place of the switch,
+  // none chosen, so the page below does not move once it is
   const api = status?.clash_api
-  if (!api) return null
+  if (status && !api) return null
 
-  const modes = [...api.modes].sort((a, b) => {
-    const rank = (mode: string) => {
-      const index = ORDER.indexOf(mode.toLowerCase())
-      return index < 0 ? ORDER.length : index
-    }
-    return rank(a) - rank(b)
-  })
-  const current = modes.find((mode) => mode.toLowerCase() === api.mode.toLowerCase()) ?? api.mode
+  const modes = api
+    ? [...api.modes].sort((a, b) => {
+        const rank = (mode: string) => {
+          const index = ORDER.indexOf(mode.toLowerCase())
+          return index < 0 ? ORDER.length : index
+        }
+        return rank(a) - rank(b)
+      })
+    : ORDER
+  const current = api ? (modes.find((mode) => mode.toLowerCase() === api.mode.toLowerCase()) ?? api.mode) : null
 
   return (
     <div className="flex justify-center">
       <Tabs value={current} onValueChange={(mode) => mode !== current && mutation.mutate(String(mode))}>
         <TabsList className="w-full max-w-md">
           {modes.map((mode) => (
-            <TabsTrigger key={mode} value={mode} disabled={mutation.isPending} className="px-6">
+            <TabsTrigger key={mode} value={mode} disabled={!api || mutation.isPending} className="px-6">
               {modeName(mode)}
             </TabsTrigger>
           ))}
