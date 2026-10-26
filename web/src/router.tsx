@@ -16,6 +16,7 @@ import { hasSession, logout, onSessionExpired } from '@/lib/ubus'
 import { ActivityPage } from '@/pages/activity'
 import { LoginPage } from '@/pages/login'
 import { PendingPage } from '@/pages/pending'
+import { PolicyPage } from '@/pages/policy'
 
 // a session that is no longer accepted sends the app back to the login
 function Root() {
@@ -93,7 +94,7 @@ function pageRoute<P extends PagePath>(path: P, component?: () => ReactNode) {
 const pageRoutes = [
   pageRoute('/activity', ActivityPage),
   pageRoute('/takeover'),
-  pageRoute('/policy'),
+  pageRoute('/policy', PolicyPage),
   pageRoute('/rules'),
   pageRoute('/core'),
   pageRoute('/profiles'),

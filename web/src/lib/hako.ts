@@ -48,3 +48,10 @@ const MODE_NAMES: Record<string, string> = {
 export function modeName(mode: string) {
   return MODE_NAMES[mode.toLowerCase()] ?? mode
 }
+
+// switches the outbound mode: kept in main.mode, and a running service is
+// reloaded, which sets it on sing-box
+export async function setMode(mode: string) {
+  const result = await call<{ result: boolean; error?: string }>('luci.hako', 'mode_set', { mode })
+  if (!result.result) throw new Error(result.error === 'no_clash_api' ? '没有启用 Clash API，无法切换出站模式' : `无法切换到 ${modeName(mode)}`)
+}

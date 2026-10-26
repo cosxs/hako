@@ -73,7 +73,7 @@ export function AppShell({ onLogout }: { onLogout: () => void }) {
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <header className="flex h-12 items-center gap-2 px-4 md:hidden">
           <SidebarTrigger />
         </header>
