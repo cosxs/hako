@@ -425,6 +425,16 @@ export function nodeValues(section: UciSection | null): NodeValues {
   return values
 }
 
+// a protocol switched to starts from the values of a new node: only the
+// name, the server and the dial fields, which every protocol has, are kept
+const KEPT = ['tag', 'type', 'server', 'server_port']
+
+export function switchProtocol(values: NodeValues): NodeValues {
+  const fresh = nodeValues(null)
+  for (const key of Object.keys(fresh)) if (KEPT.includes(key) || key.startsWith('dial_')) fresh[key] = values[key]
+  return fresh
+}
+
 // the TLS options by their fields in the JSON, which goes over them: when the
 // JSON has fields, the options are written into it too, so it never says
 // otherwise

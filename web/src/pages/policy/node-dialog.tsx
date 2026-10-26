@@ -25,6 +25,7 @@ import {
   nodeTabs,
   nodeValues,
   SECTIONS,
+  switchProtocol,
   TABS,
   tlsRequired,
   type NodeField,
@@ -263,6 +264,14 @@ export function NodeDialog({
       onDynamic: ({ value }) => {
         const fields = errors(value)
         return fields ? { fields } : undefined
+      },
+    },
+    // another protocol starts afresh
+    listeners: {
+      onChange: ({ formApi, fieldApi }) => {
+        if (fieldApi.name !== 'type') return
+        for (const [key, value] of Object.entries(switchProtocol(formApi.state.values)))
+          if (formApi.state.values[key] !== value) formApi.setFieldValue(key, value)
       },
     },
     onSubmit: ({ value }) => mutation.mutate(nodeOptions(value)),
