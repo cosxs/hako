@@ -147,6 +147,7 @@ return view.extend({
       _('Lists of domains or addresses for route rules. DNS rules and the takeover bypass use them as well.'));
     // added with a dialog, without a section name to type first
     rs.anonymous = true;
+    hako.named(rs, 'rule_set');
     rs.addremove = true;
     rs.nodescriptions = true;
     rs.modaltitle = (section_id) => _('Rule sets') + ' » ' + (uci.get(hako.profileConfig(), section_id, 'tag') || _('New rule set'));

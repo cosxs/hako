@@ -150,6 +150,7 @@ return view.extend({
     ss.filter = (section_id) => !(uci.get(hako.profileConfig(), section_id, 'type') in { fakeip: 1, local: 1 });
     // added with a dialog, without a section name to type first
     ss.anonymous = true;
+    hako.named(ss, 'dns');
     ss.addremove = true;
     ss.sortable = true;
     ss.nodescriptions = true;
@@ -253,6 +254,7 @@ return view.extend({
       _('Remote rule sets download with them, chosen as the default on the Rules page or for each rule set.'));
     const hs = o.subsection;
     hs.anonymous = true;
+    hako.named(hs, 'http_client');
     hs.addremove = true;
     hs.nodescriptions = true;
     hs.modaltitle = (section_id) => _('HTTP clients') + ' » ' + (uci.get(hako.profileConfig(), section_id, 'tag') || _('New HTTP client'));
