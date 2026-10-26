@@ -32,6 +32,13 @@ stop() {
 
 cleanup() {
   firewall_down
+  # a reload restarting sing-box: the next one takes the queries of dnsmasq
+  # the same way, which goes on sending to it rather than restarting twice,
+  # and clears what a tun left behind before it starts
+  if [ -f "$RELOADING" ]; then
+    flush_dns_cache
+    return 0
+  fi
   dnsmasq_down
   if [ -n "$tun_route" ]; then
     # shellcheck disable=SC2086
@@ -41,6 +48,9 @@ cleanup() {
 }
 
 trap stop TERM INT
+
+# the runner of the previous config has gone
+rm -f "$RELOADING"
 
 if [ -n "$tun_route" ]; then
   # shellcheck disable=SC2086
@@ -76,6 +86,10 @@ if uses_tproxy || [ -n "$(dns_inbound)" ]; then
     dnsmasq_up
   fi
 fi
+
+# a config without a dns inbound leaves dnsmasq to its upstream servers,
+# also after a reload from one with it
+[ -n "$(dns_inbound)" ] || dnsmasq_down
 
 # sing-box starts with the mode in its cache file: set the chosen one
 apply_mode 20 &

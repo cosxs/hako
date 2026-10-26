@@ -1,7 +1,6 @@
 import { revalidateLogic, useForm, useStore } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CircleAlertIcon, GripVerticalIcon, PlusIcon, XIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Alert, AlertTitle } from '@/components/reui/alert'
@@ -23,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { effectToast, untilApplied } from '@/lib/hako'
 import { cn } from '@/lib/utils'
 import {
   copyName,
@@ -122,9 +122,9 @@ export function GroupDialog({
   const taken = profile.outbounds.filter((other) => other['.name'] !== self).map(label)
 
   const mutation = useMutation({
-    mutationFn: (values: Record<string, string | string[]>) => saveOutbound(profile.config, editing, values, 'group'),
-    onSuccess: (_result, values) => {
-      toast.success(editing ? `已保存 ${values.tag}` : `已添加 ${values.tag}`)
+    mutationFn: (values: Record<string, string | string[]>) => untilApplied(() => saveOutbound(profile.config, editing, values, 'group')),
+    onSuccess: ({ effect }, values) => {
+      effectToast(editing ? `已保存 ${values.tag}` : `已添加 ${values.tag}`, effect)
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },

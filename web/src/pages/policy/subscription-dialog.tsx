@@ -1,7 +1,6 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CircleAlertIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert'
@@ -12,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { effectToast, untilApplied } from '@/lib/hako'
 import {
   addSubscription,
   editSubscription,
@@ -86,9 +86,9 @@ export function SubscriptionDialog({
   const others = subscriptions.filter((other) => other.name !== sub?.name)
 
   const mutation = useMutation({
-    mutationFn: (values: SubscriptionValues) => (sub ? editSubscription(sub.name, values) : addSubscription(values)),
-    onSuccess: (_result, values) => {
-      toast.success(sub ? `已保存 ${values.title}` : `已添加 ${values.title}`)
+    mutationFn: (values: SubscriptionValues) => untilApplied(() => (sub ? editSubscription(sub.name, values) : addSubscription(values))),
+    onSuccess: ({ effect }, values) => {
+      effectToast(sub ? `已保存 ${values.title}` : `已添加 ${values.title}`, effect)
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },

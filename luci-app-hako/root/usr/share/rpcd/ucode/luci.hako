@@ -13,6 +13,8 @@ const PROFILE_TEMPLATE = '/usr/share/hako/template/hako_template';
 const GENERATOR = '/usr/share/hako/ucode/generate.uc';
 const RUN_DIR = '/var/run/hako';
 const RUN_CONFIG = `${RUN_DIR}/config.json`;
+// left while a reload restarts sing-box with a new config, RELOADING of common.sh
+const RELOADING = `${RUN_DIR}/reloading`;
 const CORE = '/usr/bin/sing-box';
 const COMMON = '/usr/share/hako/common.sh';
 const CORE_INSTALL = '/usr/share/hako/core-install.sh';
@@ -596,6 +598,27 @@ const methods = {
       }
 
       return { available: true, names: names, groups: groups, delays: delays };
+    }
+  },
+
+  // whether sing-box runs what the settings give: the config generated from
+  // them is the one it runs, no restart for a new one is under way, and its
+  // clash API answers. A save waits for this across the reload it triggers
+  applied: {
+    call: function() {
+      if (!instance_pid())
+        return { running: false };
+
+      const name = current_profile();
+      const generated = profile_exists(name) ? command_output(`${generate_command(name)} 2>/dev/null`) : null;
+      const api = clash_api(load_json(RUN_CONFIG));
+
+      return {
+        running: true,
+        current: generated != null && generated == readfile(RUN_CONFIG),
+        restarting: access(RELOADING) == true,
+        api: api != null && clash_request(api, 'GET', '/version')?.status == 200
+      };
     }
   },
 

@@ -129,8 +129,12 @@ prepare_config() {
 		return 1
 	fi
 
+	# a new config restarts sing-box: marked before it is in place, so the
+	# runner that stops keeps dnsmasq sending to sing-box, and a save waiting
+	# for it sees the restart coming
 	if ! cmp -s "$staged" "$RUN_CONFIG"; then
 		config_changed=1
+		touch "$RELOADING"
 	fi
 	mv -f "$staged" "$RUN_CONFIG"
 }
@@ -151,7 +155,9 @@ service_stopped() {
 	flush_dns_cache
 }
 
-# changes to the device settings and to the profile in use are applied
+# changes to the device settings and to the profile in use are applied, a
+# tenth of a second after the last one: a save commits both at once
 service_triggers() {
+	PROCD_RELOAD_DELAY=100
 	procd_add_reload_trigger hako "hako_$(uci -q get hako.main.profile)"
 }

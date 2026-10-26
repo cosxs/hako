@@ -2,7 +2,6 @@ import { revalidateLogic, useForm, useStore, type AnyFieldApi } from '@tanstack/
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlertIcon, EyeIcon, EyeOffIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { toast } from 'sonner'
 
 import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
@@ -15,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { effectToast, untilApplied } from '@/lib/hako'
 import { cn } from '@/lib/utils'
 import {
   fieldTab,
@@ -237,9 +237,9 @@ export function NodeDialog({
   const { data: devices } = useQuery(devicesQuery)
 
   const mutation = useMutation({
-    mutationFn: (options: Record<string, string | string[]>) => saveOutbound(profile.config, editing, options, 'node'),
-    onSuccess: (_result, options) => {
-      toast.success(editing ? `已保存 ${options.tag}` : `已添加 ${options.tag}`)
+    mutationFn: (options: Record<string, string | string[]>) => untilApplied(() => saveOutbound(profile.config, editing, options, 'node')),
+    onSuccess: ({ effect }, options) => {
+      effectToast(editing ? `已保存 ${options.tag}` : `已添加 ${options.tag}`, effect)
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },

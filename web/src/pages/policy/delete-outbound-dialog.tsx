@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Spinner } from '@/components/ui/spinner'
+import { effectToast, untilApplied } from '@/lib/hako'
 import { deleteOutbound, outboundUsers } from '@/lib/outbounds'
 import { label, type Profile } from '@/lib/policy'
 import type { UciSection } from '@/lib/uci'
@@ -31,9 +32,9 @@ export function DeleteOutboundDialog({
 }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (target: UciSection) => deleteOutbound(profile!, target),
-    onSuccess: (_result, target) => {
-      toast.success(`已删除 ${label(target)}`)
+    mutationFn: (target: UciSection) => untilApplied(() => deleteOutbound(profile!, target)),
+    onSuccess: ({ effect }, target) => {
+      effectToast(`已删除 ${label(target)}`, effect)
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },

@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Spinner } from '@/components/ui/spinner'
+import { effectToast, untilApplied } from '@/lib/hako'
 import { deleteSubscription, type Subscription } from '@/lib/policy'
 
 // deleting a subscription: what it downloaded goes too, and the groups that
@@ -19,9 +20,9 @@ import { deleteSubscription, type Subscription } from '@/lib/policy'
 export function DeleteSubscriptionDialog({ sub, onOpenChange }: { sub: Subscription | null; onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (target: Subscription) => deleteSubscription(target.name),
-    onSuccess: (_result, target) => {
-      toast.success(`已删除 ${target.tag}`)
+    mutationFn: (target: Subscription) => untilApplied(() => deleteSubscription(target.name)),
+    onSuccess: ({ effect }, target) => {
+      effectToast(`已删除 ${target.tag}`, effect)
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },

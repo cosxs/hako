@@ -15,6 +15,9 @@ APP_LOG="$LOG_DIR/app.log"
 CORE_LOG="$LOG_DIR/core.log"
 FIREWALL_STATE="$RUN_DIR/firewall.state"
 DNSMASQ_STATE="$RUN_DIR/dnsmasq.state"
+# left by a reload that restarts sing-box with a new config, for the runner
+# that stops to keep dnsmasq sending to sing-box
+RELOADING="$RUN_DIR/reloading"
 DNSMASQ_CONF="hako.conf"
 
 log() {
@@ -168,16 +171,16 @@ tproxy_port() {
   inspect tproxy_port
 }
 
-# wait_for_listen <port> <pid>: wait up to about 10 seconds, half a second
-# apart, until a TCP port is listened on; fails at once when process <pid>
+# wait_for_listen <port> <pid>: wait up to about 10 seconds, a tenth of a
+# second apart, until a TCP port is listened on; fails at once when process <pid>
 # exits (1), or when the time is up (2)
 wait_for_listen() {
   local i=0
 
-  while [ "$i" -lt 20 ]; do
+  while [ "$i" -lt 100 ]; do
     kill -0 "$2" 2> /dev/null || return 1
     netstat -lnt 2> /dev/null | awk -v p="$1" '$4 ~ ":" p "$" { found = 1 } END { exit !found }' && return 0
-    ucode -e 'sleep(500)'
+    ucode -e 'sleep(100)'
     i=$((i + 1))
   done
 
@@ -225,23 +228,37 @@ dnsmasq_dirs() {
 # to them; so the router itself and the devices asking dnsmasq get the answers
 # of sing-box too. The files written are kept in a state file.
 dnsmasq_up() {
-  local inbound server port dir
-
-  dnsmasq_down
+  local inbound server port dir file conf changed=
 
   inbound=$(dns_inbound)
   if [ -z "$inbound" ]; then
+    dnsmasq_down
     log "no dns inbound in the running config: dnsmasq keeps its upstream servers"
     return 0
   fi
 
   server="${inbound% *}"
   port="${inbound#* }"
+  conf=$(printf '# set up by Hako while sing-box runs\nno-resolv\nserver=%s#%s' "$server" "$port")
+
+  # sing-box restarted by a reload: dnsmasq sends to it already, unless the
+  # address or the instances of dnsmasq changed
+  if [ -f "$DNSMASQ_STATE" ]; then
+    for dir in $(dnsmasq_dirs); do
+      [ "$(cat "$dir/$DNSMASQ_CONF" 2> /dev/null)" = "$conf" ] || changed=1
+    done
+    [ -n "$changed" ] || return 0
+
+    # the old files go with the restart below, not one of their own
+    while read -r file; do
+      rm -f "$file"
+    done < "$DNSMASQ_STATE"
+    rm -f "$DNSMASQ_STATE"
+  fi
 
   for dir in $(dnsmasq_dirs); do
     mkdir -p "$dir"
-    printf '# set up by Hako while sing-box runs\nno-resolv\nserver=%s#%s\n' \
-      "$server" "$port" > "$dir/$DNSMASQ_CONF"
+    printf '%s\n' "$conf" > "$dir/$DNSMASQ_CONF"
     echo "$dir/$DNSMASQ_CONF" >> "$DNSMASQ_STATE"
   done
 
