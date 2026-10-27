@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 
-import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -17,7 +17,11 @@ function errorText(error: Error) {
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('root')
   const [password, setPassword] = useState('')
-  const mutation = useMutation({ mutationFn: () => login(username, password), onSuccess: onLogin })
+  const mutation = useMutation({
+    mutationFn: () => login(username, password),
+    onSuccess: onLogin,
+    onError: (error: Error) => toast.error(errorText(error)),
+  })
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -42,11 +46,6 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                 <FieldLabel htmlFor="password">密码</FieldLabel>
                 <Input id="password" type="password" autoComplete="current-password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
               </Field>
-              {mutation.error && (
-                <Alert variant="destructive">
-                  <AlertTitle>{errorText(mutation.error)}</AlertTitle>
-                </Alert>
-              )}
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending && <Spinner />}
                 登录

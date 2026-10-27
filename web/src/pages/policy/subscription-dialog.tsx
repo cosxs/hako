@@ -1,9 +1,8 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CircleAlertIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -92,6 +91,12 @@ export function SubscriptionDialog({
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },
+    onError: (error: SubscriptionError) =>
+      toast.error(error.message, {
+        description: [sub ? '订阅保持原样。' : '订阅没有保存。', error.code === 'download_failed' && '检查订阅地址后重试。', error.output]
+          .filter(Boolean)
+          .join(' '),
+      }),
   })
 
   const form = useForm({
@@ -115,8 +120,6 @@ export function SubscriptionDialog({
         user_agent: value.agent.trim(),
       }),
   })
-
-  const failure = mutation.error as SubscriptionError | null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,18 +223,6 @@ export function SubscriptionDialog({
                 )}
               </form.Field>
             </div>
-
-            {failure && (
-              <Alert variant="destructive">
-                <CircleAlertIcon />
-                <AlertTitle>{failure.message}</AlertTitle>
-                <AlertDescription>
-                  {sub ? '订阅保持原样。' : '订阅没有保存。'}
-                  {failure.code === 'download_failed' && '检查订阅地址后重试。'}
-                  {failure.output && <pre className="mt-2 max-h-40 overflow-auto font-mono text-xs whitespace-pre-wrap">{failure.output}</pre>}
-                </AlertDescription>
-              </Alert>
-            )}
           </FieldGroup>
 
           <DialogFooter>

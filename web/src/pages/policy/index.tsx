@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 
-import { Alert, AlertTitle } from '@/components/reui/alert'
 import { profileQuery, subscriptionsQuery } from '@/lib/policy'
 import { ModeSwitch } from '@/pages/policy/mode-switch'
 import { preloadDialogs } from '@/pages/policy/dialog-loaders'
@@ -13,7 +13,12 @@ import { GroupsSection, NodesSection, SubscriptionsSection } from '@/pages/polic
 export function PolicyPage() {
   const profile = useQuery(profileQuery)
   const subscriptions = useQuery(subscriptionsQuery)
-  const error = profile.error ?? subscriptions.error
+  const error = (profile.error ?? subscriptions.error)?.message
+
+  // once for each failure, not again at each refetch failing as well
+  useEffect(() => {
+    if (error) toast.error(`读取配置失败：${error}`, { id: 'policy-error' })
+  }, [error])
 
   // the dialogs come after the page, in the background
   useEffect(preloadDialogs, [])
@@ -21,11 +26,6 @@ export function PolicyPage() {
   return (
     <PolicyRuntimeProvider>
       <ModeSwitch />
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>读取配置失败：{error.message}</AlertTitle>
-        </Alert>
-      )}
       <div className="flex flex-col gap-9">
         <NodesSection profile={profile.data} subscriptions={subscriptions.data} />
         <GroupsSection profile={profile.data} subscriptions={subscriptions.data} />

@@ -1,9 +1,9 @@
 import { revalidateLogic, useForm, useStore } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CircleAlertIcon, GripVerticalIcon, PlusIcon, XIcon } from 'lucide-react'
+import { GripVerticalIcon, PlusIcon, XIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Badge } from '@/components/reui/badge'
 import { Sortable, SortableItem, SortableItemHandle } from '@/components/reui/sortable'
 import { Button } from '@/components/ui/button'
@@ -128,6 +128,7 @@ export function GroupDialog({
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },
+    onError: (error: Error) => toast.error(`保存失败：${error.message}`),
   })
 
   const schema = z
@@ -176,7 +177,6 @@ export function GroupDialog({
   const values = useStore(form.store, (state) => state.values)
   const auto = values.type === 'urltest'
   const matched = includedNodes(subscriptions, values.include, values.filter)
-  const failure = mutation.error
 
   // what can be added, by kind: the nodes, the subscriptions, the groups but
   // those containing this one, and the hidden nodes such as Direct
@@ -446,12 +446,6 @@ export function GroupDialog({
               )}
             </form.Field>
 
-            {failure && (
-              <Alert variant="destructive">
-                <CircleAlertIcon />
-                <AlertTitle>保存失败：{failure.message}</AlertTitle>
-              </Alert>
-            )}
           </FieldGroup>
 
           <DialogFooter>

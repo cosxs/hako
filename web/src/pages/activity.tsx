@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { toast } from 'sonner'
 
-import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Badge } from '@/components/reui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +19,12 @@ function takeoverText(takeover: Status['takeover']) {
 
 export function ActivityPage() {
   const { data, error, isPending } = useQuery(statusQuery)
+  const failure = error?.message
+
+  // once for each failure, not again at each refetch failing as well
+  useEffect(() => {
+    if (failure) toast.error(`读取状态失败：${failure}`, { id: 'status-error' })
+  }, [failure])
 
   const rows: { label: string; value: ReactNode }[] = data
     ? [
@@ -38,11 +44,6 @@ export function ActivityPage() {
         <CardDescription>每 5 秒刷新</CardDescription>
       </CardHeader>
       <CardContent>
-        {error && (
-          <Alert variant="destructive">
-            <AlertTitle>读取状态失败：{error.message}</AlertTitle>
-          </Alert>
-        )}
         {isPending && (
           <div className="flex flex-col gap-3">
             {Array.from({ length: 6 }, (_, index) => (

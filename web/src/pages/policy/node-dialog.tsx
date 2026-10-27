@@ -1,9 +1,9 @@
 import { revalidateLogic, useForm, useStore, type AnyFieldApi } from '@tanstack/react-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlertIcon, EyeIcon, EyeOffIcon, PlusIcon, XIcon } from 'lucide-react'
+import { EyeIcon, EyeOffIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 
-import { Alert, AlertTitle } from '@/components/reui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldContent, FieldLabel } from '@/components/ui/field'
@@ -243,6 +243,7 @@ export function NodeDialog({
       queryClient.invalidateQueries({ queryKey: ['hako'] })
       onOpenChange(false)
     },
+    onError: (error: Error) => toast.error(`保存失败：${error.message}`),
   })
 
   // the errors of the fields shown, by key
@@ -407,7 +408,6 @@ export function NodeDialog({
         </section>
       )
     })
-  const failure = mutation.error
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -441,12 +441,6 @@ export function NodeDialog({
               <div className="flex flex-col gap-5">{column('left')}</div>
               <div className="flex flex-col gap-5">{column('right')}</div>
             </div>
-            {failure && (
-              <Alert variant="destructive" className="mt-5">
-                <CircleAlertIcon />
-                <AlertTitle>保存失败：{failure.message}</AlertTitle>
-              </Alert>
-            )}
           </div>
 
           <DialogFooter className="border-t px-6 py-3.5">
