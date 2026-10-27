@@ -96,11 +96,11 @@ const pageRoutes = [
   pageRoute('/activity', lazyRouteComponent(() => import('@/pages/activity'), 'ActivityPage')),
   pageRoute('/takeover'),
   pageRoute('/policy', lazyRouteComponent(() => import('@/pages/policy'), 'PolicyPage')),
-  pageRoute('/rules'),
+  pageRoute('/rules', lazyRouteComponent(() => import('@/pages/rules'), 'RulesPage')),
   pageRoute('/core'),
   pageRoute('/profiles'),
   pageRoute('/logs'),
-  pageRoute('/settings'),
+  pageRoute('/settings', lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage')),
 ] as const
 
 const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, ...pageRoutes])])

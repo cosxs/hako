@@ -33,7 +33,7 @@ export function groupContainers(profile: Profile, name: string | null) {
   const self = groups.find((group) => group['.name'] === name)
   if (!self) return containers
 
-  for (let grown = true; grown; ) {
+  for (let grown = true; grown;) {
     grown = false
     for (const group of groups)
       if (group !== self && !containers.has(group) && [self, ...containers].some((member) => contains(group, member))) {
@@ -49,7 +49,9 @@ export function groupContainers(profile: Profile, name: string | null) {
 // from being deleted: a rule or anything connecting through it would go
 // elsewhere unnoticed
 export function outboundUsers(profile: Profile, section: UciSection) {
-  const groups = profile.outbounds.filter((group) => isGroup(group) && group !== section && (refers(group.outbounds, section) || refers(group.default, section)))
+  const groups = profile.outbounds.filter(
+    (group) => isGroup(group) && group !== section && (refers(group.outbounds, section) || refers(group.default, section)),
+  )
   const blockers: string[] = []
 
   for (const other of profile.sections) {
@@ -69,10 +71,10 @@ export function outboundUsers(profile: Profile, section: UciSection) {
 const SECTION_NAMES: Record<string, string> = { dns_server: 'DNS 服务器', ntp: 'NTP', http_client: 'HTTP 客户端', outbound: '节点' }
 
 // the options of a rule that are no condition
-const RULE_OPTIONS = new Set(['action', 'outbound', 'hidden', 'enabled', 'comment', 'type', 'mode', 'id', 'invert'])
+const RULE_OPTIONS = new Set(['action', 'outbound', 'hidden', 'enabled', 'comment', 'type', 'mode', 'id', 'invert', 'method'])
 
 // a rule as its comment, or else its first condition
-function describeRule(rule: UciSection) {
+export function describeRule(rule: UciSection) {
   if (rule.comment) return String(rule.comment)
   const key = Object.keys(rule).find((key) => !key.startsWith('.') && !RULE_OPTIONS.has(key))
   if (!key) return '没有条件的规则'
@@ -117,15 +119,48 @@ export async function saveOutbound(config: string, section: UciSection | null, v
 
 // UCI names an anonymous section by its position among all sections of the
 // package and a hash of its type, cfg%02x%04x: deleting a section renames the
-// anonymous ones after it, one position down. Old name to new
-function shiftedNames(sections: UciSection[], deleted: UciSection) {
+// anonymous ones after it, one position down for each deleted before it. Old
+// name to new
+export function shiftedNames(sections: UciSection[], deleted: UciSection[]) {
   const names = new Map<string, string>()
   for (const section of sections) {
     const match = /^cfg([0-9a-f]+)([0-9a-f]{4})$/.exec(section['.name'])
-    if (section['.anonymous'] && section['.index'] > deleted['.index'] && match)
-      names.set(section['.name'], `cfg${(parseInt(match[1], 16) - 1).toString(16).padStart(2, '0')}${match[2]}`)
+    const shift = deleted.filter((other) => other['.index'] < section['.index']).length
+    if (section['.anonymous'] && shift && !deleted.includes(section) && match)
+      names.set(section['.name'], `cfg${(parseInt(match[1], 16) - shift).toString(16).padStart(2, '0')}${match[2]}`)
   }
   return names
+}
+
+// sections deleted: what refers to an anonymous section after them takes its
+// new name, here and in the device config, as it has once committed. Not
+// applied
+export async function deleteSections(profile: Profile, deleted: UciSection[], inbounds: UciSection[]) {
+  const { config } = profile
+  const names = shiftedNames(profile.sections, deleted)
+  const rename = (ref: string) => names.get(ref) ?? ref
+
+  for (const other of profile.sections) {
+    if (deleted.includes(other)) continue
+    const changed: Record<string, string | string[]> = {}
+    for (const [key, value] of Object.entries(other)) {
+      if (key.startsWith('.')) continue
+      if (Array.isArray(value)) {
+        if (value.some((ref) => names.has(ref))) changed[key] = value.map(rename)
+      } else if (typeof value !== 'string') continue
+      else if (names.has(value)) changed[key] = rename(value)
+      else if (key === 'dial_fields' && dialDetour(value) && names.has(dialDetour(value)!))
+        changed[key] = JSON.stringify({ ...JSON.parse(value), detour: rename(dialDetour(value)!) }, null, 2)
+    }
+    if (Object.keys(changed).length) await setOptions(config, other['.name'], changed)
+  }
+  if (profile.clashDetour && names.has(profile.clashDetour)) await setOptions('hako', 'clash_api', { external_ui_download_detour: rename(profile.clashDetour) })
+  // the rule sets the routes of tun name
+  for (const inbound of inbounds)
+    for (const key of ['route_address_set', 'route_exclude_address_set'])
+      if (list(inbound[key]).some((ref) => names.has(ref))) await setOptions('hako', inbound['.name'], { [key]: list(inbound[key]).map(rename) })
+
+  for (const section of deleted) await deleteSection(config, section['.name'])
 }
 
 // an outbound deleted, and taken out of the groups that list it or default
@@ -133,7 +168,7 @@ function shiftedNames(sections: UciSection[], deleted: UciSection) {
 // name, which it has once committed
 export async function deleteOutbound(profile: Profile, section: UciSection) {
   const { config } = profile
-  const names = shiftedNames(profile.sections, section)
+  const names = shiftedNames(profile.sections, [section])
   const rename = (ref: string) => names.get(ref) ?? ref
 
   try {
@@ -160,7 +195,8 @@ export async function deleteOutbound(profile: Profile, section: UciSection) {
       if (Object.keys(changed).length) await setOptions(config, other['.name'], changed)
       if (removed.length) await deleteOptions(config, other['.name'], removed)
     }
-    if (profile.clashDetour && names.has(profile.clashDetour)) await setOptions('hako', 'clash_api', { external_ui_download_detour: rename(profile.clashDetour) })
+    if (profile.clashDetour && names.has(profile.clashDetour))
+      await setOptions('hako', 'clash_api', { external_ui_download_detour: rename(profile.clashDetour) })
 
     await deleteSection(config, section['.name'])
     await apply()

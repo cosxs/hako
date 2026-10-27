@@ -1,4 +1,4 @@
-import { call } from '@/lib/ubus'
+import { call, UbusError } from '@/lib/ubus'
 
 // UCI through ubus. Changes are kept in the session until applied; applying
 // them commits and reloads the services they concern, and rolls them back
@@ -12,6 +12,8 @@ export type UciSection = Record<string, string | string[]> & {
 }
 
 const APPLY_TIMEOUT = 30
+// what uci apply answers when there is nothing to apply
+const UBUS_NO_DATA = 5
 
 export async function getConfig(config: string) {
   const result = await call<{ values: Record<string, UciSection> }>('uci', 'get', { config })
@@ -40,6 +42,12 @@ export function deleteOptions(config: string, section: string, options: string[]
   return call('uci', 'delete', { config, section, options })
 }
 
+// the sections of a package in this order; the anonymous ones are named by
+// their position once committed
+export function order(config: string, sections: string[]) {
+  return call('uci', 'order', { config, sections })
+}
+
 export async function changes() {
   const result = await call<{ changes?: Record<string, unknown[]> }>('uci', 'changes')
   return result.changes ?? {}
@@ -53,6 +61,12 @@ export function revert(config: string) {
 // reached once the services reloaded, the confirmation fails and the
 // changes roll back by themselves
 export async function apply() {
-  await call('uci', 'apply', { rollback: true, timeout: APPLY_TIMEOUT })
+  try {
+    await call('uci', 'apply', { rollback: true, timeout: APPLY_TIMEOUT })
+  } catch (error) {
+    // nothing changed: saving what is there already applies nothing
+    if (error instanceof UbusError && error.code === UBUS_NO_DATA) return
+    throw error
+  }
   await call('uci', 'confirm')
 }
