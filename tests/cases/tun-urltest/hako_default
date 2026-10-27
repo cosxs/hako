@@ -83,10 +83,12 @@ config route 'route'
   option find_neighbor '1'
 
 config rule_set 'cn_ip'
-  option tag 'cn-mainland-ip'
-  option type 'local'
+  option tag 'geoip-cn'
+  option type 'remote'
   option format 'binary'
-  option path '/usr/share/hako/rule-set/cn-mainland-ip.srs'
+  option url 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs'
+  option update_interval '24h'
+  option initial_path '/usr/share/hako/rule-set/geoip-cn.srs'
 
 # a remote rule set without an http client: one is added through route.final;
 # the one it names is gone, so it falls back to it with a warning

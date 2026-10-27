@@ -177,12 +177,55 @@ function named_sections(uci) {
   }
 }
 
+// the IP list of mainland China shipped before version 4, and what replaces it
+const OLD_CN_LIST = '/usr/share/hako/rule-set/cn-mainland-ip.srs';
+const GEOIP_CN = {
+  url: 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
+  update_interval: '24h',
+  initial_path: '/usr/share/hako/rule-set/geoip-cn.srs'
+};
+
+// 4: the IP list of mainland China is the geoip-cn rule set of
+// SagerNet/sing-geoip, remote as sing-box has it: sing-box keeps it up to
+// date, and starts with the one shipped, the latest when built. The rule
+// sets that read the old list are that one now. The tproxy firewall
+// bypasses no rule sets: sing-box matches them, as for tun
+function geoip_rule_set(uci) {
+  uci.delete(CONFIG, 'firewall', 'bypass_rule_set');
+
+  for (let name in profiles()) {
+    const pkg = profile_package(name);
+    uci.load(pkg);
+
+    let changed = false;
+    uci.foreach(pkg, 'rule_set', (section) => {
+      if (section.path != OLD_CN_LIST)
+        return;
+
+      uci.set(pkg, section['.name'], 'type', 'remote');
+      uci.set(pkg, section['.name'], 'format', 'binary');
+      for (let key, value in GEOIP_CN)
+        uci.set(pkg, section['.name'], key, value);
+      uci.delete(pkg, section['.name'], 'path');
+      if (section.tag == 'cn-mainland-ip')
+        uci.set(pkg, section['.name'], 'tag', 'geoip-cn');
+      changed = true;
+    });
+
+    if (changed) {
+      uci.save(pkg);
+      uci.commit(pkg);
+    }
+  }
+}
+
 // MIGRATIONS[i] moves version i + 1 to i + 2. Version 1 is the baseline:
 // the device settings in hako and each profile in a package of its own;
 // configs from before it are not migrated
 const MIGRATIONS = [
   subscription_sections,
-  named_sections
+  named_sections,
+  geoip_rule_set
 ];
 
 const latest = length(MIGRATIONS) + 1;

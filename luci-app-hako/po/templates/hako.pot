@@ -280,9 +280,6 @@ msgstr ""
 msgid "Destinations in these rule sets bypass sing-box in the firewall."
 msgstr ""
 
-msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
-msgstr ""
-
 msgid "Details"
 msgstr ""
 

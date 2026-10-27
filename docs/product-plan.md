@@ -35,7 +35,7 @@
 | 出站模式 | 规则判定 / 全局代理 / 直接连接，运行时切换；全局代理时国内 IP 也走代理 |
 | 透明代理 | 一个总开关，接管局域网和路由器自身的流量。接管方式二选一：TUN（sing-box 的 `auto_route` + `auto_redirect`，规则由 sing-box 设置）或 TProxy（Hako 设置 nft 规则和策略路由）；DNS 由 sing-box 应答，本地域名交还 dnsmasq；默认只接管 IPv4，可开启 IPv6 接管 |
 | 访问控制 | 按设备（IP 或 MAC）设置黑名单或白名单 |
-| 绕过与分流 | 内网和保留地址始终直连；国内 IP 用自带的规则集在防火墙层绕过；DNS 先问国内 DNS，国内 IP 原样返回，其余返回 FakeIP 并由节点解析 |
+| 绕过与分流 | 内网和保留地址始终直连；国内 IP 用 SagerNet/sing-geoip 的 geoip-cn 远程规则集（随软件包附带打包时的最新版作为初始文件，sing-box 自动更新）判断直连，TUN 下在 sing-box 的路由层绕过；DNS 先问国内 DNS，国内 IP 原样返回，其余返回 FakeIP 并由节点解析 |
 | 订阅 | 在策略页的「订阅节点」添加，一份配置可以有多个订阅，和手动节点并列；订阅只提供节点，一个订阅一行，「详情」弹窗只读列出它的节点、可测延迟；每个订阅也是一个策略（手动选择或自动测速），策略组和规则都能选它；所有配置的订阅都定时更新（见 3.1.1） |
 | 配置文件 | 配置都基于内置模板新建（见 3.1），设置页编辑当前配置 |
 | 日志 | 日志设置在页面上方：自动清理（默认开启）、保留天数（默认 7 天）、内核日志级别；下方插件日志和内核日志分两个标签，只显示当天的日志并自动刷新，「清空」只清空显示、不删除文件；后台按天保存，每天零点轮转 |
@@ -127,12 +127,13 @@
 
 ```
 config hako 'main'                 # Hako 自身的设置
-    option config_version '2'      # 配置格式的版本，升级时由迁移脚本逐级更新（1：基线，见 3.1；
-                                   # 2：订阅从「订阅配置」改为配置包里的 config subscription，见 3.1.1）
+    option config_version '4'      # 配置格式的版本，升级时由迁移脚本逐级更新（1：基线，见 3.1；
+                                   # 2：订阅从「订阅配置」改为配置包里的 config subscription，见 3.1.1；
+                                   # 3：被引用的匿名 section 起名；4：国内 IP 改为远程的 geoip-cn，TProxy 不再绕过规则集）
     option enabled '0'
     option profile 'default'       # 当前配置的标识，即配置包 hako_<标识>
     # option mode 'Global'         # 出站模式：在活动页选择后立即写入并重载，由 Hako 经 clash API 设到 sing-box；
-                                   # 也决定国内 IP 是否在防火墙层绕过；没有时取 clash_api.default_mode
+                                   # 也决定国内 IP 是否绕过 TUN；没有时取 clash_api.default_mode
 
 config hako 'logs'                 # Hako 的日志管理
     option auto_clean '1'          # 自动清理按天保存的旧日志
@@ -264,13 +265,15 @@ config route 'route'               # → route
     # list dhcp_lease_files ''              # 默认不写：sing-box 自动探测 /tmp/dhcp.leases（OpenWrt 的 dnsmasq）等租约文件
     # option default_http_client ''   # 远程规则集默认的下载方式；模板留空，即第一个 HTTP 客户端（内置的 HTTP Proxy）
 
-config rule_set 'cn_ip'            # → route.rule_set[]
-    option tag 'cn-mainland-ip'
-    option type 'local'            # local | remote | inline；随软件包附带，启动时不用下载
+config rule_set 'cn_ip'            # → route.rule_set[]；SagerNet/sing-geoip 的国内 IP，照 sing-box 文档的写法
+    option tag 'geoip-cn'
+    option type 'remote'           # local | remote | inline
     option format 'binary'         # 可留空：按 path / url 的扩展名（.srs / .json）判断
-    option path '/usr/share/hako/rule-set/cn-mainland-ip.srs'
-    # remote：url、http_client、update_interval、initial_path（还没下载时先用的本地文件）
-    # inline：option rules '[...]'  # sing-box 无头规则的 JSON 数组，原样写入；TProxy 的绕过也能用
+    option url 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs'
+    option update_interval '24h'   # sing-box 自己下载、更新并存进缓存文件
+    option initial_path '/usr/share/hako/rule-set/geoip-cn.srs'  # 还没有缓存时先用：随软件包附带，CI 打包时下载的最新版
+    # http_client：下载方式，留空即默认 HTTP 客户端
+    # local：option path；inline：option rules '[...]'  # sing-box 无头规则的 JSON 数组，原样写入
 
 config inbound 'tproxy'            # TProxy 接管时启用，'tun' 关闭
     option enabled '0'
@@ -300,7 +303,6 @@ config hako 'firewall'             # Hako 为 TProxy 设置的防火墙与策略
     list   interface 'lan'         # 从这些接口进入的流量被接管
     list   bypass_address '10.0.0.0/8'   # 保留地址，共 10 项
     list   bypass_address6 'fd00::/8'    # 绕过的 IPv6 地址（共 4 项）；不接管 IPv6 时其余 TCP/UDP 拒绝；fd00::/8 是实际在用的 ULA
-    list   bypass_rule_set 'cn_ip'  # 本地规则集，反编译后放入 nft 集合
     option mark '0x6f62'           # 要交给 TProxy 的包
     option output_mark '0x6f63'    # sing-box 自己的连接（生成为 route.default_mark）
     option route_table '233'
@@ -510,8 +512,8 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
 打开接管后：
 
 1. **连接**：
-   - **TUN**：`auto_route` + `auto_redirect` 接管局域网设备和路由器自身的流量，规则由 sing-box 设置。保留地址（`route_exclude_address`，默认值与 TProxy 的 `bypass_address` / `bypass_address6` 相同）和国内 IP（`route_exclude_address_set`）在防火墙层直接绕过。
-   - **TProxy**：Hako 用 `firewall.uc` 生成 `inet hako` 表：局域网接口进来的 TCP/UDP 打上 `mark` 交给 TProxy 端口；路由器自身的流量在 output 打标记后经策略路由（`local default dev lo`）回到本机再交给 TProxy；sing-box 自己的连接带 `output_mark`，不被接管；保留地址和本地规则集里的地址在 nft 集合中直接绕过。DNS：局域网和路由器自身发往 53 端口的查询重定向到 `dns-in`；路由器自己的查询重定向到回环地址后源地址仍是 WAN 地址，sing-box 监听全部地址、会从该地址应答，与重定向对不上，所以在 postrouting 把它们的源地址改为 `127.0.0.1` / `::1`。fw4 重启不受影响。是否设置、TProxy 和 DNS 端口、sing-box 自己的标记都取自 sing-box 正在运行的配置：新配置没通过检查、继续运行旧配置时，规则与旧配置一致。
+   - **TUN**：`auto_route` + `auto_redirect` 接管局域网设备和路由器自身的流量，规则由 sing-box 设置。保留地址（`route_exclude_address`，默认值与 TProxy 的 `bypass_address` / `bypass_address6` 相同）和国内 IP（`route_exclude_address_set`）由 sing-box 排除在 TUN 路由之外，不进 sing-box。
+   - **TProxy**：Hako 用 `firewall.uc` 生成 `inet hako` 表：局域网接口进来的 TCP/UDP 打上 `mark` 交给 TProxy 端口；路由器自身的流量在 output 打标记后经策略路由（`local default dev lo`）回到本机再交给 TProxy；sing-box 自己的连接带 `output_mark`，不被接管；保留地址在 nft 集合中直接绕过。规则集不在防火墙层绕过（sing-box 不管 TProxy 的防火墙，远程规则集也只在 sing-box 的缓存里）：国内 IP 进入 sing-box 后由路由规则直连。DNS：局域网和路由器自身发往 53 端口的查询重定向到 `dns-in`；路由器自己的查询重定向到回环地址后源地址仍是 WAN 地址，sing-box 监听全部地址、会从该地址应答，与重定向对不上，所以在 postrouting 把它们的源地址改为 `127.0.0.1` / `::1`。fw4 重启不受影响。是否设置、TProxy 和 DNS 端口、sing-box 自己的标记都取自 sing-box 正在运行的配置：新配置没通过检查、继续运行旧配置时，规则与旧配置一致。
    - **随 sing-box 存亡**：procd 运行的是 `run.sh`，它在 sing-box 启动后设置规则，sing-box 一退出（崩溃或停止）立即删除，procd 重启 sing-box 时再设置。sing-box 反复崩溃、procd 放弃重启时，规则已经删除，流量直连，不会断网。
    - **TUN 也一样**：sing-box 正常退出时会自己撤掉 TUN 的规则，但崩溃或被杀时会留下 `inet sing-box` 表和策略路由，让路由器断网。`run.sh` 在 sing-box 启动前和退出后清理这些残留：路由表、优先级和标记取自运行配置的 TUN 入站（没写的用 sing-box 的默认值），逐条删除能对上的规则（规则优先级起的 4 个优先级里带这些标记、查这张表、`goto` 或 `nop` 的；回退优先级里查这张表的；优先级 1 上 `auto_redirect` 为重定向路由加的、查一张随机编号路由表的那条），不按优先级整个清空，别人的规则不受影响。
    - **DNS 缓存**：sing-box 退出时 dnsmasq 恢复原来的上游并重启，缓存随之清空，避免 FakeIP 残留。
@@ -519,7 +521,7 @@ config route_rule                  # 国内 IP 直连（经 TUN 以外进入 sin
    - **IPv6 接管**（接管页的 IPv6 开关）：同时设置 `firewall.ipv6 '1'`、`dns.strategy 'prefer_ipv4'`，并给 TUN 加 IPv6 地址（默认 `fdfe:dcba:9876::1/126`，sing-box 示例值；关闭时去掉 TUN 的 IPv6 地址、改回 `ipv4_only`）。TUN 有了 IPv6 地址，sing-box 自己接管 IPv6 路由和 DNS，规则集的 IPv6 部分（`cn-mainland-ip` 含 3534 条 IPv6）随 `route_exclude_address_set` 生效。TProxy：`firewall.uc` 不再生成拒绝 IPv6 的链，改为 `tproxy ip6` 接管，`bypass6` 集合加上规则集的 IPv6 地址（全局模式除外），并设 `ip -6` 策略路由。FakeIP 用 IPv6 地址段 `2001:2::/48`。RealIP 模式下节点需要能访问 IPv6 目标；FakeIP 模式下由节点解析域名，不受影响。
    - **接口**：启动时按 ubus 状态取局域网接口的设备，接口未就绪时用 network 配置中的 `device`；接口 up 时 hotplug 重新设置规则。
    - 两种方式下，内网地址直连，其余按路由规则和出站模式处理。
-   - **全局代理模式**：国内 IP 也走代理，防火墙层不再绕过规则集（保留地址仍直连）。出站模式在活动页选择，选中即写入 `main.mode` 并重载 Hako，不用保存并应用（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器和 `firewall.uc` 据此决定是否绕过。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，Hako 没运行时也能选。
+   - **全局代理模式**：国内 IP 也走代理，TUN 不再排除国内 IP（保留地址仍直连）。出站模式在活动页选择，选中即写入 `main.mode` 并重载 Hako，不用保存并应用（不改 `clash_api.default_mode`：sing-box 把它当作一个独立的模式提供，改掉后「规则判定」会从可选模式中消失）。生成器据此决定是否排除。应用时 sing-box 不重启的，`mode.uc` 经 clash API 设置模式，TProxy 的防火墙规则有变化才重设；TUN 进出全局模式时配置改变，sing-box 重启（现有连接断开）。sing-box 把模式存在缓存文件里，启动时优先用缓存的模式，所以 `run.sh` 在每次启动后也设置一次。可选的模式按配置算：默认模式加上规则里出现的 `clash_mode`，Hako 没运行时也能选。
 2. **DNS**：发往外部 53 端口的查询（包括设备写死的 8.8.8.8）都由 sing-box 应答（TUN 由 sing-box 劫持，TProxy 由 Hako 重定向到 `dns-in`），sing-box 能看到是哪台设备在查询；问路由器（dnsmasq）的查询由 dnsmasq 转给 `dns-in`（见第 3 点）。本地域名和私有网段的反查转给 dnsmasq，DHCP 主机名照常可用；其余先问国内 DNS，国内 IP 原样返回，其他按 DNS 模式处理：
    - **FakeIP**（默认）：立即返回假地址，连接时由节点解析域名。快、分流准；应答的 TTL 为 1 秒（与 mihomo 的 fake-ip 相同），设备几乎不缓存假地址，停止服务后下一次查询就拿到真实地址。假地址由 sing-box 在本地分配，查询变多几乎没有开销；自带 DNS 缓存的程序（如 Java 默认缓存 30 秒）仍要等它自己的缓存过期。
    - **RealIP**：经代理向远程 DNS 再查一次，返回真实地址。首次访问稍慢，所有应用都能正常使用，停止后不留假地址。
@@ -580,7 +582,7 @@ hako/
 │       ├── common.sh
 │       ├── core-install.sh
 │       ├── subscription.sh     # 下载、检查并替换订阅的内容（subscriptions/<配置标识>/<订阅>.json）；cron 每小时执行 due
-│       ├── rule-set/           # 国内 IP 规则集（来自 cosxs/cn-mainland-ip）
+│       ├── rule-set/           # geoip-cn.srs：国内 IP 规则集的初始文件（SagerNet/sing-geoip，CI 打包前更新为最新版）
 │       └── ucode/              # generate.uc、firewall.uc、migrate.uc、mode.uc、inspect.uc；
 │                               # clash.uc、config.uc、profile.uc 为共享模块，装到 /usr/share/ucode/hako/
 ├── luci-app-hako/
@@ -605,7 +607,7 @@ hako/
 | 页面 | 内容 |
 | --- | --- |
 | 活动 | 运行状态、配置来源、接管方式、出站模式（单选切换，选中立即生效；配置里只有一种模式时只显示名称，未启用 clash API 时不显示）、已运行时长（天、时、分）、内核版本、插件版本；启动 / 停止 / 重载；内核安装与更新；sing-box 自带服务在用时提示并提供「由 Hako 接管」 |
-| 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
+| 接管 | 启用、接管方式（TUN / TProxy）、DNS 模式（FakeIP / RealIP），FakeIP 时显示它的 IPv4 / IPv6 地址段；IPv6 开关（默认关闭）；TUN：接口名称、地址、MTU、绕过的规则集、绕过的 IPv4 地址、绕过的 IPv6 地址（同一个 `route_exclude_address` 按地址族拆开显示，保存时合并）；TProxy：TProxy 端口、DNS 端口、局域网接口、绕过的 IPv4 地址、绕过的 IPv6 地址；代理端口（mixed 入站）：启用、端口、用户名、密码，与接管互相独立，活动页在启用时显示端口 |
 | 策略 | 策略组、节点和订阅节点，见下方「策略页」 |
 | 规则 | 从上到下平铺三块：设置、规则、规则集。规则：结构参考 Surge，一条规则一个条件；列表为启用、类型、值、动作、注释，从上到下匹配，拖动调整顺序；新规则排在最前（固定规则之后）。弹窗：规则类型（下拉，直接是 sing-box 路由规则的字段名：domain、domain_suffix、domain_keyword、domain_regex、rule_set、ip_cidr、ip_is_private、source_ip_cidr、source_ip_is_private、source_mac_address、source_hostname、port、port_range、source_port、source_port_range、network、protocol、inbound、ip_version、auth_user）和它的值（随类型变化，下方一句说明；ip_is_private 这类布尔字段不用填值；弹窗分「标准规则」「逻辑规则」两个标签页（参考 Surge 的标准规则和 AND/OR 规则），保存时停在哪个标签页，规则就是哪种（逻辑规则写入 `type 'logical'`，不留自己的匹配条件；标准规则不留 `mode`、`id` 和子规则）；动作、出站、拒绝方式、反向匹配、注释两个标签页各有一份，切换时带过去，保存时只写当前这份；编辑已有规则时打开在它那种的标签页；启用只在表格里切换；逻辑规则填模式 and / or 和子规则：子规则是标签页里嵌的 LuCI 原生表格（参考 Surge 的子规则表格），列出类型和值，可增删、拖动排序；添加或编辑时叠一层弹窗，和标准规则一样左边选规则类型、右边填值，另有反向匹配，类型多一个「JSON」，写类型表达不了的（多个条件、嵌套 logical）；打开子规则弹窗前先保存逻辑规则这一层（LuCI 叠放弹窗的做法），逻辑规则第一次加子规则时生成 `id`；删除逻辑规则、取消新建的逻辑规则或把它改成标准规则时，它的子规则一起删除；子规则只写匹配条件，动作用外层这条规则的；表格里照 Surge 的写法一行显示：类型为 AND / OR，值为子规则的表达式，如 `((domain_suffix,netflix.com), (NOT,((port,443))))`，反向的子规则包一层 NOT，JSON 写的也换成这种写法；子规则表格里 JSON 的值同样这样显示）、反向匹配（invert）；动作：route（选策略组或节点）或 reject（method：default / drop）；注释（`comment`，不生成）。手写的多条件规则显示为「多个条件」，弹窗里只改动作和注释，条件保持原样。嗅探、DNS 劫持、内网直连和全局 / 直连模式这 5 条固定规则带 `hidden`，不显示。规则集：增删改（标签、类型：远程 / 本地文件 / 内联；格式：按扩展名 / 二进制 / 源文件；远程：URL、初始文件、下载方式、更新间隔；本地：路径；内联：规则，sing-box 无头规则的 JSON 数组），弹窗添加，不用先填 section 名；DNS 规则和接管页的绕过规则集也引用这里的规则集。设置：按 sing-box 文档顺序列出路由器用得上的 `route` 字段：默认出站 `final`、邻居解析 `find_neighbor`、DHCP 租约文件 `dhcp_lease_files`、默认 HTTP 客户端 `default_http_client`（留空时 sing-box 用第一个 HTTP 客户端，空选项据此显示「第一个 HTTP 客户端」；一个都没定义时显示「未定义 HTTP 客户端」，这时会经默认出站下载，1.14 已废弃、1.16 移除；规则集的「下载方式」和 Hysteria2 realm 的「HTTP 客户端」留空则跟随这里，空选项显示「默认 HTTP 客户端」）、默认域名解析服务器 `default_domain_resolver`（只列直连、且不是 local 的 DNS 服务器：节点连上之前要靠它解析自己的服务器域名，走代理的会卡死，local 会绕回 sing-box）；不列出 `auto_detect_interface`（生成器总是开启）、`default_interface`、`find_process`、多网卡策略（`default_network_strategy`、`default_network_type`、`default_fallback_network_type`、`default_fallback_delay`），以及 Hako 在 TProxy 时自动设置的 `default_mark`（取防火墙的 `output_mark`） |
 | 设备 | 访问控制模式与设备列表 |

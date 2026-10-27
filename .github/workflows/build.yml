@@ -44,6 +44,18 @@ jobs:
           # the whole checkout becomes the SDK feed, keep it free of node_modules
           rm -rf node_modules
 
+      # the geoip-cn rule set shipped as its initial_path, the latest of
+      # SagerNet/sing-geoip; the one in the repository when it cannot be had
+      - name: update geoip-cn
+        run: |
+          if curl -fsSL --retry 3 -o "$RUNNER_TEMP/geoip-cn.srs" \
+             https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs &&
+             [ "$(head -c 3 "$RUNNER_TEMP/geoip-cn.srs")" = SRS ]; then
+            mv "$RUNNER_TEMP/geoip-cn.srs" hako/files/rule-set/geoip-cn.srs
+          else
+            echo "::warning::geoip-cn.srs not updated, shipping the one in the repository"
+          fi
+
       - uses: openwrt/gh-action-sdk@v11
         env:
           ARCH: x86_64-${{ matrix.branch }}

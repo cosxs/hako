@@ -6,28 +6,23 @@
 // IPv6 is taken over the same way with firewall.ipv6; otherwise IPv6
 // connections are refused, so clients fall back to IPv4.
 //
-// Usage: firewall.uc <running config> <work dir>
+// Usage: firewall.uc <running config>
 // Ports and the mark of sing-box's own connections come from the config
 // sing-box runs, so the rules always match it; interfaces, bypassed
-// destinations and the routing marks come from UCI. The work dir holds
-// decompiled rule sets.
+// addresses and the routing marks come from UCI. Rule sets are matched by
+// sing-box itself, as its routes and DNS rules use them.
 
 'use strict';
 
 import { cursor } from 'uci';
 import { connect } from 'ubus';
-import { readfile, unlink } from 'fs';
-import { DEVICE, current_profile, profile_source } from 'hako.profile';
+import { readfile } from 'fs';
+import { DEVICE } from 'hako.profile';
 
-const CORE = '/usr/bin/sing-box';
 const RUN_CONFIG = ARGV[0];
-const WORK_DIR = ARGV[1] ?? '/tmp';
 
 const uci = cursor();
 uci.load(DEVICE);
-
-// rule sets belong to the profile in use
-const SOURCE = profile_source(uci, current_profile(uci));
 
 function list(value) {
   if (type(value) == 'array')
@@ -79,69 +74,6 @@ function devices() {
   return uniq(result);
 }
 
-// a rule set section by name or tag
-function rule_set(ref) {
-  let found = null;
-
-  if (!SOURCE)
-    return null;
-
-  SOURCE.uci.foreach(SOURCE.package, 'rule_set', (section) => {
-    if (!found && (section['.name'] == ref || section.tag == ref))
-      found = section;
-  });
-
-  return found;
-}
-
-// the IPv4 and IPv6 CIDRs of a local binary or source rule set
-function rule_set_cidrs(ref) {
-  const result = { ipv4: [], ipv6: [] };
-
-  const section = rule_set(ref);
-  if (!section || section.enabled == '0') {
-    warn(`hako: unknown rule_set '${ref}'\n`);
-    return result;
-  }
-
-  if (!(section.type in [ 'local', 'inline' ]) || (section.type == 'local' && !section.path)) {
-    warn(`hako: rule_set '${ref}': only local and inline rule sets can be bypassed in the firewall\n`);
-    return result;
-  }
-
-  // an inline rule set has its rules in UCI, as a JSON array
-  let content = null;
-  if (section.type == 'inline') {
-    content = `{ "rules": ${section.rules ?? '[]'} }`;
-  }
-  else if (section.format == 'source' || (!section.format && match(section.path, /\.json$/))) {
-    content = readfile(section.path);
-  }
-  else {
-    const output = `${WORK_DIR}/rule-set-${section['.name']}.json`;
-    if (system(`${CORE} rule-set decompile ${section.path} -o ${output} >/dev/null 2>&1`) == 0)
-      content = readfile(output);
-    unlink(output);
-  }
-
-  let source = null;
-  try {
-    source = json(content ?? '');
-  }
-  catch (e) {}
-
-  if (!source) {
-    warn(`hako: rule_set '${ref}': cannot read ${section.path}\n`);
-    return result;
-  }
-
-  for (let rule in ((type(source.rules) == 'object') ? [ source.rules ] : (source.rules ?? [])))
-    for (let cidr in list(rule.ip_cidr))
-      push((index(cidr, ':') < 0) ? result.ipv4 : result.ipv6, cidr);
-
-  return result;
-}
-
 const fwmark = mark('mark');
 const outputMark = (running?.route?.default_mark > 0) ? sprintf('0x%x', running.route.default_mark) : null;
 const tproxyPort = port('tproxy');
@@ -155,21 +87,8 @@ if (!fwmark || !outputMark || !tproxyPort) {
 const lan = devices();
 const ipv6 = uci.get(DEVICE, 'firewall', 'ipv6') == '1';
 
-let bypass = list(uci.get(DEVICE, 'firewall', 'bypass_address'));
-let bypass6 = list(uci.get(DEVICE, 'firewall', 'bypass_address6'));
-
-// in Global mode every connection goes through sing-box, so the rule sets do
-// not bypass it; switching the mode keeps it in main.mode
-const mode = uci.get(DEVICE, 'main', 'mode') ?? uci.get(DEVICE, 'clash_api', 'default_mode') ?? '';
-if (lc(mode) != 'global') {
-  for (let ref in list(uci.get(DEVICE, 'firewall', 'bypass_rule_set'))) {
-    const cidrs = rule_set_cidrs(ref);
-
-    bypass = [ ...bypass, ...cidrs.ipv4 ];
-    if (ipv6)
-      bypass6 = [ ...bypass6, ...cidrs.ipv6 ];
-  }
-}
+const bypass = list(uci.get(DEVICE, 'firewall', 'bypass_address'));
+const bypass6 = list(uci.get(DEVICE, 'firewall', 'bypass_address6'));
 
 function elements(values) {
   return length(values) ? `elements = { ${join(', ', values)} }` : '';

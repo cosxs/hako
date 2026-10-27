@@ -70,10 +70,11 @@ define Package/hako/install
 	$(INSTALL_DATA) ./files/ucode/config.uc $(1)/usr/share/ucode/hako/config.uc
 	$(INSTALL_DATA) ./files/ucode/profile.uc $(1)/usr/share/ucode/hako/profile.uc
 
-	# the mainland China IP list from cosxs/cn-mainland-ip, so the bypass works
-	# without downloading anything at start
+	# the IP list of mainland China from SagerNet/sing-geoip, the latest when
+	# built: the initial_path of the geoip-cn rule set, which sing-box uses
+	# until it has downloaded and cached one of its own
 	$(INSTALL_DIR) $(1)/usr/share/hako/rule-set
-	$(INSTALL_DATA) ./files/rule-set/cn-mainland-ip.srs $(1)/usr/share/hako/rule-set/cn-mainland-ip.srs
+	$(INSTALL_DATA) ./files/rule-set/geoip-cn.srs $(1)/usr/share/hako/rule-set/geoip-cn.srs
 	echo "$(PKG_VERSION)-r$(PKG_RELEASE)" > $(1)/usr/share/hako/version
 endef
 

@@ -197,12 +197,6 @@ return view.extend({
     o.nocreate = true;
     o.description = _('Traffic coming in on these interfaces is taken over.');
 
-    o = modeOption(s.option(form.MultiValue, '_bypass_rule_set', _('Bypass rule sets')), 'tproxy');
-    o.ucisection = 'firewall';
-    o.ucioption = 'bypass_rule_set';
-    o.description = _('Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used.');
-    hako.sectionChoices(o, 'rule_set');
-
     o = modeOption(s.option(form.DynamicList, '_bypass_address', _('Bypass IPv4 addresses')), 'tproxy');
     o.ucisection = 'firewall';
     o.ucioption = 'bypass_address';

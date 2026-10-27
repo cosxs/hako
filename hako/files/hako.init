@@ -87,11 +87,10 @@ start_service() {
 	[ -n "$config_changed" ] && return 0
 
 	# a reload that leaves sing-box running: set the outbound mode on it, and
-	# the tproxy firewall again if its rules changed (rule sets are bypassed
-	# except in Global mode)
+	# the tproxy firewall again if its rules changed
 	apply_mode
 	if [ -f "$FIREWALL_STATE" ] && uses_tproxy &&
-	   ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
+	   ! ucode "$FIREWALL" "$RUN_CONFIG" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
 		firewall_up
 	fi
 }

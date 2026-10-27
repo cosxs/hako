@@ -57,7 +57,7 @@
 			{
 				"match_response": true,
 				"rule_set": [
-					"cn-mainland-ip"
+					"geoip-cn"
 				],
 				"action": "respond"
 			},
@@ -125,7 +125,7 @@
 				"ff00::/8"
 			],
 			"route_exclude_address_set": [
-				"cn-mainland-ip"
+				"geoip-cn"
 			]
 		},
 		{
@@ -246,23 +246,25 @@
 			},
 			{
 				"rule_set": [
-					"cn-mainland-ip"
+					"geoip-cn"
 				],
 				"outbound": "Direct"
 			},
 			{
+				"outbound": "Anon",
 				"rule_set": [
 					"anon-rs"
-				],
-				"outbound": "Anon"
+				]
 			}
 		],
 		"rule_set": [
 			{
-				"tag": "cn-mainland-ip",
-				"type": "local",
+				"tag": "geoip-cn",
+				"type": "remote",
 				"format": "binary",
-				"path": "/usr/share/hako/rule-set/cn-mainland-ip.srs"
+				"url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+				"update_interval": "24h",
+				"initial_path": "/usr/share/hako/rule-set/geoip-cn.srs"
 			},
 			{
 				"tag": "anon-rs",

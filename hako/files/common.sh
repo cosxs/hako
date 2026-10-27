@@ -351,7 +351,7 @@ firewall_up() {
   table=$(uci -q get hako.firewall.route_table)
   priority=$(uci -q get hako.firewall.rule_priority)
 
-  if ! ucode "$FIREWALL" "$RUN_CONFIG" "$RUN_DIR" > "$RUN_DIR/firewall.nft" 2>> "$APP_LOG" ||
+  if ! ucode "$FIREWALL" "$RUN_CONFIG" > "$RUN_DIR/firewall.nft" 2>> "$APP_LOG" ||
      ! nft -f "$RUN_DIR/firewall.nft" 2>> "$APP_LOG"; then
     log "failed to set up the firewall for tproxy"
     nft delete table inet hako 2> /dev/null

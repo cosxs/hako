@@ -282,9 +282,6 @@ msgstr "删除 %s？"
 msgid "Destinations in these rule sets bypass sing-box in the firewall."
 msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。"
 
-msgid "Destinations in these rule sets bypass sing-box in the firewall. Only local and inline rule sets can be used."
-msgstr "目标地址在这些规则集中的流量，在防火墙层直接绕过 sing-box。只能用本地和内联规则集。"
-
 msgid "Details"
 msgstr "详情"
 
