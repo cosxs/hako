@@ -66,6 +66,26 @@ valid_json() {
     try { exit(type(json(readfile(ARGV[0]) ?? "")) == "object" ? 0 : 1); } catch (e) { exit(1); }' "$1" 2> /dev/null
 }
 
+# nodes_only <download> <output>: what a subscription gives, its outbounds and
+# endpoints. The rest of what a provider sends, its DNS, its rules and the rule
+# set files they name, is not taken: the nodes resolve their servers with the
+# DNS of the profile, here a local resolver standing in for it
+nodes_only() {
+  ucode -e 'import { readfile, writefile } from "fs";
+    const config = json(readfile(ARGV[0]));
+    const nodes = {
+      dns: { servers: [ { type: "local", tag: "check" } ] },
+      route: { default_domain_resolver: "check" }
+    };
+    for (let key in [ "outbounds", "endpoints" ]) {
+      if (type(config[key]) != "array") continue;
+      for (let node in config[key])
+        if (type(node) == "object") delete node.domain_resolver;
+      nodes[key] = config[key];
+    }
+    exit(writefile(ARGV[1], nodes) != null ? 0 : 1);' "$1" "$2" 2> /dev/null
+}
+
 # update <profile> <subscription>: download, check and replace a
 # subscription; UPDATED gets the profile when the content changed. Fails
 # without touching the old content.
@@ -113,8 +133,8 @@ update() {
     return $E_JSON
   fi
 
-  if [ -x "$CORE" ] &&
-     ! "$CORE" check -c "$temp/download.json" -D "$RUN_DIR" > "$temp/check.log" 2>&1; then
+  if [ -x "$CORE" ] && ! { nodes_only "$temp/download.json" "$temp/nodes.json" &&
+     "$CORE" check -c "$temp/nodes.json" -D "$RUN_DIR" > "$temp/check.log" 2>&1; }; then
     msg=$(sed 's/\x1b\[[0-9;]*m//g' "$temp/check.log" | grep -v '^$' | tail -n 1)
     rm -rf "$temp"
     record_error "$pkg" "$id" "sing-box check failed${msg:+: $msg}"
