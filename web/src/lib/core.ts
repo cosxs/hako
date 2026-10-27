@@ -295,11 +295,32 @@ export type ServiceValues = {
   dashboardInterval: string
 }
 
+// where a dashboard is kept, across reboots and upgrades as /etc/hako is,
+// and sing-box downloads it from
+export const DASHBOARD_PATH = '/etc/hako/dashboard'
+export const DASHBOARD_URL = 'https://github.com/SagerNet/sing-box-dashboard/archive/refs/heads/gh-pages.zip'
+
+// a new API has its dashboard off, filled in for when it is switched on
 export function serviceValues(section: UciSection | null): ServiceValues {
+  if (!section)
+    return {
+      enabled: true,
+      tag: '',
+      listen: '',
+      port: '',
+      secret: '',
+      origins: '',
+      privateNetwork: false,
+      dashboard: false,
+      dashboardPath: DASHBOARD_PATH,
+      dashboardUrl: DASHBOARD_URL,
+      dashboardClient: '',
+      dashboardInterval: '24',
+    }
   return {
     enabled: section?.enabled !== '0',
     tag: text(section?.tag),
-    listen: text(section?.listen) || '127.0.0.1',
+    listen: text(section?.listen),
     port: text(section?.listen_port),
     secret: text(section?.secret),
     origins: list(section?.access_control_allow_origin).join(' '),

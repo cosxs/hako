@@ -26,6 +26,7 @@ import {
 import { effectToast, untilApplied } from '@/lib/hako'
 import { label, type Profile } from '@/lib/policy'
 import type { UciSection } from '@/lib/uci'
+import { cn } from '@/lib/utils'
 import { ChoiceSelect, DeleteSectionDialog, SectionTable, TextInput, UnitInput } from '@/pages/core/fields'
 import { FieldRow, FieldSection, SwitchRow } from '@/pages/rules/form'
 
@@ -100,22 +101,31 @@ function SectionList({
 }
 
 // a dialog of one section, framed as the rule set dialog
+// of one column, as the rule set dialog; of two, as the node dialog, the
+// sections given left and right
 function SectionDialog({
   title,
   pending,
   children,
+  columns,
   onSubmit,
   onOpenChange,
 }: {
   title: string
   pending: boolean
-  children: ReactNode
+  children?: ReactNode
+  columns?: [ReactNode, ReactNode]
   onSubmit: () => void
   onOpenChange: (open: boolean) => void
 }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-0 overflow-hidden p-0',
+          columns ? 'h-[min(38rem,calc(100dvh-2rem))] sm:max-w-[960px]' : 'max-h-[calc(100dvh-2rem)] sm:max-w-xl',
+        )}
+      >
         <form
           noValidate
           className="flex min-h-0 flex-1 flex-col"
@@ -128,7 +138,16 @@ function SectionDialog({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription className="sr-only">保存后立即生效。</DialogDescription>
           </DialogHeader>
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">{children}</div>
+          {columns ? (
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="grid items-start gap-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-5">{columns[0]}</div>
+                <div className="flex flex-col gap-5">{columns[1]}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">{children}</div>
+          )}
           <DialogFooter className="border-t px-6 py-3.5">
             <DialogClose render={<Button type="button" variant="outline" />}>取消</DialogClose>
             <Button type="submit" disabled={pending}>
@@ -335,45 +354,51 @@ function ServiceDialog({ profile, section, onOpenChange }: { profile: Profile; s
   )
 
   return (
-    <SectionDialog title={section ? '编辑 API' : '新增 API'} pending={save.isPending} onSubmit={form.handleSubmit} onOpenChange={onOpenChange}>
-      <FieldSection title="API">
-        {toggle('enabled', '启用')}
-        {text('tag', '名称', false)}
-        {text('listen', '监听地址')}
-        {text('port', '端口', false)}
-        {text('secret', '密钥', false, 'password')}
-        {text('origins', '允许的来源')}
-        {toggle('privateNetwork', '允许私有网络')}
-      </FieldSection>
-      <FieldSection title="面板">
-        {toggle('dashboard', '启用')}
-        {dashboard && text('dashboardPath', '目录')}
-        {dashboard && text('dashboardUrl', '下载地址')}
-        {dashboard && (
-          <form.Field name="dashboardClient">
-            {(field) => (
-              <FieldRow label="HTTP 客户端" htmlFor="service-dashboardClient" wide>
-                <ChoiceSelect id="service-dashboardClient" items={clients} value={field.state.value} onChange={field.handleChange} />
-              </FieldRow>
-            )}
-          </form.Field>
-        )}
-        {dashboard && (
-          <form.Field name="dashboardInterval">
-            {(field) => (
-              <FieldRow label="更新间隔" htmlFor="service-dashboardInterval" wide>
-                <UnitInput
-                  id="service-dashboardInterval"
-                  unit="小时"
-                  value={field.state.value}
-                  invalid={invalid(field.state.meta)}
-                  onChange={field.handleChange}
-                />
-              </FieldRow>
-            )}
-          </form.Field>
-        )}
-      </FieldSection>
-    </SectionDialog>
+    <SectionDialog
+      title={section ? '编辑 API' : '新增 API'}
+      pending={save.isPending}
+      onSubmit={form.handleSubmit}
+      onOpenChange={onOpenChange}
+      columns={[
+        <FieldSection key="api" title="API">
+          {toggle('enabled', '启用')}
+          {text('tag', '名称', false)}
+          {text('listen', '监听地址')}
+          {text('port', '端口', false)}
+          {text('secret', '密钥', false, 'password')}
+          {text('origins', '允许的来源')}
+          {toggle('privateNetwork', '允许私有网络')}
+        </FieldSection>,
+        <FieldSection key="dashboard" title="面板">
+          {toggle('dashboard', '启用')}
+          {dashboard && text('dashboardPath', '目录')}
+          {dashboard && text('dashboardUrl', '下载地址')}
+          {dashboard && (
+            <form.Field name="dashboardClient">
+              {(field) => (
+                <FieldRow label="HTTP 客户端" htmlFor="service-dashboardClient" wide>
+                  <ChoiceSelect id="service-dashboardClient" items={clients} value={field.state.value} onChange={field.handleChange} />
+                </FieldRow>
+              )}
+            </form.Field>
+          )}
+          {dashboard && (
+            <form.Field name="dashboardInterval">
+              {(field) => (
+                <FieldRow label="更新间隔" htmlFor="service-dashboardInterval" wide>
+                  <UnitInput
+                    id="service-dashboardInterval"
+                    unit="小时"
+                    value={field.state.value}
+                    invalid={invalid(field.state.meta)}
+                    onChange={field.handleChange}
+                  />
+                </FieldRow>
+              )}
+            </form.Field>
+          )}
+        </FieldSection>,
+      ]}
+    />
   )
 }
