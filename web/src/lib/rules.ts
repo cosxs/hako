@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { deleteSections, findOutbound, findSubscription, list } from '@/lib/outbounds'
 import { isGroup, label, type Profile, type Subscription } from '@/lib/policy'
-import { addSection, apply, deleteOptions, getConfig, order, revert, setOptions, type UciSection } from '@/lib/uci'
+import { addSection, applying, deleteOptions, getConfig, order, setOptions, writeSection, type UciSection } from '@/lib/uci'
 
 // the route rules of a profile as the rules page edits them: standard rules
 // of one condition, and logical ones with their conditions as route_subrule
@@ -265,21 +265,6 @@ function clearedConditions() {
   return Object.fromEntries([...MATCH_KEYS.filter((key) => key !== 'clash_mode'), MATCH_SOURCE].map((key) => [key, '']))
 }
 
-// a section written: the options with a value set, those empty removed. A new
-// one is added at the end, and named when a name is given
-async function writeSection(config: string, section: UciSection | null, type: string, values: Record<string, string | string[]>, name?: string) {
-  const set: Record<string, string | string[]> = {}
-  const unset: string[] = []
-  for (const [key, value] of Object.entries(values)) {
-    if (Array.isArray(value) ? value.length : value !== '') set[key] = value
-    else if (section && section[key] != null) unset.push(key)
-  }
-  if (!section) return addSection(config, type, set, name)
-  if (Object.keys(set).length) await setOptions(config, section['.name'], set)
-  if (unset.length) await deleteOptions(config, section['.name'], unset)
-  return section['.name']
-}
-
 // the inbounds of the device settings, which may name rule sets of the
 // profile: the routes tun takes, or leaves, by rule sets
 const INBOUND_RULE_SETS = ['route_address_set', 'route_exclude_address_set']
@@ -287,18 +272,6 @@ const INBOUND_RULE_SETS = ['route_address_set', 'route_exclude_address_set']
 async function deviceInbounds() {
   const sections = await getConfig('hako').catch(() => [])
   return sections.filter((section) => section['.type'] === 'inbound')
-}
-
-// changes made, then applied, which reloads sing-box; reverted when one fails
-async function applying(config: string, change: () => Promise<void>) {
-  try {
-    await change()
-    await apply()
-  } catch (error) {
-    await revert(config).catch(() => {})
-    await revert('hako').catch(() => {})
-    throw error
-  }
 }
 
 export type StandardValues = {

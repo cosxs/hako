@@ -70,3 +70,31 @@ export async function apply() {
   }
   await call('uci', 'confirm')
 }
+
+// a section written: the options with a value set, those empty removed. A new
+// one is added at the end, and named when a name is given
+export async function writeSection(config: string, section: UciSection | null, type: string, values: Record<string, string | string[]>, name?: string) {
+  const set: Record<string, string | string[]> = {}
+  const unset: string[] = []
+  for (const [key, value] of Object.entries(values)) {
+    if (Array.isArray(value) ? value.length : value !== '') set[key] = value
+    else if (section && section[key] != null) unset.push(key)
+  }
+  if (!section) return addSection(config, type, set, name)
+  if (Object.keys(set).length) await setOptions(config, section['.name'], set)
+  if (unset.length) await deleteOptions(config, section['.name'], unset)
+  return section['.name']
+}
+
+// changes made to a profile and the device settings, then applied, which
+// reloads sing-box; reverted when one fails
+export async function applying(config: string, change: () => Promise<unknown>) {
+  try {
+    await change()
+    await apply()
+  } catch (error) {
+    await revert(config).catch(() => {})
+    await revert('hako').catch(() => {})
+    throw error
+  }
+}
