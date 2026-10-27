@@ -141,7 +141,7 @@ const RULE_SET_FIELDS = {
 const MATCH_FIELDS = {
   domain: 'list', domain_suffix: 'list', domain_keyword: 'list', domain_regex: 'list',
   ip_cidr: 'list', ip_is_private: 'bool', source_ip_cidr: 'list', rule_set: 'rule_sets',
-  clash_mode: 'string', invert: 'bool'
+  rule_set_ip_cidr_match_source: 'bool', clash_mode: 'string', invert: 'bool'
 };
 
 const DNS_RULE_FIELDS = merge({
