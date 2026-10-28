@@ -32,9 +32,9 @@
 | --- | --- | --- |
 | `final`、`strategy`、`optimistic` | 已实现 | 内核设置 › DNS |
 | `disable_cache`、`disable_expire`、`cache_capacity`、`timeout`、`reverse_mapping`、`client_subnet` | 部分实现 | 生成器支持，两套界面都没有 |
-| DNS 服务器：`udp`、`tcp`、`tls`、`quic`、`https`、`h3`、`local`、`fakeip` | 部分实现 | 内核设置 › DNS 的表格里增删改。界面不能编辑 `tls_insecure`（生成器支持）和 `local` 的 `prefer_go`（生成器支持） |
+| DNS 服务器：`udp`、`tcp`、`tls`、`quic`、`https`、`h3`、`local`、`fakeip` | 部分实现 | 内核设置 › DNS 的表格里增删改，弹窗左边是服务器、右边是拨号字段（出站、域名解析）。`local` 和 `fakeip` 内置，不在表格里：`fakeip` 由 FakeIP 卡片的开关添加，地址段也在那里改。界面不能编辑 `tls_insecure`（生成器支持）和 `local` 的 `prefer_go`（生成器支持） |
 | DNS 服务器：`dhcp`、`hosts`、`resolved`、`tailscale` 等其他类型 | 未实现 | 生成器会跳过并给出警告 |
-| DNS 规则 | 部分实现 | 模板自带的规则（局域网域名交给 dnsmasq、国内外分流）是固定的；自定义规则只能在内核设置 › DNS 里写 JSON，没有可视化编辑 |
+| DNS 规则 | 部分实现 | 模板自带的规则（局域网域名交给 dnsmasq、国内外分流）是固定的，只有境外域名交给谁可以改：FakeIP 开着时交给 `fakeip`，关掉时交给「境外 DNS 服务器」；自定义规则只能在内核设置 › DNS 里写 JSON，没有可视化编辑 |
 
 ### 1.3 NTP [`ntp`](https://sing-box.sagernet.org/zh/configuration/ntp/)
 

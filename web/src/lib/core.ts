@@ -19,7 +19,8 @@ export const STRATEGIES: Record<string, string> = {
   ipv6_only: '仅 IPv6',
 }
 
-// the DNS server types, named as in the sing-box documentation
+// the types of the DNS servers added by hand, named as in the sing-box
+// documentation; local and fakeip are built in
 export const DNS_TYPES: Record<string, string> = {
   udp: 'UDP',
   tcp: 'TCP',
@@ -27,9 +28,11 @@ export const DNS_TYPES: Record<string, string> = {
   quic: 'QUIC',
   https: 'HTTPS',
   h3: 'HTTP/3',
-  local: 'local',
-  fakeip: 'FakeIP',
 }
+
+// the address ranges of a fakeip server added by the FakeIP switch, as in the
+// template
+const FAKEIP_RANGES = { inet4_range: '198.18.0.0/15', inet6_range: '2001:2::/48' }
 export const REMOTE_DNS_TYPES = ['udp', 'tcp', 'tls', 'quic', 'https', 'h3']
 export const TLS_DNS_TYPES = ['tls', 'quic', 'https', 'h3']
 
@@ -114,12 +117,56 @@ export async function saveLog(profile: Profile, values: LogValues) {
 
 // DNS
 
-export type DnsValues = { final: string; strategy: string; optimistic: boolean; customRules: string }
+// fakeip answers the foreign domains, those whose answer from the system DNS
+// is not in the mainland, or another server of foreignServer answers them:
+// the server of the foreign and fallback DNS rules of the template; the
+// address ranges are those of the fakeip server
+export type DnsValues = {
+  final: string
+  fakeip: boolean
+  fakeip4: string
+  fakeip6: string
+  foreignServer: string
+  strategy: string
+  optimistic: boolean
+  customRules: string
+}
+
+const CIDR4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}\/([12]?\d|3[0-2])$/
+const CIDR6 = /^[0-9a-f:]*:[0-9a-f:.]*\/(12[0-8]|1[01]\d|\d?\d)$/i
+
+export const validCidr4 = (input: string) => !input.trim() || CIDR4.test(input.trim())
+export const validCidr6 = (input: string) => !input.trim() || CIDR6.test(input.trim())
+
+const FOREIGN_RULES = ['foreign', 'fallback']
+
+export function foreignRules(profile: Profile) {
+  return profile.sections.filter((section) => section['.type'] === 'dns_rule' && FOREIGN_RULES.includes(section['.name']))
+}
+
+export function fakeipServer(profile: Profile) {
+  return sectionsOf(profile, 'dns_server').find((section) => section.type === 'fakeip') ?? null
+}
+
+// the servers that may answer the foreign domains with real addresses
+export function foreignServers(profile: Profile) {
+  return sectionsOf(profile, 'dns_server').filter((section) => section.type !== 'fakeip')
+}
 
 export function dnsValues(profile: Profile): DnsValues {
   const dns = sectionOf(profile, 'dns')
+  const server = text(foreignRules(profile)[0]?.server)
+  const fake = sectionsOf(profile, 'dns_server').find((section) => section['.name'] === server || section.tag === server)
+  const fakeip = !server || fake?.type === 'fakeip'
+  // a profile without a fakeip server gets one with the ranges of the
+  // template once the switch is on
+  const ranges = fakeipServer(profile) ?? FAKEIP_RANGES
   return {
     final: text(dns?.final),
+    fakeip,
+    fakeip4: text(ranges.inet4_range),
+    fakeip6: text(ranges.inet6_range),
+    foreignServer: fakeip ? '' : server,
     strategy: text(dns?.strategy),
     optimistic: dns?.optimistic !== '0',
     customRules: text(dns?.custom_rules),
@@ -134,8 +181,9 @@ export function finalServers(profile: Profile) {
 
 export async function saveDns(profile: Profile, values: DnsValues) {
   const rules = values.customRules.trim()
-  await applying(profile.config, () =>
-    writeSection(
+  const fake = fakeipServer(profile)
+  await applying(profile.config, async () => {
+    await writeSection(
       profile.config,
       sectionOf(profile, 'dns'),
       'dns',
@@ -147,8 +195,21 @@ export async function saveDns(profile: Profile, values: DnsValues) {
         custom_rules: rules && !/^\[\s*\]$/.test(rules) ? rules : '',
       },
       'dns',
-    ),
-  )
+    )
+    // fake addresses are answered with a TTL of 1 second, so devices hardly
+    // cache them and get real ones as soon as Hako stops
+    // the FakeIP switch adds the fakeip server when there is none; off, the
+    // server stays with its ranges, which no rule uses
+    const ranges = { inet4_range: values.fakeip4.trim(), inet6_range: values.fakeip6.trim() }
+    const fakeName = fake
+      ? await writeSection(profile.config, fake, 'dns_server', ranges)
+      : values.fakeip
+        ? await writeSection(profile.config, null, 'dns_server', { tag: 'fakeip', type: 'fakeip', ...ranges }, 'fakeip')
+        : ''
+    const server = values.fakeip ? fakeName : values.foreignServer
+    if (server)
+      for (const rule of foreignRules(profile)) await writeSection(profile.config, rule, 'dns_rule', { server, rewrite_ttl: values.fakeip ? '1' : '' })
+  })
 }
 
 export type DnsServerValues = {
@@ -160,8 +221,6 @@ export type DnsServerValues = {
   tlsServerName: string
   detour: string
   domainResolver: string
-  inet4Range: string
-  inet6Range: string
 }
 
 export function dnsServerValues(section: UciSection | null): DnsServerValues {
@@ -174,14 +233,11 @@ export function dnsServerValues(section: UciSection | null): DnsServerValues {
     tlsServerName: text(section?.tls_server_name),
     detour: text(section?.detour),
     domainResolver: text(section?.domain_resolver),
-    inet4Range: text(section?.inet4_range),
-    inet6Range: text(section?.inet6_range),
   }
 }
 
 export async function saveDnsServer(profile: Profile, section: UciSection | null, values: DnsServerValues) {
   const remote = REMOTE_DNS_TYPES.includes(values.type)
-  const fakeip = values.type === 'fakeip'
   await applying(profile.config, () =>
     writeSection(
       profile.config,
@@ -194,10 +250,8 @@ export async function saveDnsServer(profile: Profile, section: UciSection | null
         server_port: remote ? values.port.trim() : '',
         path: ['https', 'h3'].includes(values.type) ? values.path.trim() : '',
         tls_server_name: TLS_DNS_TYPES.includes(values.type) ? values.tlsServerName.trim() : '',
-        detour: fakeip ? '' : values.detour,
-        domain_resolver: fakeip ? '' : values.domainResolver,
-        inet4_range: fakeip ? values.inet4Range.trim() : '',
-        inet6_range: fakeip ? values.inet6Range.trim() : '',
+        detour: values.detour,
+        domain_resolver: values.domainResolver,
       },
       `dns_${Date.now()}`,
     ),
