@@ -118,27 +118,22 @@ config outbound 'global'
 
 config route_rule
 	option action 'sniff'
-	option hidden '1'
 
 config route_rule
 	list protocol 'dns'
 	option action 'hijack-dns'
-	option hidden '1'
 
 config route_rule
 	option ip_is_private '1'
 	option outbound 'direct'
-	option hidden '1'
 
 config route_rule
 	option clash_mode 'Direct'
 	option outbound 'direct'
-	option hidden '1'
 
 config route_rule
 	option clash_mode 'Global'
 	option outbound 'global'
-	option hidden '1'
 
 config route_rule
 	list port '853'

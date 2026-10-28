@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { effectToast, untilApplied } from '@/lib/hako'
 import { profileQuery, subscriptionsQuery, type Profile, type Subscription } from '@/lib/policy'
-import { outboundChoice, outboundText, reorderRules, ruleKind, ruleText, setRuleEnabled, visibleRules, type RuleKind } from '@/lib/rules'
+import { outboundChoice, outboundText, reorderRules, ruleKind, ruleText, setRuleEnabled, routeRules, type RuleKind } from '@/lib/rules'
 import type { UciSection } from '@/lib/uci'
 import { cn } from '@/lib/utils'
 import { LogicalDialog } from '@/pages/rules/logical-dialog'
@@ -73,7 +73,7 @@ export function RulesPage() {
     onError: (failure: Error) => toast.error(`保存失败：${failure.message}`),
   })
 
-  const rules = profile ? visibleRules(profile) : []
+  const rules = profile ? routeRules(profile) : []
   const byName = new Map(rules.map((section) => [section['.name'], section]))
   const ordered = moved ? moved.map((name) => byName.get(name)).filter((section): section is UciSection => !!section) : rules
 

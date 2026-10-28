@@ -6,9 +6,9 @@ import { addSection, applying, deleteOptions, getConfig, order, setOptions, writ
 
 // the route rules of a profile as the rules page edits them: standard rules
 // of one condition, and logical ones with their conditions as route_subrule
-// sections naming their id. The hidden rules Hako adds (sniffing, DNS
-// hijacking, private addresses, the outbound modes) are not shown, and keep
-// their places. The rule sets are sections of their own, which a rule_set
+// sections naming their id. The rules Hako adds (sniffing, DNS hijacking,
+// private addresses, the outbound modes) are shown with the others. The rule
+// sets are sections of their own, which a rule_set
 // condition names, as route.rule_set and the rule_set of a rule in sing-box
 
 export const PROTOCOLS = ['http', 'tls', 'quic', 'stun', 'dns', 'bittorrent', 'dtls', 'ssh', 'rdp', 'ntp']
@@ -85,7 +85,7 @@ export const CONDITION_GROUPS = [
   ['rule_set'],
 ]
 
-// what a rule matches; clash_mode is for the hidden rules of the modes
+// what a rule matches; clash_mode is for the rules of the outbound modes
 const MATCH_KEYS = [...Object.keys(CONDITIONS), 'clash_mode']
 
 // a rule_set condition matching the IP CIDRs of its rule sets against the
@@ -142,8 +142,8 @@ export function ruleKind(section: UciSection): RuleKind {
   return section.type === 'logical' ? 'logical' : 'standard'
 }
 
-export function visibleRules(profile: Profile) {
-  return profile.sections.filter((section) => section['.type'] === 'route_rule' && section.hidden !== '1')
+export function routeRules(profile: Profile) {
+  return profile.sections.filter((section) => section['.type'] === 'route_rule')
 }
 
 export function subrulesOf(profile: Profile, rule: UciSection) {
@@ -403,7 +403,6 @@ export const inboundsQuery = queryOptions({
 export function ruleSetUsers(profile: Profile, inbounds: UciSection[], set: UciSection) {
   const refers = (refs: string | string[] | undefined) => list(refs).some((ref) => ref === set['.name'] || ref === set.tag)
   const users: string[] = []
-  let hidden = 0
   let dns = 0
   const rule = (section: UciSection) => {
     const text = ruleText(profile, section)
@@ -412,16 +411,12 @@ export function ruleSetUsers(profile: Profile, inbounds: UciSection[], set: UciS
   for (const section of profile.sections) {
     if (!refers(section.rule_set)) continue
     const type = section['.type']
-    if (type === 'route_rule') {
-      if (section.hidden === '1') hidden++
-      else users.push(rule(section))
-    } else if (type === 'route_subrule') {
+    if (type === 'route_rule') users.push(rule(section))
+    else if (type === 'route_subrule') {
       const logical = profile.sections.find((other) => other['.type'] === 'route_rule' && other.type === 'logical' && other.id === section.rule)
-      if (logical?.hidden === '1') hidden++
-      else users.push(logical ? rule(logical) : '逻辑规则的条件')
+      users.push(logical ? rule(logical) : '逻辑规则的条件')
     } else if (type === 'dns_rule') dns++
   }
-  if (hidden) users.push(`内置路由规则 ${hidden} 条`)
   if (dns) users.push(`DNS 规则 ${dns} 条`)
   for (const inbound of inbounds) {
     const name = inbound.type === 'tun' ? 'TUN' : label(inbound)
@@ -509,10 +504,10 @@ export async function setRuleEnabled(profile: Profile, section: UciSection, enab
   })
 }
 
-// the rules shown in a new order, in the places they had among the sections
+// the rules in a new order, in the places they had among the sections
 export async function reorderRules(profile: Profile, names: string[]) {
   const all = profile.sections.map((section) => section['.name'])
-  const shown = new Set(visibleRules(profile).map((section) => section['.name']))
+  const shown = new Set(routeRules(profile).map((section) => section['.name']))
   const slots = all.flatMap((name, index) => (shown.has(name) ? [index] : []))
   slots.forEach((slot, index) => (all[slot] = names[index]))
   await applying(profile.config, () => order(profile.config, all).then(() => {}))

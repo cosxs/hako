@@ -219,13 +219,37 @@ function geoip_rule_set(uci) {
   }
 }
 
+// 5: the route rules Hako adds (sniffing, DNS hijacking, private addresses,
+// the outbound modes) are shown with the others: they lose hidden
+function shown_route_rules(uci) {
+  for (let name in profiles()) {
+    const pkg = profile_package(name);
+    uci.load(pkg);
+
+    let changed = false;
+    uci.foreach(pkg, 'route_rule', (section) => {
+      if (section.hidden == null)
+        return;
+
+      uci.delete(pkg, section['.name'], 'hidden');
+      changed = true;
+    });
+
+    if (changed) {
+      uci.save(pkg);
+      uci.commit(pkg);
+    }
+  }
+}
+
 // MIGRATIONS[i] moves version i + 1 to i + 2. Version 1 is the baseline:
 // the device settings in hako and each profile in a package of its own;
 // configs from before it are not migrated
 const MIGRATIONS = [
   subscription_sections,
   named_sections,
-  geoip_rule_set
+  geoip_rule_set,
+  shown_route_rules
 ];
 
 const latest = length(MIGRATIONS) + 1;

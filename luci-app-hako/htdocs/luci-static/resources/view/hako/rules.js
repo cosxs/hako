@@ -15,19 +15,9 @@ function choiceText(section_id) {
   return (index >= 0) ? this.vallist[index] : '%h'.format(value);
 }
 
-const RuleSection = logical.RuleSection.extend({
-  // a new rule goes in front of the listed ones, behind the hidden rules
-  handleAdd(ev, name) {
-    const first = this.cfgsections()[0];
-    const result = this.super('handleAdd', [ ev, name ]);
-    const added = this.map.addedSection;
-
-    if (first && added)
-      uci.move(hako.profileConfig(), added, first);
-
-    return result;
-  }
-});
+// a new rule goes behind the others, as in the app: the rules Hako adds,
+// sniffing and DNS hijacking first, keep their places in front
+const RuleSection = logical.RuleSection;
 
 return view.extend({
   load() {
@@ -54,7 +44,6 @@ return view.extend({
     rs.addremove = true;
     rs.sortable = true;
     rs.nodescriptions = true;
-    rs.filter = (section_id) => !hako.isHidden(section_id);
     rs.modaltitle = _('Route rules');
     rs.tab('standard', _('Standard rule'));
     rs.tab('logical', _('Logical rule'));
@@ -114,7 +103,7 @@ return view.extend({
 
     // what a matching connection gets; other actions set by hand are kept
     const actions = uci.sections(config, 'route_rule')
-      .filter((section) => !hako.isHidden(section['.name']) && section.action && !(section.action in { route: 1, reject: 1 }))
+      .filter((section) => section.action && !(section.action in { route: 1, reject: 1 }))
       .map((section) => section.action);
 
     logical.shared(rs, 'action', form.ListValue, _('Action'), (o) => {
