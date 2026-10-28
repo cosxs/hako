@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { Badge } from '@/components/reui/badge'
 import { Sortable, SortableItem, SortableItemHandle } from '@/components/reui/sortable'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -17,11 +16,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from '@/components/ui/field'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { effectToast, untilApplied } from '@/lib/hako'
 import { cn } from '@/lib/utils'
 import {
@@ -36,6 +37,7 @@ import {
   saveOutbound,
 } from '@/lib/outbounds'
 import { GROUP_TYPES, isGroup, label, shortName, type Profile, type Subscription } from '@/lib/policy'
+import { Row, Section } from '@/pages/policy/dialog-layout'
 import type { UciSection } from '@/lib/uci'
 
 // a member as the dialog lists it: what it is, by the reference stored
@@ -96,7 +98,8 @@ function fieldsOf(section: UciSection | null, name: string): Fields {
     interval: durationField(section?.interval, 'm'),
     idle: durationField(section?.idle_timeout, 'm'),
     tolerance: text('tolerance'),
-    interrupt: section?.interrupt_exist_connections === '1',
+    // on for a new group
+    interrupt: section ? section.interrupt_exist_connections === '1' : true,
   }
 }
 
@@ -192,7 +195,7 @@ export function GroupDialog({
 
   // the default outbound is one of the members: those listed, then the nodes
   // the filter takes
-  const defaults: Record<string, string> = { '': `第一个成员${values.outbounds.length ? `（${describe(profile, subscriptions, values.outbounds[0]).label}）` : ''}` }
+  const defaults: Record<string, string> = { '': '第一个成员' }
   for (const ref of values.outbounds) defaults[ref] = describe(profile, subscriptions, ref).label
   for (const node of matched) defaults[node.tag] = node.tag
 
@@ -200,255 +203,259 @@ export function GroupDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      {/* of one height whatever the type: the fields scroll between the title
-          and the buttons */}
-      <DialogContent className="h-[min(44rem,calc(100dvh-2rem))] grid-rows-1 overflow-hidden sm:max-w-xl">
+      {/* as the node dialog: of one height whatever the type, the fields
+          scroll between the title and the buttons */}
+      <DialogContent className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]">
         <form
           noValidate
-          className="flex min-h-0 flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault()
             form.handleSubmit()
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="border-b px-6 pt-5 pb-3.5">
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{auto ? '自动选用延迟最低的成员。' : '在策略页或活动里手动选择用哪个成员。'}</DialogDescription>
+            <DialogDescription className="sr-only">保存后立即生效。</DialogDescription>
           </DialogHeader>
 
-          <FieldGroup className="-m-1 min-h-0 flex-1 overflow-y-auto p-1">
-            <div className="grid grid-cols-2 gap-4">
-              <form.Field name="name">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor="group-name">名称</FieldLabel>
-                    <Input
-                      id="group-name"
-                      autoFocus
-                      value={field.state.value}
-                      aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => field.handleChange(event.target.value)}
-                    />
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="type">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor="group-type">类型</FieldLabel>
-                    <Select items={GROUP_TYPES} value={field.state.value} onValueChange={(value) => field.handleChange(String(value))}>
-                      <SelectTrigger id="group-type" className="w-full data-placeholder:text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(GROUP_TYPES).map(([value, text]) => (
-                          <SelectItem key={value} value={value}>
-                            {text}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              </form.Field>
-            </div>
-
-            <form.Field name="outbounds">
-              {(field) => {
-                const invalid = field.state.meta.isTouched && !field.state.meta.isValid
-                return (
-                  <Field>
-                    <FieldTitle>成员</FieldTitle>
-                    <div className={cn('overflow-hidden rounded-lg border', invalid && 'border-destructive ring-3 ring-destructive/20')}>
-                      <Sortable value={field.state.value} getItemValue={(ref) => ref} onValueChange={(refs) => field.handleChange(refs)}>
-                        {field.state.value.map((ref) => {
-                          const member = describe(profile, subscriptions, ref)
-                          return (
-                            <SortableItem key={ref} value={ref} className="flex h-9 items-center gap-2 border-b bg-background pr-1 pl-2">
-                              <SortableItemHandle className="flex text-muted-foreground" aria-label={`拖动 ${member.label}`}>
-                                <GripVerticalIcon className="size-4" />
-                              </SortableItemHandle>
-                              <span className="min-w-0 flex-1 truncate">{member.label}</span>
-                              <Badge variant={member.kind === '已失效' ? 'destructive-light' : 'secondary'}>{member.kind}</Badge>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`移除 ${member.label}`}
-                                onClick={() => field.handleChange(field.state.value.filter((item) => item !== ref))}
-                              >
-                                <XIcon />
-                              </Button>
-                            </SortableItem>
-                          )
-                        })}
-                      </Sortable>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          disabled={!choices.length}
-                          render={
-                            <button
-                              type="button"
-                              className="flex h-9 w-full items-center gap-2 px-2 text-left text-muted-foreground outline-none hover:bg-muted/50 focus-visible:bg-muted/50 disabled:opacity-50"
-                            />
-                          }
-                        >
-                          <PlusIcon className="size-4" />
-                          添加成员…
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="max-h-80 w-64">
-                          {choices.map((group) => (
-                            <DropdownMenuGroup key={group.title}>
-                              <DropdownMenuLabel>{group.title}</DropdownMenuLabel>
-                              {group.items.map(([value, text]) => (
-                                <DropdownMenuItem key={value} onClick={() => field.handleChange([...field.state.value, value])}>
-                                  {text}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuGroup>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <FieldDescription>拖动调整顺序。订阅作为一个整体加入，节点由它自己选择。</FieldDescription>
-                  </Field>
-                )
-              }}
-            </form.Field>
-
-            <Field>
-              <FieldTitle>包含订阅节点</FieldTitle>
-              <form.Field name="include">
-                {(field) => (
-                  <div className="flex flex-wrap gap-x-5 gap-y-2">
-                    {subscriptions
-                      .filter((sub) => sub.enabled || field.state.value.includes(sub.name))
-                      .map((sub) => (
-                        <Field key={sub.name} orientation="horizontal" className="w-auto">
-                          <Checkbox
-                            id={`group-include-${sub.name}`}
-                            checked={field.state.value.includes(sub.name)}
-                            onCheckedChange={(checked) =>
-                              field.handleChange(
-                                checked ? subscriptions.filter((item) => item.name === sub.name || field.state.value.includes(item.name)).map((item) => item.name) : field.state.value.filter((item) => item !== sub.name),
-                              )
-                            }
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid items-start gap-6 sm:grid-cols-2">
+              <div className="flex flex-col gap-5">
+                <Section title="基本信息">
+                  <form.Field name="name">
+                    {(field) => (
+                      <Row label="名称" htmlFor="group-name">
+                        <div className="w-[56%] shrink-0">
+                          <Input
+                            id="group-name"
+                            autoFocus
+                            className="bg-background"
+                            value={field.state.value}
+                            aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
+                            onBlur={field.handleBlur}
+                            onChange={(event) => field.handleChange(event.target.value)}
                           />
-                          <FieldLabel htmlFor={`group-include-${sub.name}`} className="font-normal">
-                            {sub.tag}
-                          </FieldLabel>
-                        </Field>
-                      ))}
-                    {!subscriptions.length && <span className="text-muted-foreground">还没有订阅。</span>}
-                  </div>
-                )}
-              </form.Field>
-              <FieldLabel htmlFor="group-filter">节点筛选</FieldLabel>
-              <form.Field name="filter">
-                {(field) => (
-                  <Input
-                    id="group-filter"
-                    value={field.state.value}
-                    aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                  />
-                )}
-              </form.Field>
-              <FieldDescription>
-                {values.include.length && nodeFilter(values.filter)
-                  ? `匹配 ${matched.length} 个节点${matched.length ? `：${matched.slice(0, 4).map((node) => node.name).join('、')}${matched.length > 4 ? ' 等' : ''}` : ''}。按名称匹配，不区分大小写，不含订阅前缀。`
-                  : '勾选订阅后，按筛选把它的节点逐个加在成员之后。'}
-              </FieldDescription>
-            </Field>
+                        </div>
+                      </Row>
+                    )}
+                  </form.Field>
+                  <form.Field name="type">
+                    {(field) => (
+                      <Row label="类型" htmlFor="group-type">
+                        <Tabs value={field.state.value} onValueChange={(value) => field.handleChange(String(value))}>
+                          <TabsList id="group-type" className="bg-input/70">
+                            {Object.entries(GROUP_TYPES).map(([value, text]) => (
+                              <TabsTrigger key={value} value={value} className="px-2.5">
+                                {text}
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                        </Tabs>
+                      </Row>
+                    )}
+                  </form.Field>
+                </Section>
 
-            {!auto && (
-              <form.Field name="default">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor="group-default">默认出站</FieldLabel>
-                    <Select items={defaults} value={field.state.value in defaults ? field.state.value : ''} onValueChange={(value) => field.handleChange(String(value ?? ''))}>
-                      <SelectTrigger id="group-default" className="w-full data-placeholder:text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(defaults).map(([value, text]) => (
-                          <SelectItem key={value} value={value}>
-                            {text}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              </form.Field>
-            )}
-
-            {auto && (
-              <>
-                <form.Field name="url">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel htmlFor="group-url">测速地址</FieldLabel>
-                      <Input
-                        id="group-url"
-                        className="font-mono"
-                        value={field.state.value}
-                        aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
-                        onBlur={field.handleBlur}
-                        onChange={(event) => field.handleChange(event.target.value)}
-                      />
-                    </Field>
-                  )}
-                </form.Field>
-                <div className="grid grid-cols-3 gap-4">
-                  {(
-                    [
-                      ['interval', '测速间隔', '分钟'],
-                      ['idle', '闲置超时', '分钟'],
-                      ['tolerance', '容差', '毫秒'],
-                    ] as const
-                  ).map(([name, text, unit]) => (
-                    <form.Field key={name} name={name}>
+                {!auto && (
+                  <Section title="出站">
+                    <form.Field name="default">
                       {(field) => (
-                        <Field>
-                          <FieldLabel htmlFor={`group-${name}`}>{text}</FieldLabel>
-                          <InputGroup>
-                            <InputGroupInput
-                              id={`group-${name}`}
+                        <Row label="出站标签" htmlFor="group-default">
+                          <div className="w-[56%] shrink-0">
+                            <Select items={defaults} value={field.state.value in defaults ? field.state.value : ''} onValueChange={(value) => field.handleChange(String(value ?? ''))}>
+                              <SelectTrigger id="group-default" className="w-full bg-background data-placeholder:text-foreground">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(defaults).map(([value, text]) => (
+                                  <SelectItem key={value} value={value}>
+                                    {text}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </Row>
+                      )}
+                    </form.Field>
+                  </Section>
+                )}
+
+                {auto && (
+                  <Section title="测速">
+                    <form.Field name="url">
+                      {(field) => (
+                        <Row label="测速地址" htmlFor="group-url">
+                          <div className="w-2/3 shrink-0">
+                            <Input
+                              id="group-url"
+                              className="bg-background font-mono"
                               value={field.state.value}
                               aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
                               onBlur={field.handleBlur}
                               onChange={(event) => field.handleChange(event.target.value)}
                             />
-                            <InputGroupAddon align="inline-end">
-                              <InputGroupText>{unit}</InputGroupText>
-                            </InputGroupAddon>
-                          </InputGroup>
-                        </Field>
+                          </div>
+                        </Row>
                       )}
                     </form.Field>
-                  ))}
-                </div>
-              </>
-            )}
+                    {/* the three short ones side by side, each labelled above */}
+                    <div className="grid grid-cols-3 gap-3 py-2.5">
+                      {(
+                        [
+                          ['interval', '测速间隔', '分钟'],
+                          ['idle', '闲置超时', '分钟'],
+                          ['tolerance', '容差', '毫秒'],
+                        ] as const
+                      ).map(([name, text, unit]) => (
+                        <form.Field key={name} name={name}>
+                          {(field) => (
+                            <Field className="gap-1.5">
+                              <FieldLabel htmlFor={`group-${name}`} className="font-normal">
+                                {text}
+                              </FieldLabel>
+                              <InputGroup className="bg-background">
+                                <InputGroupInput
+                                  id={`group-${name}`}
+                                  value={field.state.value}
+                                  aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
+                                  onBlur={field.handleBlur}
+                                  onChange={(event) => field.handleChange(event.target.value)}
+                                />
+                                <InputGroupAddon align="inline-end">
+                                  <InputGroupText>{unit}</InputGroupText>
+                                </InputGroupAddon>
+                              </InputGroup>
+                            </Field>
+                          )}
+                        </form.Field>
+                      ))}
+                    </div>
+                  </Section>
+                )}
 
-            <form.Field name="interrupt">
-              {(field) => (
-                <Field orientation="horizontal">
-                  <Checkbox id="group-interrupt" checked={field.state.value} onCheckedChange={(checked) => field.handleChange(!!checked)} />
-                  <FieldContent>
-                    <FieldLabel htmlFor="group-interrupt">中断现有连接</FieldLabel>
-                    <FieldDescription>切换成员时断开经由旧成员的连接。</FieldDescription>
-                  </FieldContent>
-                </Field>
-              )}
-            </form.Field>
+                <Section title="选项">
+                  <form.Field name="interrupt">
+                    {(field) => (
+                      <Row label="中断现有连接" htmlFor="group-interrupt">
+                        <Switch id="group-interrupt" checked={field.state.value} onCheckedChange={(checked) => field.handleChange(checked)} />
+                      </Row>
+                    )}
+                  </form.Field>
+                </Section>
+              </div>
 
-          </FieldGroup>
+              <div className="flex flex-col gap-5">
+                <form.Field name="outbounds">
+                  {(field) => {
+                    const invalid = field.state.meta.isTouched && !field.state.meta.isValid
+                    return (
+                      <Section title="成员" invalid={invalid}>
+                        {/* the members, if any, a row each, and a row to add one */}
+                        {!!field.state.value.length && (
+                        <Sortable value={field.state.value} getItemValue={(ref) => ref} onValueChange={(refs) => field.handleChange(refs)} className="divide-y">
+                          {field.state.value.map((ref) => {
+                            const member = describe(profile, subscriptions, ref)
+                            return (
+                              <SortableItem key={ref} value={ref} className="-mx-3.5 flex h-11 items-center gap-2 bg-muted pr-2 pl-2.5">
+                                <SortableItemHandle className="flex text-muted-foreground" aria-label={`拖动 ${member.label}`}>
+                                  <GripVerticalIcon className="size-4" />
+                                </SortableItemHandle>
+                                <span className="min-w-0 flex-1 truncate">{member.label}</span>
+                                <Badge variant={member.kind === '已失效' ? 'destructive-light' : 'secondary'}>{member.kind}</Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`移除 ${member.label}`}
+                                  onClick={() => field.handleChange(field.state.value.filter((item) => item !== ref))}
+                                >
+                                  <XIcon />
+                                </Button>
+                              </SortableItem>
+                            )
+                          })}
+                        </Sortable>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            disabled={!choices.length}
+                            render={
+                              <button
+                                type="button"
+                                className="-mx-3.5 flex h-11 w-[calc(100%+1.75rem)] items-center gap-2 px-3 text-left text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground disabled:opacity-50"
+                              />
+                            }
+                          >
+                            <PlusIcon className="size-4" />
+                            添加成员…
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="max-h-80 w-64">
+                            {choices.map((group) => (
+                              <DropdownMenuGroup key={group.title}>
+                                <DropdownMenuLabel>{group.title}</DropdownMenuLabel>
+                                {group.items.map(([value, text]) => (
+                                  <DropdownMenuItem key={value} onClick={() => field.handleChange([...field.state.value, value])}>
+                                    {text}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuGroup>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </Section>
+                    )
+                  }}
+                </form.Field>
 
-          <DialogFooter>
+                <Section title="包含订阅节点">
+                  <form.Field name="include">
+                    {(field) => (
+                      <>
+                        {subscriptions
+                          .filter((sub) => sub.enabled || field.state.value.includes(sub.name))
+                          .map((sub) => (
+                            <Row key={sub.name} label={sub.tag} htmlFor={`group-include-${sub.name}`}>
+                              <Switch
+                                id={`group-include-${sub.name}`}
+                                checked={field.state.value.includes(sub.name)}
+                                onCheckedChange={(checked) =>
+                                  field.handleChange(
+                                    checked
+                                      ? subscriptions.filter((item) => item.name === sub.name || field.state.value.includes(item.name)).map((item) => item.name)
+                                      : field.state.value.filter((item) => item !== sub.name),
+                                  )
+                                }
+                              />
+                            </Row>
+                          ))}
+                        {!subscriptions.length && <p className="py-2.5 text-sm text-muted-foreground">还没有订阅。</p>}
+                      </>
+                    )}
+                  </form.Field>
+                  <form.Field name="filter">
+                    {(field) => (
+                      <Row label="节点筛选" htmlFor="group-filter">
+                        <div className="w-[56%] shrink-0">
+                          <Input
+                            id="group-filter"
+                            className="bg-background"
+                            value={field.state.value}
+                            aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
+                            onBlur={field.handleBlur}
+                            onChange={(event) => field.handleChange(event.target.value)}
+                          />
+                        </div>
+                      </Row>
+                    )}
+                  </form.Field>
+                </Section>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t px-6 py-3.5">
             <DialogClose render={<Button type="button" variant="outline" />}>取消</DialogClose>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending && <Spinner />}

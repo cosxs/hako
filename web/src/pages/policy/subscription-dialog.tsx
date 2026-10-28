@@ -5,11 +5,10 @@ import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { effectToast, untilApplied } from '@/lib/hako'
 import {
   addSubscription,
@@ -19,6 +18,8 @@ import {
   type Subscription,
   type SubscriptionValues,
 } from '@/lib/policy'
+import { cn } from '@/lib/utils'
+import { Row, Section } from '@/pages/policy/dialog-layout'
 
 // an update interval as hours, as the dialog takes it; another duration is
 // shown as it is
@@ -121,111 +122,107 @@ export function SubscriptionDialog({
       }),
   })
 
+  // a text field of a row, its width as in the node dialog
+  const text = (name: 'name' | 'prefix' | 'url' | 'agent', id: string, width: string, props: { autoFocus?: boolean; mono?: boolean; placeholder?: string } = {}) => (
+    <form.Field name={name}>
+      {(field) => (
+        <div className={cn('shrink-0', width)}>
+          <Input
+            id={id}
+            autoFocus={props.autoFocus}
+            placeholder={props.placeholder}
+            className={cn('bg-background', props.mono && 'font-mono')}
+            value={field.state.value}
+            aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
+            onBlur={field.handleBlur}
+            onChange={(event) => field.handleChange(event.target.value)}
+          />
+        </div>
+      )}
+    </form.Field>
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      {/* as the node dialog: two columns of sections between the title and
+          the buttons */}
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]">
         <form
           noValidate
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault()
             form.handleSubmit()
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="border-b px-6 pt-5 pb-3.5">
             <DialogTitle>{sub ? '编辑订阅' : '新增订阅'}</DialogTitle>
-            <DialogDescription>{sub ? '改了地址或 User-Agent 会重新下载，下载失败则不保存。' : '先下载订阅，下载成功才保存。'}</DialogDescription>
+            <DialogDescription className="sr-only">{sub ? '改了地址或 User-Agent 会重新下载，下载失败则不保存。' : '先下载订阅，下载成功才保存。'}</DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
-            <form.Field name="name">
-              {(field) => {
-                const invalid = field.state.meta.isTouched && !field.state.meta.isValid
-                return (
-                  <Field>
-                    <FieldLabel htmlFor="sub-name">名称</FieldLabel>
-                    <Input id="sub-name" autoFocus value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                  </Field>
-                )
-              }}
-            </form.Field>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid items-start gap-6 sm:grid-cols-2">
+              <Section title="基本信息">
+                <Row label="名称" htmlFor="sub-name">
+                  {text('name', 'sub-name', 'w-[56%]', { autoFocus: true })}
+                </Row>
+                <form.Field name="type">
+                  {(field) => (
+                    <Row label="类型" htmlFor="sub-type">
+                      <Tabs value={field.state.value} onValueChange={(value) => field.handleChange(String(value))}>
+                        <TabsList id="sub-type" className="bg-input/70">
+                          {Object.entries(GROUP_TYPES).map(([value, name]) => (
+                            <TabsTrigger key={value} value={value} className="px-2.5">
+                              {name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                    </Row>
+                  )}
+                </form.Field>
+                <form.Subscribe selector={(state) => state.values.name}>
+                  {(name) => (
+                    <Row label="节点名前缀" htmlFor="sub-prefix">
+                      {text('prefix', 'sub-prefix', 'w-[56%]', { placeholder: name.trim() || '订阅名' })}
+                    </Row>
+                  )}
+                </form.Subscribe>
+              </Section>
 
-            <div className="grid grid-cols-2 gap-4">
-              <form.Field name="type">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor="sub-type">类型</FieldLabel>
-                    <Select items={GROUP_TYPES} value={field.state.value} onValueChange={(value) => field.handleChange(String(value))}>
-                      <SelectTrigger id="sub-type" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(GROUP_TYPES).map(([value, text]) => (
-                          <SelectItem key={value} value={value}>
-                            {text}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="prefix">
-                {(field) => {
-                  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field>
-                      <FieldLabel htmlFor="sub-prefix">节点名前缀</FieldLabel>
-                      <Input id="sub-prefix" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                      <FieldDescription>留空则用订阅名。</FieldDescription>
-                    </Field>
-                  )
-                }}
-              </form.Field>
+              <Section title="下载">
+                <Row label="订阅地址" htmlFor="sub-url">
+                  {text('url', 'sub-url', 'w-2/3', { mono: true })}
+                </Row>
+                <form.Field name="hours">
+                  {(field) => (
+                    <Row label="更新间隔" htmlFor="sub-hours">
+                      <div className="w-2/5 shrink-0">
+                        <InputGroup className="bg-background">
+                          <InputGroupInput
+                            id="sub-hours"
+                            placeholder="手动"
+                            value={field.state.value}
+                            aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
+                            onBlur={field.handleBlur}
+                            onChange={(event) => field.handleChange(event.target.value)}
+                          />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupText>小时</InputGroupText>
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </div>
+                    </Row>
+                  )}
+                </form.Field>
+                <Row label="User-Agent" htmlFor="sub-agent">
+                  {text('agent', 'sub-agent', 'w-2/3')}
+                </Row>
+              </Section>
             </div>
+          </div>
 
-            <form.Field name="url">
-              {(field) => {
-                const invalid = field.state.meta.isTouched && !field.state.meta.isValid
-                return (
-                  <Field>
-                    <FieldLabel htmlFor="sub-url">订阅地址</FieldLabel>
-                    <Input id="sub-url" className="font-mono" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                  </Field>
-                )
-              }}
-            </form.Field>
-
-            <div className="grid grid-cols-2 gap-4">
-              <form.Field name="hours">
-                {(field) => {
-                  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field>
-                      <FieldLabel htmlFor="sub-hours">更新间隔</FieldLabel>
-                      <InputGroup>
-                        <InputGroupInput id="sub-hours" value={field.state.value} aria-invalid={invalid} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupText>小时</InputGroupText>
-                        </InputGroupAddon>
-                      </InputGroup>
-                      <FieldDescription>留空则只手动更新。</FieldDescription>
-                    </Field>
-                  )
-                }}
-              </form.Field>
-              <form.Field name="agent">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor="sub-agent">User-Agent</FieldLabel>
-                    <Input id="sub-agent" value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} />
-                  </Field>
-                )}
-              </form.Field>
-            </div>
-          </FieldGroup>
-
-          <DialogFooter>
+          <DialogFooter className="border-t px-6 py-3.5">
             <DialogClose render={<Button type="button" variant="outline" />}>取消</DialogClose>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending && <Spinner />}
