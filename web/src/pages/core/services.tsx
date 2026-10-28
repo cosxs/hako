@@ -75,7 +75,7 @@ function SectionList({
   })
 
   return (
-    <div className="flex w-full max-w-[720px] flex-col gap-2">
+    <div className="flex w-full max-w-[1120px] flex-col gap-2">
       <h3 className="px-0.5 text-[13px] font-semibold">{kind}</h3>
       <SectionTable
         label={kind}

@@ -40,7 +40,7 @@ export function CorePage() {
       {tab === 'experimental' ? (
         <ExperimentalTab profile={profile} />
       ) : !profile ? (
-        <div className="flex w-full max-w-[720px] flex-col gap-6">
+        <div className="flex w-full max-w-[1120px] flex-col gap-6">
           <Skeleton className="h-36 w-full rounded-lg" />
         </div>
       ) : tab === 'log' ? (
