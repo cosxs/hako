@@ -4,13 +4,13 @@
     "read": {
       "uci": [ "hako", "hako_*", "network" ],
       "ubus": {
-        "luci.hako": [ "status", "outbounds", "applied", "core_latest", "core_install_status", "log_read", "profiles", "profile_view", "subscriptions", "overview", "latency", "external_ip", "events" ]
+        "luci.hako": [ "status", "outbounds", "applied", "core_latest", "core_install_status", "log_read", "profiles", "profile_view", "profile_export", "subscriptions", "overview", "latency", "external_ip", "events" ]
       }
     },
     "write": {
       "uci": [ "hako", "hako_*" ],
       "ubus": {
-        "luci.hako": [ "control", "mode_set", "select", "delay", "core_install", "profile_create", "profile_delete", "profile_use", "subscription_add", "subscription_edit", "subscription_delete", "subscription_update" ]
+        "luci.hako": [ "control", "mode_set", "select", "delay", "core_install", "profile_create", "profile_delete", "profile_use", "profile_rename", "profile_import", "subscription_add", "subscription_edit", "subscription_delete", "subscription_update" ]
       },
       "file": {
         "/tmp/hako-core-upload.apk": [ "write" ]

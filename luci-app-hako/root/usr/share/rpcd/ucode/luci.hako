@@ -566,6 +566,72 @@ function remove_temp(dir) {
   rmdir(dir);
 }
 
+// the sections a profile is made of, of which an imported file needs one
+const PROFILE_TYPES = [ 'log', 'dns', 'dns_server', 'dns_rule', 'ntp', 'http_client', 'outbound', 'subscription', 'route', 'route_rule', 'rule_set' ];
+// an imported profile is a UCI file of some size
+const IMPORT_LIMIT = 1048576;
+
+// another title for a profile: as a new one's, but its own may stay
+function rename_profile(name, title) {
+  if (!profile_exists(name))
+    return 'not_found';
+
+  if (type(title) != 'string' || !length(trim(title)))
+    return 'invalid_title';
+
+  if (length(filter(list_profiles(), (profile) => profile.name != name && profile.title == trim(title))))
+    return 'exists';
+
+  const pkg = profile_package(name);
+  const uci = cursor();
+  uci.load(pkg);
+  uci.set(pkg, 'profile', 'profile');
+  uci.set(pkg, 'profile', 'title', trim(title));
+  return uci.commit(pkg) ? null : 'write_failed';
+}
+
+// a profile from a UCI file, such as an exported one, under a title of its
+// own: { name } or { error }. Its subscriptions download as they update
+function import_profile(content, title) {
+  const error = check_title(title);
+  if (error)
+    return { error: error };
+
+  if (type(content) != 'string' || !length(content) || length(content) > IMPORT_LIMIT)
+    return { error: 'invalid_file' };
+
+  // read in a directory of its own, as UCI reads files: one with none of
+  // the sections of a profile is not one
+  const temp = make_temp();
+  if (!temp)
+    return { error: 'write_failed' };
+
+  let sections = 0;
+  if (writefile(`${temp}/profile`, content)) {
+    const uci = cursor(temp, temp);
+    for (let id, section in uci.get_all('profile') ?? {})
+      if (section['.type'] in PROFILE_TYPES)
+        sections++;
+  }
+  remove_temp(temp);
+
+  if (!sections)
+    return { error: 'invalid_file' };
+
+  const name = new_profile_id();
+  const pkg = name ? profile_package(name) : null;
+  if (!pkg || !writefile(`${CONFIG_DIR}/${pkg}`, content))
+    return { error: 'write_failed' };
+
+  const uci = cursor();
+  uci.load(pkg);
+  uci.set(pkg, 'profile', 'profile');
+  uci.set(pkg, 'profile', 'title', trim(title));
+  uci.commit(pkg);
+
+  return { name: name };
+}
+
 // sing-box check on a config file, with what it printed but without the
 // colors of its log; passes when sing-box is not installed yet. The log goes
 // into dir when given (left to the caller), else into a directory of its own
@@ -887,6 +953,38 @@ const methods = {
       remove_temp(temp);
 
       return content ? { content: content, warnings: warnings } : { error: 'generate_failed', warnings: warnings };
+    }
+  },
+
+  // another title of a profile
+  profile_rename: {
+    args: { name: 'name', title: 'title' },
+    call: function(req) {
+      const error = rename_profile(req.args?.name, req.args?.title);
+      return error ? { result: false, error: error } : { result: true };
+    }
+  },
+
+  // the UCI file of a profile, as it is saved, with its title
+  profile_export: {
+    args: { name: 'name' },
+    call: function(req) {
+      const name = req.args?.name;
+      if (!profile_exists(name))
+        return { error: 'not_found' };
+
+      const content = readfile(`${CONFIG_DIR}/${profile_package(name)}`);
+      const title = filter(list_profiles(), (profile) => profile.name == name)[0]?.title ?? name;
+      return content != null ? { content: content, title: title } : { error: 'not_found' };
+    }
+  },
+
+  // a new profile from a UCI file, with its title
+  profile_import: {
+    args: { content: 'content', title: 'title' },
+    call: function(req) {
+      const res = import_profile(req.args?.content, req.args?.title);
+      return res.error ? { result: false, error: res.error } : { result: true, name: res.name };
     }
   },
 
