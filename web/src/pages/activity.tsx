@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { control, eventsQuery, externalIpQuery, latencyQuery, modeName, overviewQuery, statusQuery, type Overview } from '@/lib/hako'
-import { deviceQuery, setProxyPort, setTakeover } from '@/lib/takeover'
+import { deviceQuery, setProxyPort } from '@/lib/takeover'
 import { cn } from '@/lib/utils'
 import { ModeSwitch } from '@/pages/policy/mode-switch'
 
@@ -200,8 +200,8 @@ export function ActivityPage() {
   const busy = (action: Action) => act.isPending && act.variables === action
 
   const toggle = useMutation({
-    mutationFn: ({ what, on }: { what: 'takeover' | 'mixed'; on: boolean }) => (what === 'takeover' ? setTakeover(device!, on) : setProxyPort(device!, on)),
-    onSuccess: (_, { what, on }) => toast.success(`${what === 'takeover' ? '接管' : '代理端口'}已${on ? '打开' : '关闭'}`),
+    mutationFn: (on: boolean) => setProxyPort(device!, on),
+    onSuccess: (_, on) => toast.success(`代理端口已${on ? '打开' : '关闭'}`),
     onError: (error: Error) => toast.error(error.message),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['hako'] }),
   })
@@ -218,7 +218,6 @@ export function ActivityPage() {
   // what keeps sing-box from starting, set right in the settings
   const coreProblem = !core.installed ? '未安装' : core.supported === false ? '版本过低' : core.service_active ? '自带的服务在用' : null
   const section = (name: string) => device?.sections.find((item) => item['.name'] === name)
-  const takeoverOn = section('tun')?.enabled === '1' || section('tproxy')?.enabled === '1'
   const mixedOn = section('mixed')?.enabled === '1'
   const net = overview?.network
   const connections = overview?.connections
@@ -253,24 +252,7 @@ export function ActivityPage() {
         <div className="min-w-0 flex-1">
           <Events />
         </div>
-        {device && (
-          <div className="flex gap-2">
-            {section('mixed') && (
-              <ToggleChip
-                label="代理端口"
-                on={mixedOn}
-                busy={toggle.isPending && toggle.variables?.what === 'mixed'}
-                onToggle={() => toggle.mutate({ what: 'mixed', on: !mixedOn })}
-              />
-            )}
-            <ToggleChip
-              label="接管"
-              on={takeoverOn}
-              busy={toggle.isPending && toggle.variables?.what === 'takeover'}
-              onToggle={() => toggle.mutate({ what: 'takeover', on: !takeoverOn })}
-            />
-          </div>
-        )}
+        {section('mixed') && <ToggleChip label="代理端口" on={mixedOn} busy={toggle.isPending} onToggle={() => toggle.mutate(!mixedOn)} />}
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
