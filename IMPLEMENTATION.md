@@ -145,7 +145,7 @@
 | 透明代理（TUN / TProxy） | 已实现 | 新界面接管页：接管开关和方式、DNS 端口，TUN 的接口名、地址、MTU、绕过的规则集和地址，TProxy 的端口、局域网接口和绕过的地址 |
 | TProxy 防火墙 | 已实现 | `firewall.uc` 生成 nftables 规则和策略路由；只绕过保留地址，规则集交给 sing-box 匹配 |
 | DNS 接管 | 已实现 | 防火墙把局域网的 DNS 查询和路由器本机发往 dnsmasq 的查询重定向到 `dns-in`（本机这部分 TUN 需开 `auto_redirect`）；dnsmasq 不改动，`local` 经它查询运营商的 DNS，它发给上游的查询不进 sing-box（TUN 自动加 `exclude_uid`，并在 `auto_redirect` 的回退规则前为 dnsmasq 加一条路由规则，IPv6 上游也从 WAN 走；TProxy 跳过 dnsmasq 用户） |
-| IPv6 接管 | 已实现 | 新界面接管页的「接管 IPv6」开关，同时改 DNS 的解析策略 |
+| IPv6 接管 | 已实现 | 默认双栈：设备模板的 TUN 带 `fdfe:dcba:9876::1/126`，`firewall.ipv6` 为 1。TUN 地址里有 IPv6 地址即接管 IPv6，TProxy 看「接管 IPv6」开关；不接管时防火墙拒绝局域网和路由器本机发往外网的 IPv6 连接（放过绕过地址、链路本地和组播、sing-box 自己和 dnsmasq 的连接），设备立即退回 IPv4，不会绕过 sing-box。和 DNS 解析策略互不影响 |
 | 访问控制（按设备 IP 或 MAC 设黑名单或白名单） | 未实现 | 设计文档 M1 有，后端和两套界面都没有 |
 | 订阅 | 已实现 | 新界面策略页增删改、手动更新；每小时检查定时更新 |
 | 配置文件（多份配置） | 已实现 | 新界面配置文件页新建、切换、删除 |

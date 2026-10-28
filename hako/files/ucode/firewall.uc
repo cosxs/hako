@@ -5,8 +5,9 @@
 // resolver the local DNS server of sing-box asks. With the tproxy
 // inbound, LAN traffic and the router's own traffic go to it, and bypassed
 // destinations never reach sing-box; sing-box sets up its own rules for the
-// tun inbound. IPv6 is taken over the same way with firewall.ipv6; otherwise
-// IPv6 connections are refused, so clients fall back to IPv4.
+// tun inbound. IPv6 is taken over the same way with firewall.ipv6, or by a
+// tun with an IPv6 address; otherwise IPv6 connections are refused, so
+// clients fall back to IPv4 instead of going out past sing-box.
 //
 // Usage: firewall.uc <running config>
 // Ports and the mark of sing-box's own connections come from the config
@@ -98,6 +99,22 @@ const ipv6 = uci.get(DEVICE, 'firewall', 'ipv6') == '1';
 const bypass = list(uci.get(DEVICE, 'firewall', 'bypass_address'));
 const bypass6 = list(uci.get(DEVICE, 'firewall', 'bypass_address6'));
 
+const isV6 = (address) => index(address, ':') >= 0;
+
+// the tun inbound, and the mark of sing-box's own connections: tproxy has
+// the default mark of the running config, a tun marks them with
+// auto_redirect only; without it, they cannot be told apart from the
+// router's own
+const tun = tproxyPort ? null : tun_route(running);
+const ownMark = tproxyPort ? outputMark : (tun?.auto_redirect ? tun_route_params(running)[3] : null);
+const dnsmasqUid = dnsmasq_uid();
+
+// IPv6 not taken over: by tproxy without firewall.ipv6, or by a tun without
+// an IPv6 address, as sing-box routes IPv6 only then. The addresses bypassed
+// are those of the one in use
+const refuseIpv6 = tproxyPort ? !ipv6 : (tun != null && !length(filter(list(tun.address), isV6)));
+const refuseBypass6 = tproxyPort ? bypass6 : filter(list(tun?.route_exclude_address), isV6);
+
 function elements(values) {
   return length(values) ? `elements = { ${join(', ', values)} }` : '';
 }
@@ -157,23 +174,45 @@ if (tproxyPort)
   }
 `);
 
-// without ipv6 only IPv4 is taken over: IPv6 connections from the LAN and
-// the router are refused, so they fall back to IPv4 instead of going out
-// directly
-if (tproxyPort && !ipv6)
+// IPv6 not taken over: IPv6 connections from the LAN and the router are
+// refused, so they fall back to IPv4, which is, instead of going out
+// directly. Left alone are the bypassed addresses, link-local and multicast
+// ones (DHCPv6 and the like), the connections of sing-box and the queries of
+// dnsmasq to its upstream servers. Those of the router are refused only where
+// the ones of sing-box can be told apart
+if (refuseIpv6) {
+  if (!tproxyPort)
+    print(`
+  set bypass6 {
+    type ipv6_addr
+    flags interval
+    auto-merge
+    ${elements(refuseBypass6)}
+  }
+`);
+
   print(`
   chain forward_ipv6 {
     type filter hook forward priority filter; policy accept;
     iifname != @lan return
     meta nfproto ipv6 meta l4proto { tcp, udp } ip6 daddr != @bypass6 reject with icmpx no-route
   }
+`);
 
+  if (ownMark)
+    print(`
   chain output_ipv6 {
     type filter hook output priority filter; policy accept;
-    meta mark ${outputMark} return
-    meta nfproto ipv6 meta l4proto { tcp, udp } fib daddr type != local ip6 daddr != @bypass6 reject with icmpx no-route
+    meta nfproto != ipv6 return
+    meta mark ${ownMark} return${dnsmasqUid != null ? `
+    meta skuid ${dnsmasqUid} return` : ''}
+    fib daddr type { local, multicast } return
+    ip6 daddr { fe80::/10, ff00::/8 } return
+    ip6 daddr @bypass6 return
+    meta l4proto { tcp, udp } reject with icmpx no-route
   }
 `);
+}
 
 // DNS from the LAN goes to the dns inbound: with tproxy all of it, with tun
 // what is sent to the router itself, as the tun hijacks the rest
@@ -190,12 +229,8 @@ if (dnsPort)
 // tproxy those to any other server, which a tun hijacks itself. Left out are
 // the queries of sing-box, which carry the mark of its own connections, and
 // those of dnsmasq to its upstream servers: the local DNS server asks
-// dnsmasq, and either would come back to sing-box. A tun marks the
-// connections of sing-box with auto_redirect only; without it, they cannot
-// be told apart from the router's own, which stay with dnsmasq
-const dnsmasqUid = dnsmasq_uid();
-const tun = tun_route(running);
-const ownMark = tproxyPort ? outputMark : (tun?.auto_redirect ? tun_route_params(running)[3] : null);
+// dnsmasq, and either would come back to sing-box. Without the mark of
+// sing-box, the router's own queries stay with dnsmasq
 
 if (dnsPort && ownMark)
   print(`

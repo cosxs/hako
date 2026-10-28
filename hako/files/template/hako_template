@@ -4,7 +4,6 @@ config log 'log'
 
 config dns 'dns'
   option final 'local'
-  option strategy 'ipv4_only'
   option optimistic '1'
 
 config dns_server 'local'
