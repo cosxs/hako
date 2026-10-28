@@ -99,7 +99,7 @@ const pageRoutes = [
   pageRoute('/rules', lazyRouteComponent(() => import('@/pages/rules'), 'RulesPage')),
   pageRoute('/core', lazyRouteComponent(() => import('@/pages/core'), 'CorePage')),
   pageRoute('/profiles', lazyRouteComponent(() => import('@/pages/profiles'), 'ProfilesPage')),
-  pageRoute('/logs'),
+  pageRoute('/logs', lazyRouteComponent(() => import('@/pages/logs'), 'LogsPage')),
   pageRoute('/settings', lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage')),
 ] as const
 
