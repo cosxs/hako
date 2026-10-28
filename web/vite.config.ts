@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/ubus': { target: router, changeOrigin: true },
+        // files uploaded, such as a sing-box package
+        '/cgi-bin/cgi-upload': { target: router, changeOrigin: true },
       },
     },
     // Installed from root/ rather than htdocs/: luci.mk runs jsmin and csstidy
@@ -31,7 +33,12 @@ export default defineConfig(({ mode }) => {
           // React and the router and queries of every page in a chunk of
           // their own, which a new version of the app leaves cached
           codeSplitting: {
-            groups: [{ name: 'vendor', test: /node_modules[\\/](react|react-dom|scheduler|@tanstack[\\/](react-router|router-core|history|store|react-store|react-query|query-core))[\\/]/ }],
+            groups: [
+              {
+                name: 'vendor',
+                test: /node_modules[\\/](react|react-dom|scheduler|@tanstack[\\/](react-router|router-core|history|store|react-store|react-query|query-core))[\\/]/,
+              },
+            ],
           },
         },
       },

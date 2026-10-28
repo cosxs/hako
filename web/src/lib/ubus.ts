@@ -110,3 +110,20 @@ export async function logout() {
   writeSession(null)
   if (id) await rpc(id, 'session', 'destroy', {}).catch(() => {})
 }
+
+// a file written on the router through LuCI's cgi-upload, which the session
+// must be allowed to write by the ACL of the app
+export async function upload(path: string, file: File) {
+  if (!session) {
+    expire()
+    throw new UbusError(-32002, 'Not logged in')
+  }
+  const form = new FormData()
+  form.append('sessionid', session)
+  form.append('filename', path)
+  form.append('filedata', file)
+  const response = await fetch('/cgi-bin/cgi-upload', { method: 'POST', body: form })
+  if (!response.ok) throw new UbusError(-1, `HTTP ${response.status}`)
+  const reply = await response.json().catch(() => null)
+  if (!reply || reply.failure) throw new UbusError(-1, reply?.message ?? 'upload failed')
+}

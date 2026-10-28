@@ -72,7 +72,7 @@ const APPLY_TIMEOUT = 20_000
 export async function untilApplied<T>(change: () => Promise<T>): Promise<{ result: T; effect: Effect }> {
   const result = await change()
 
-  for (const deadline = Date.now() + APPLY_TIMEOUT; Date.now() < deadline; ) {
+  for (const deadline = Date.now() + APPLY_TIMEOUT; Date.now() < deadline;) {
     const now = await call<Applied>('luci.hako', 'applied').catch(() => null)
     if (now && !now.running) return { result, effect: 'stopped' }
     if (now?.current && !now.restarting && now.api) return { result, effect: 'applied' }
@@ -86,4 +86,33 @@ export function effectToast(done: string, effect: Effect) {
   if (effect === 'applied') toast.success(`${done}，已生效`)
   else if (effect === 'stopped') toast.success(`${done}，服务未运行，启动后生效`)
   else toast.warning(`${done}，但 sing-box 还没有运行新的配置，请查看日志`)
+}
+
+// starts, stops, restarts or reloads the service; enable turns it on first,
+// and takeover stops and disables the service of the sing-box package too
+export async function control(action: 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'takeover') {
+  const result = await call<{ result: boolean; error?: string }>('luci.hako', 'control', { action })
+  if (!result.result) throw new Error(result.error ?? '操作失败，请查看日志')
+}
+
+// the latest release of sing-box on GitHub for this router
+export type CoreLatest = { version?: string; arch?: string; size?: number; free_space?: number; error?: string }
+
+export function coreLatest() {
+  return call<CoreLatest>('luci.hako', 'core_latest')
+}
+
+// where an uploaded package goes, which the ACL lets the app write
+export const CORE_UPLOAD = '/tmp/hako-core-upload.apk'
+
+// installs sing-box in the background from GitHub or the uploaded package
+export async function coreInstall(source: 'github' | 'upload') {
+  const result = await call<{ result: boolean; error?: string }>('luci.hako', 'core_install', { source })
+  if (!result.result) throw new Error(result.error === 'busy' ? '正在安装，请稍候' : (result.error ?? '无法开始安装'))
+}
+
+export type CoreInstallStatus = { running: boolean; success: boolean | null; log: string }
+
+export function coreInstallStatus() {
+  return call<CoreInstallStatus>('luci.hako', 'core_install_status')
 }
