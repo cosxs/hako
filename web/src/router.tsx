@@ -94,7 +94,7 @@ function pageRoute<P extends PagePath>(path: P, component?: RouteComponent) {
 
 const pageRoutes = [
   pageRoute('/activity', lazyRouteComponent(() => import('@/pages/activity'), 'ActivityPage')),
-  pageRoute('/takeover'),
+  pageRoute('/takeover', lazyRouteComponent(() => import('@/pages/takeover'), 'TakeoverPage')),
   pageRoute('/policy', lazyRouteComponent(() => import('@/pages/policy'), 'PolicyPage')),
   pageRoute('/rules', lazyRouteComponent(() => import('@/pages/rules'), 'RulesPage')),
   pageRoute('/core', lazyRouteComponent(() => import('@/pages/core'), 'CorePage')),
