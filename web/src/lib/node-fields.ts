@@ -19,6 +19,7 @@ const TLS_OPTIONAL = ['vmess', 'vless', 'trojan', 'http']
 const TLS_REQUIRED = ['hysteria2', 'tuic', 'anytls', 'naive']
 const UTLS_TYPES = ['vmess', 'vless', 'trojan', 'http', 'anytls']
 const MULTIPLEX_TYPES = ['shadowsocks', 'vmess', 'vless', 'trojan']
+const UOT_TYPES = ['socks', 'shadowsocks', 'naive']
 const QUIC_TYPES = ['hysteria2', 'tuic']
 const TRANSPORT_TYPES = ['vmess', 'vless', 'trojan']
 const PASSWORD_REQUIRED = ['shadowsocks', 'trojan', 'anytls']
@@ -70,6 +71,11 @@ const PROTOCOL_TABS: Record<string, Tab[]> = {
 
 export function nodeTabs(type: string): Tab[] {
   return PROTOCOL_TABS[type] ?? ['general', 'dial']
+}
+
+// the multiplex tab is off while UDP over TCP, which conflicts with it, is on
+export function tabDisabled(tab: Tab, values: NodeValues) {
+  return tab === 'multiplex' && uot(values)
 }
 
 // the sections, by tab and column, in their order; the one of the protocol
@@ -135,6 +141,8 @@ export type NodeField = {
   initial?: string
   // kept when the field hides, as another field shares its option
   retain?: boolean
+  // not saved, as another field conflicts with it
+  disabled?: (v: NodeValues) => boolean
 }
 
 const str = (v: NodeValues, key: string) => (typeof v[key] === 'string' ? (v[key] as string) : '')
@@ -144,7 +152,9 @@ const on = (v: NodeValues, key: string) => str(v, key) === '1'
 const addressed = (v: NodeValues) => str(v, 'type') !== 'hysteria2' || !str(v, 'realm_server_url')
 const realm = (v: NodeValues) => str(v, 'type') === 'hysteria2' && !!str(v, 'realm_server_url')
 const tlsOn = (v: NodeValues) => TLS_REQUIRED.includes(str(v, 'type')) || (TLS_OPTIONAL.includes(str(v, 'type')) && on(v, 'tls_enabled'))
-const multiplexOn = (v: NodeValues) => MULTIPLEX_TYPES.includes(str(v, 'type')) && on(v, 'multiplex_enabled')
+// UDP over TCP conflicts with multiplex, which is off while it is on
+const uot = (v: NodeValues) => UOT_TYPES.includes(str(v, 'type')) && on(v, 'udp_over_tcp')
+const multiplexOn = (v: NodeValues) => MULTIPLEX_TYPES.includes(str(v, 'type')) && on(v, 'multiplex_enabled') && !uot(v)
 const always = () => true
 
 const uint = (value: string) => /^\d+$/.test(value)
@@ -172,7 +182,7 @@ export const NODE_FIELDS: NodeField[] = [
 
   // general: the options of the connection
   { key: 'network', option: 'network', label: '网络协议', section: 'options', kind: 'segmented', show: is('shadowsocks', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'snell', 'socks'), choices: NETWORK_CHOICES },
-  { key: 'udp_over_tcp', option: 'udp_over_tcp', label: 'UDP over TCP', section: 'options', kind: 'switch', show: is('socks', 'shadowsocks', 'naive') },
+  { key: 'udp_over_tcp', option: 'udp_over_tcp', label: 'UDP over TCP', section: 'options', kind: 'switch', show: is(...UOT_TYPES) },
   { key: 'packet_encoding', option: 'packet_encoding', label: 'UDP 包编码', section: 'options', kind: 'select', show: is('vmess', 'vless'), width: 'short', choices: [['', '默认'], ['packetaddr', 'packetaddr'], ['xudp', 'xudp']] },
   { key: 'disable_chrome_parrot', option: 'disable_chrome_parrot', label: '禁用 Chrome 指纹模仿', section: 'options', kind: 'switch', show: is('hysteria2') },
   { key: 'zero_rtt_handshake', option: 'zero_rtt_handshake', label: '0-RTT 握手', section: 'options', kind: 'switch', show: is('tuic') },
@@ -305,7 +315,7 @@ export const NODE_FIELDS: NodeField[] = [
 
   // multiplex; the streams are the minimum, with the maximum connections, or
   // the maximum, which takes their place
-  { key: 'multiplex_enabled', option: 'multiplex_enabled', label: '启用多路复用', section: 'multiplex', kind: 'switch', show: is(...MULTIPLEX_TYPES) },
+  { key: 'multiplex_enabled', option: 'multiplex_enabled', label: '启用多路复用', section: 'multiplex', kind: 'switch', show: is(...MULTIPLEX_TYPES), disabled: uot },
   { key: 'multiplex_protocol', option: 'multiplex_protocol', label: '协议', section: 'multiplex', kind: 'segmented', show: multiplexOn, choices: [['', 'h2mux'], ['smux', 'smux'], ['yamux', 'yamux']] },
   { key: 'multiplex_streams', option: '', label: '流数', section: 'multiplex', kind: 'streams', show: multiplexOn, check: uint },
   { key: 'multiplex_max_connections', option: 'multiplex_max_connections', label: '最大连接数', section: 'multiplex', kind: 'text', show: (v) => multiplexOn(v) && str(v, 'multiplex_streams_kind') !== 'max', width: 'tiny', check: uint },
@@ -423,6 +433,12 @@ export function switchProtocol(values: NodeValues): NodeValues {
   return fresh
 }
 
+// UDP over TCP turned on clears multiplex, which conflicts with it
+export function clearMultiplex(): NodeValues {
+  const fresh = nodeValues(null)
+  return Object.fromEntries(Object.keys(fresh).filter((key) => key.startsWith('multiplex_')).map((key) => [key, fresh[key]]))
+}
+
 // the TLS options by their fields in the JSON, which goes over them: when the
 // JSON has fields, the options are written into it too, so it never says
 // otherwise
@@ -438,7 +454,7 @@ const TLS_BINDINGS: [string, (tls: Record<string, any>, value: string) => void][
 // the UCI options to save from the form: those of the fields shown, and the
 // others of the dialog removed, but for those kept for a field sharing them
 export function nodeOptions(values: NodeValues): Record<string, string | string[]> {
-  const shown = NODE_FIELDS.filter((field) => field.option && field.show(values))
+  const shown = NODE_FIELDS.filter((field) => field.option && field.show(values) && !field.disabled?.(values))
   const options: Record<string, string | string[]> = {}
 
   for (const field of shown) {

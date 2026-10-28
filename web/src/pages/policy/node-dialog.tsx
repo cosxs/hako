@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { effectToast, untilApplied } from '@/lib/hako'
 import { cn } from '@/lib/utils'
 import {
+  clearMultiplex,
   fieldTab,
   NODE_FIELDS,
   NODE_PROTOCOLS,
@@ -26,6 +27,7 @@ import {
   nodeValues,
   SECTIONS,
   switchProtocol,
+  tabDisabled,
   TABS,
   tlsRequired,
   type NodeField,
@@ -267,12 +269,13 @@ export function NodeDialog({
         return fields ? { fields } : undefined
       },
     },
-    // another protocol starts afresh
+    // another protocol starts afresh; UDP over TCP turned on clears multiplex
     listeners: {
       onChange: ({ formApi, fieldApi }) => {
-        if (fieldApi.name !== 'type') return
-        for (const [key, value] of Object.entries(switchProtocol(formApi.state.values)))
-          if (formApi.state.values[key] !== value) formApi.setFieldValue(key, value)
+        const values = formApi.state.values
+        const next =
+          fieldApi.name === 'type' ? switchProtocol(values) : fieldApi.name === 'udp_over_tcp' && values.udp_over_tcp === '1' ? clearMultiplex() : null
+        if (next) for (const [key, value] of Object.entries(next)) if (values[key] !== value) formApi.setFieldValue(key, value)
       },
     },
     onSubmit: ({ value }) => mutation.mutate(nodeOptions(value)),
@@ -428,7 +431,7 @@ export function NodeDialog({
             <Tabs value={current} onValueChange={(next) => setTab(next as Tab)}>
               <TabsList>
                 {tabs.map((item) => (
-                  <TabsTrigger key={item} value={item}>
+                  <TabsTrigger key={item} value={item} disabled={tabDisabled(item, values)}>
                     {TABS[item]}
                   </TabsTrigger>
                 ))}
