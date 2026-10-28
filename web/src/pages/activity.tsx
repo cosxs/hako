@@ -1,26 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { RefreshCwIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/reui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
-import { control, CORE_UPLOAD, coreInstall, coreInstallStatus, coreLatest, statusQuery, type Status } from '@/lib/hako'
-import { upload } from '@/lib/ubus'
+import { control, eventsQuery, externalIpQuery, latencyQuery, modeName, overviewQuery, statusQuery, type Overview } from '@/lib/hako'
+import { deviceQuery, setProxyPort, setTakeover } from '@/lib/takeover'
+import { cn } from '@/lib/utils'
 import { ModeSwitch } from '@/pages/policy/mode-switch'
-
-function takeoverText(takeover: Status['takeover']) {
-  const parts = []
-  if (takeover.tun) parts.push(`TUN（${takeover.tun}）`)
-  if (takeover.tproxy) parts.push(`TProxy（${takeover.tproxy}）`)
-  if (takeover.redirect) parts.push(`Redirect（${takeover.redirect}）`)
-  if (takeover.dns) parts.push(`DNS 劫持（${[takeover.dns.tag, takeover.dns.port && `:${takeover.dns.port}`].filter(Boolean).join(' ')}）`)
-  if (takeover.mixed) parts.push(`代理端口（${[takeover.mixed.tag, takeover.mixed.port && `:${takeover.mixed.port}`].filter(Boolean).join(' ')}）`)
-  return parts.length ? parts.join(' · ') : '未接管'
-}
 
 // how long sing-box has run, in days, hours and minutes
 function uptimeText(seconds: number) {
@@ -30,9 +23,23 @@ function uptimeText(seconds: number) {
   return [days && `${days} 天`, (days || hours) && `${hours} 小时`, `${minutes} 分钟`].filter(Boolean).join(' ')
 }
 
-type Action = 'start' | 'stop' | 'reload' | 'enable' | 'takeover'
+// a rate in bytes a second as a number and its unit
+function rate(bytes: number): [string, string] {
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return [value >= 100 || unit === 0 ? Math.round(value).toString() : value.toFixed(1), units[unit]]
+}
 
-const DONE: Record<Action, string> = { start: '已启动', stop: '已停止', reload: '已重载', enable: '已启用并启动', takeover: '已接管 sing-box 服务并启动' }
+const PROTOCOLS: Record<string, string> = { pppoe: 'PPPoE', dhcp: 'DHCP', dhcpv6: 'DHCPv6', static: '静态地址' }
+
+type Action = 'start' | 'stop' | 'reload' | 'enable'
+
+const DONE: Record<Action, string> = { start: '已启动', stop: '已停止', reload: '已重载', enable: '已启用并启动' }
 
 function Rows({ rows }: { rows: { label: string; value: ReactNode }[] }) {
   return (
@@ -47,12 +54,136 @@ function Rows({ rows }: { rows: { label: string; value: ReactNode }[] }) {
   )
 }
 
-// the state of Hako and sing-box: starting, stopping and reloading it, the
-// outbound mode, and installing sing-box
+// a figure: a small caption over a large value and its unit
+function Figure({ label, value, unit, small }: { label: ReactNode; value: ReactNode; unit?: string; small?: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <span className={cn('truncate font-semibold tabular-nums', small ? 'text-xl' : 'text-4xl tracking-tight')}>
+        {value}
+        {unit && <span className="ml-1 text-sm font-normal text-muted-foreground">{unit}</span>}
+      </span>
+    </div>
+  )
+}
+
+function ms(value: number | null | undefined) {
+  return value == null ? '-' : String(value)
+}
+
+// the rates of the last minutes, read from the bytes sing-box moved since it
+// started, sampled each time the overview comes in
+type Sample = { up: number; down: number }
+const SAMPLES = 60
+
+function useRates(overview: Overview | undefined) {
+  const last = useRef<{ up: number; down: number; at: number } | null>(null)
+  const [samples, setSamples] = useState<Sample[]>([])
+  const connections = overview?.connections
+
+  useEffect(() => {
+    if (!connections) {
+      last.current = null
+      return
+    }
+    const now = { up: connections.upload_total, down: connections.download_total, at: Date.now() }
+    const before = last.current
+    last.current = now
+    // a restart of sing-box starts its counts again
+    if (!before || now.up < before.up || now.down < before.down) return
+    const seconds = Math.max((now.at - before.at) / 1000, 0.5)
+    setSamples((list) => [...list, { up: (now.up - before.up) / seconds, down: (now.down - before.down) / seconds }].slice(-SAMPLES))
+  }, [connections])
+
+  return samples
+}
+
+// a line of the rates of the last minutes, filled below
+function Sparkline({ values, className }: { values: number[]; className: string }) {
+  const max = Math.max(...values, 1)
+  const width = 200
+  const height = 64
+  // the newest on the right edge, older ones to the left of it
+  const step = width / (SAMPLES - 1)
+  const points = values.map((value, index) => [width - (values.length - 1 - index) * step, height - (value / max) * (height - 4) - 2])
+  const line = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={cn('h-16 w-full', className)} aria-hidden="true">
+      {points.length > 1 && (
+        <>
+          <polygon points={`${line} ${width},${height} ${points[0][0].toFixed(1)},${height}`} className="fill-current opacity-15" />
+          <polyline points={line} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function SpeedCard({ title, values, className }: { title: string; values: number[]; className: string }) {
+  const [value, unit] = rate(values.length ? values[values.length - 1] : 0)
+  const [peak, peakUnit] = rate(Math.max(...values, 0))
+  return (
+    <Card className="gap-2 overflow-hidden pb-0">
+      <CardContent className="flex items-start justify-between gap-2">
+        <Figure label={title} value={value} unit={unit} />
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {peak} {peakUnit}
+        </span>
+      </CardContent>
+      <Sparkline values={values} className={className} />
+    </Card>
+  )
+}
+
+// a switch of the top bar: a dot, green when on, and its name
+function ToggleChip({ label, on, busy, onToggle }: { label: string; on: boolean; busy: boolean; onToggle: () => void }) {
+  return (
+    <Button variant="outline" size="sm" className="rounded-full" disabled={busy} aria-pressed={on} onClick={onToggle}>
+      {busy ? <Spinner /> : <span className={cn('size-2 rounded-full', on ? 'bg-green-500' : 'bg-muted-foreground/40')} />}
+      {label}
+    </Button>
+  )
+}
+
+// the latest events of the plugin log, the newest one shown
+function Events() {
+  const { data } = useQuery(eventsQuery)
+  const latest = data?.[0]
+  const text = (line: string) => line.replace(/^\d{4}-\d{2}-\d{2} /, '')
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button variant="ghost" size="sm" className="max-w-full min-w-0 rounded-full bg-muted text-muted-foreground" />}>
+        <span className="size-1.5 shrink-0 rounded-full bg-current" />
+        <span className="truncate">{latest ? text(latest) : '无事件'}</span>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))]">
+        {data?.length ? (
+          <ul className="flex max-h-80 flex-col gap-1.5 overflow-y-auto font-mono text-xs">
+            {data.map((line, index) => (
+              <li key={index} className="break-all">
+                {text(line)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">今天还没有事件</p>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// the state of Hako and sing-box at a glance, as the activity page of Surge:
+// the network, the latency, the rates and the connections; starting,
+// stopping and reloading it, and the outbound mode
 export function ActivityPage() {
   const queryClient = useQueryClient()
   const { data, error } = useQuery(statusQuery)
-  const [installing, setInstalling] = useState(false)
+  const overview = useQuery(overviewQuery).data
+  const latency = useQuery(latencyQuery)
+  const external = useQuery(externalIpQuery).data
+  const device = useQuery(deviceQuery).data
+  const samples = useRates(overview)
   const failure = error?.message
 
   // once for each failure, not again at each refetch failing as well
@@ -68,6 +199,13 @@ export function ActivityPage() {
   })
   const busy = (action: Action) => act.isPending && act.variables === action
 
+  const toggle = useMutation({
+    mutationFn: ({ what, on }: { what: 'takeover' | 'mixed'; on: boolean }) => (what === 'takeover' ? setTakeover(device!, on) : setProxyPort(device!, on)),
+    onSuccess: (_, { what, on }) => toast.success(`${what === 'takeover' ? '接管' : '代理端口'}已${on ? '打开' : '关闭'}`),
+    onError: (error: Error) => toast.error(error.message),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['hako'] }),
+  })
+
   if (!data)
     return (
       <div className="flex w-full max-w-[1120px] flex-col gap-6">
@@ -77,6 +215,15 @@ export function ActivityPage() {
 
   const core = data.core
   const usable = core.installed && core.supported !== false
+  // what keeps sing-box from starting, set right in the settings
+  const coreProblem = !core.installed ? '未安装' : core.supported === false ? '版本过低' : core.service_active ? '自带的服务在用' : null
+  const section = (name: string) => device?.sections.find((item) => item['.name'] === name)
+  const takeoverOn = section('tun')?.enabled === '1' || section('tproxy')?.enabled === '1'
+  const mixedOn = section('mixed')?.enabled === '1'
+  const net = overview?.network
+  const connections = overview?.connections
+  const proxy = latency.data?.proxy
+
   const controls = !data.enabled ? (
     <Button size="sm" disabled={act.isPending || !usable} onClick={() => act.mutate('enable')}>
       {busy('enable') && <Spinner />}
@@ -101,190 +248,129 @@ export function ActivityPage() {
   )
 
   return (
-    <div className="grid w-full max-w-[1120px] items-start gap-6 xl:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>运行状态</CardTitle>
-          <CardDescription>每 5 秒刷新</CardDescription>
-          <CardAction className="flex gap-2">{controls}</CardAction>
-        </CardHeader>
-        <CardContent>
-          <Rows
-            rows={[
-              {
-                label: '状态',
-                value: data.running ? (
-                  <Badge variant="success-light">运行中</Badge>
-                ) : data.enabled ? (
-                  <Badge variant="outline">未运行</Badge>
-                ) : (
-                  <Badge variant="outline">未启用</Badge>
-                ),
-              },
-              { label: '运行时长', value: data.running && data.uptime != null ? uptimeText(data.uptime) : '-' },
-              { label: '配置', value: data.profile_title },
-              { label: '接管', value: takeoverText(data.takeover) },
-              {
-                label: '出站模式',
-                value: data.clash_api ? data.clash_api.modes.length > 1 ? <ModeSwitch className="flex" /> : data.clash_api.mode : '-',
-              },
-              { label: '插件版本', value: <span className="font-mono">{data.version ?? '-'}</span> },
-            ]}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>sing-box</CardTitle>
-          <CardDescription>需要 {core.min_version.replace(/\.0$/, '')} 或更高版本</CardDescription>
-          <CardAction>
-            <Button variant="outline" size="sm" onClick={() => setInstalling(true)}>
-              {core.installed ? '更新…' : '安装…'}
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Rows
-            rows={[
-              {
-                label: '版本',
-                value: core.installed ? (
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono">{core.version ?? '未知'}</span>
-                    {core.supported === false && <Badge variant="destructive-light">版本过低</Badge>}
-                  </span>
-                ) : (
-                  '未安装'
-                ),
-              },
-              ...(core.tags?.length ? [{ label: '编译标签', value: <span className="font-mono text-xs break-all">{core.tags.join(', ')}</span> }] : []),
-            ]}
-          />
-          {core.service_active && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted px-3.5 py-2.5 text-sm">
-              <span>sing-box 软件包自带的服务正在运行或开机启动，Hako 不会启动。</span>
-              <Button size="sm" disabled={act.isPending} onClick={() => act.mutate('takeover')}>
-                {busy('takeover') && <Spinner />}由 Hako 接管
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {installing && <CoreInstallDialog minVersion={core.min_version} onOpenChange={setInstalling} />}
-    </div>
-  )
-}
-
-// installing sing-box: the latest release from GitHub, or a package
-// uploaded, then the output of the installation until it ends
-function CoreInstallDialog({ minVersion, onOpenChange }: { minVersion: string; onOpenChange: (open: boolean) => void }) {
-  const queryClient = useQueryClient()
-  const latest = useQuery({ queryKey: ['hako', 'core-latest'], queryFn: coreLatest, retry: false, staleTime: 60_000 })
-  const [started, setStarted] = useState(false)
-  const file = useRef<HTMLInputElement>(null)
-
-  const start = useMutation({
-    mutationFn: async (source: { github: true } | { upload: File }) => {
-      if ('upload' in source) {
-        await upload(CORE_UPLOAD, source.upload)
-        await coreInstall('upload')
-      } else await coreInstall('github')
-    },
-    onSuccess: () => setStarted(true),
-    onError: (error: Error) => toast.error(`无法开始安装：${error.message}`),
-  })
-
-  const status = useQuery({
-    queryKey: ['hako', 'core-install-status'],
-    queryFn: coreInstallStatus,
-    enabled: started,
-    refetchInterval: (query) => (query.state.data && !query.state.data.running ? false : 1000),
-  })
-  const done = started && status.data && !status.data.running && status.data.success != null
-  const output = useRef<HTMLPreElement>(null)
-
-  useEffect(() => {
-    if (output.current) output.current.scrollTop = output.current.scrollHeight
-  }, [status.data?.log])
-
-  useEffect(() => {
-    if (!done) return
-    if (status.data?.success) toast.success('sing-box 已安装')
-    else toast.error('安装失败，请查看输出')
-    queryClient.invalidateQueries({ queryKey: ['hako', 'status'] })
-  }, [done, status.data?.success, queryClient])
-
-  const info = latest.data
-  const size = info?.size ? `${(info.size / 1024 / 1024).toFixed(1)} MB` : null
-  const free = info?.free_space != null ? `${(info.free_space / 1024 / 1024).toFixed(1)} MB` : null
-
-  return (
-    <Dialog open onOpenChange={(open) => (!started || done ? onOpenChange(open) : undefined)}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{started ? '正在安装 sing-box' : '安装 sing-box'}</DialogTitle>
-          <DialogDescription>
-            需要 {minVersion.replace(/\.0$/, '')} 或更高版本，官方构建约占 90 MB 存储空间{free && `，剩余 ${free}`}。
-          </DialogDescription>
-        </DialogHeader>
-
-        {!started ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3.5 py-3 text-sm">
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="font-medium">GitHub 最新版本</span>
-                <span className="text-muted-foreground">
-                  {latest.isPending
-                    ? '正在查询…'
-                    : info?.error
-                      ? info.error
-                      : latest.error
-                        ? latest.error.message
-                        : `${info?.version}，${info?.arch}${size ? `，下载 ${size}` : ''}`}
-                </span>
-              </div>
-              <Button size="sm" disabled={!info?.version || start.isPending} onClick={() => start.mutate({ github: true })}>
-                {start.isPending && start.variables && 'github' in start.variables && <Spinner />}
-                安装
-              </Button>
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3.5 py-3 text-sm">
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="font-medium">上传 apk 软件包</span>
-                <span className="break-all text-muted-foreground">sing-box 发布页的 sing-box_*_openwrt_{info?.arch ?? '…'}.apk</span>
-              </div>
-              <Button size="sm" variant="outline" disabled={start.isPending} onClick={() => file.current?.click()}>
-                {start.isPending && start.variables && 'upload' in start.variables && <Spinner />}
-                选择文件…
-              </Button>
-              <input
-                ref={file}
-                type="file"
-                accept=".apk"
-                className="hidden"
-                onChange={(event) => {
-                  const chosen = event.target.files?.[0]
-                  event.target.value = ''
-                  if (chosen) start.mutate({ upload: chosen })
-                }}
+    <div className="flex w-full max-w-[1120px] flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Events />
+        </div>
+        {device && (
+          <div className="flex gap-2">
+            {section('mixed') && (
+              <ToggleChip
+                label="代理端口"
+                on={mixedOn}
+                busy={toggle.isPending && toggle.variables?.what === 'mixed'}
+                onToggle={() => toggle.mutate({ what: 'mixed', on: !mixedOn })}
               />
-            </div>
+            )}
+            <ToggleChip
+              label="接管"
+              on={takeoverOn}
+              busy={toggle.isPending && toggle.variables?.what === 'takeover'}
+              onToggle={() => toggle.mutate({ what: 'takeover', on: !takeoverOn })}
+            />
           </div>
-        ) : (
-          <pre
-            ref={output}
-            className="max-h-72 min-h-32 overflow-auto rounded-lg border bg-muted/30 px-3.5 py-2.5 font-mono text-xs leading-5 whitespace-pre-wrap"
-          >
-            {status.data?.log || '正在开始…'}
-          </pre>
         )}
+      </div>
 
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" disabled={started && !done} />}>{done ? '完成' : '取消'}</DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Figure small label="网络" value={net ? (PROTOCOLS[net.proto] ?? net.proto) : '-'} />
+        <Figure small label="配置" value={data.profile_title} />
+        <Figure small label="出站模式" value={data.clash_api ? modeName(data.clash_api.mode) : '-'} />
+        <Figure small label="外部 IP" value={external?.address ?? '-'} />
+      </div>
+
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardDescription className="flex items-center gap-1.5">
+              延迟
+              <Button variant="ghost" size="icon-xs" aria-label="重新测量延迟" disabled={latency.isFetching} onClick={() => latency.refetch()}>
+                <RefreshCwIcon className={cn(latency.isFetching && 'animate-spin')} />
+              </Button>
+            </CardDescription>
+            <CardTitle>
+              <Figure label={proxy ? proxy.name : '代理'} value={ms(proxy?.ms)} unit="ms" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="mt-auto grid grid-cols-2 gap-4">
+            <Figure small label="路由" value={ms(latency.data?.gateway?.ms)} unit="ms" />
+            <Figure small label="DNS" value={ms(latency.data?.dns?.ms)} unit="ms" />
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-6">
+          <SpeedCard title="上传" values={samples.map((sample) => sample.up)} className="text-chart-4" />
+          <SpeedCard title="下载" values={samples.map((sample) => sample.down)} className="text-chart-2" />
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardDescription>活动连接</CardDescription>
+            <CardTitle>
+              <Figure label="" value={connections ? connections.count : '-'} />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="mt-auto grid grid-cols-3 gap-4">
+            <Figure small label="设备" value={connections ? connections.devices : '-'} />
+            <Figure small label="路由器自身" value={connections ? connections.router : '-'} />
+            <Figure small label="DHCP 设备" value={overview ? overview.dhcp_devices : '-'} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>运行状态</CardTitle>
+            <CardAction className="flex gap-2">{controls}</CardAction>
+          </CardHeader>
+          <CardContent>
+            <Rows
+              rows={[
+                {
+                  label: '状态',
+                  value: data.running ? (
+                    <Badge variant="success-light">运行中</Badge>
+                  ) : data.enabled ? (
+                    <Badge variant="outline">未运行</Badge>
+                  ) : (
+                    <Badge variant="outline">未启用</Badge>
+                  ),
+                },
+                { label: '运行时长', value: data.running && data.uptime != null ? uptimeText(data.uptime) : '-' },
+                {
+                  label: '出站模式',
+                  value: data.clash_api ? (
+                    data.clash_api.modes.length > 1 ? (
+                      <ModeSwitch className="flex min-w-0" compact />
+                    ) : (
+                      modeName(data.clash_api.mode)
+                    )
+                  ) : (
+                    '-'
+                  ),
+                },
+                { label: 'WAN', value: net ? <span className="font-mono">{[net.interface, net.device, net.address].filter(Boolean).join(' · ')}</span> : '-' },
+                { label: '插件版本', value: <span className="font-mono">{data.version ?? '-'}</span> },
+                ...(coreProblem
+                  ? [
+                      {
+                        label: 'sing-box',
+                        value: (
+                          <span className="flex flex-wrap items-center gap-2">
+                            <Badge variant="destructive-light">{coreProblem}</Badge>
+                            <Link to="/settings" className="text-primary hover:underline">
+                              前往设置
+                            </Link>
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }

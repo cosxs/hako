@@ -153,3 +153,21 @@ export async function saveTakeover(profile: Profile, device: Device, values: Tak
     if (dns) await writeSection(profile.config, dns, 'dns', { strategy: values.ipv6 ? 'prefer_ipv4' : 'ipv4_only' })
   })
 }
+
+// the takeover turned on or off from the activity page, by the mode set now
+export async function setTakeover(device: Device, on: boolean) {
+  const at = (name: string) => sectionNamed(device.sections, name)
+  const tproxy = at('tproxy')?.enabled === '1'
+  await applying('hako', async () => {
+    await writeSection('hako', at('tun'), 'inbound', { enabled: on && !tproxy ? '1' : '0' })
+    await writeSection('hako', at('tproxy'), 'inbound', { enabled: on && tproxy ? '1' : '0' })
+    await writeSection('hako', at('dns_in'), 'inbound', { enabled: on ? '1' : '0' })
+  })
+}
+
+// the proxy port, for devices set up by hand, turned on or off
+export async function setProxyPort(device: Device, on: boolean) {
+  const mixed = sectionNamed(device.sections, 'mixed')
+  if (!mixed) throw new Error('没有代理端口')
+  await applying('hako', () => writeSection('hako', mixed, 'inbound', { enabled: on ? '1' : '0' }))
+}

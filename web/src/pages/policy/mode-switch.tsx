@@ -7,8 +7,9 @@ import { modeName, setMode, statusQuery } from '@/lib/hako'
 // the default modes first, in this order, then those the rules name
 const ORDER = ['direct', 'global', 'rule']
 
-// the outbound mode, switched at once; centered unless told otherwise
-export function ModeSwitch({ className = 'flex justify-center' }: { className?: string }) {
+// the outbound mode, switched at once; centered unless told otherwise, and
+// compact in a row of a card
+export function ModeSwitch({ className = 'flex justify-center', compact = false }: { className?: string; compact?: boolean }) {
   const queryClient = useQueryClient()
   const { data: status } = useQuery(statusQuery)
   const mutation = useMutation({
@@ -36,9 +37,9 @@ export function ModeSwitch({ className = 'flex justify-center' }: { className?: 
   return (
     <div className={className}>
       <Tabs value={current} onValueChange={(mode) => mode !== current && mutation.mutate(String(mode))}>
-        <TabsList className="w-full max-w-md">
+        <TabsList className={compact ? 'max-w-full' : 'w-full max-w-md'}>
           {modes.map((mode) => (
-            <TabsTrigger key={mode} value={mode} disabled={!api || mutation.isPending} className="px-6">
+            <TabsTrigger key={mode} value={mode} disabled={!api || mutation.isPending} className={compact ? 'px-2.5' : 'px-6'}>
               {modeName(mode)}
             </TabsTrigger>
           ))}

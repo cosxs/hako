@@ -4,7 +4,7 @@
     "read": {
       "uci": [ "hako", "hako_*", "network" ],
       "ubus": {
-        "luci.hako": [ "status", "outbounds", "applied", "core_latest", "core_install_status", "log_read", "profiles", "profile_view", "subscriptions" ]
+        "luci.hako": [ "status", "outbounds", "applied", "core_latest", "core_install_status", "log_read", "profiles", "profile_view", "subscriptions", "overview", "latency", "external_ip", "events" ]
       }
     },
     "write": {

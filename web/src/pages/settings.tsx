@@ -12,10 +12,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { effectToast, untilApplied } from '@/lib/hako'
 import { saveSettings, settingsQuery, type Settings } from '@/lib/settings'
 import { FieldRow, FieldSection } from '@/pages/rules/form'
+import { SingBoxSection } from '@/pages/sing-box'
 
 const URL_PATTERN = /^https?:\/\/\S+$/
 
-// the settings of Hako itself: the latency tests
+// the settings of Hako itself: sing-box and the latency tests
 export function SettingsPage() {
   const settingsResult = useQuery(settingsQuery)
   const error = settingsResult.error?.message
@@ -24,14 +25,17 @@ export function SettingsPage() {
     if (error) toast.error(`读取设置失败：${error}`, { id: 'settings-error' })
   }, [error])
 
-  if (!settingsResult.data)
-    return (
-      <div className="flex w-full max-w-[720px] flex-col gap-6">
+  return (
+    <div className="flex w-full max-w-[720px] flex-col gap-6">
+      <SingBoxSection />
+      {/* a form of the settings read, again once they are saved */}
+      {settingsResult.data ? (
+        <SettingsForm key={JSON.stringify(settingsResult.data)} settings={settingsResult.data} />
+      ) : (
         <Skeleton className="h-28 w-full rounded-lg" />
-      </div>
-    )
-  // a form of the settings read, again once they are saved
-  return <SettingsForm key={JSON.stringify(settingsResult.data)} settings={settingsResult.data} />
+      )}
+    </div>
+  )
 }
 
 function SettingsForm({ settings }: { settings: Settings }) {
@@ -63,7 +67,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   return (
     <form
       noValidate
-      className="flex w-full max-w-[720px] flex-col gap-6"
+      className="flex flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault()
         form.handleSubmit()

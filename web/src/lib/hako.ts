@@ -116,3 +116,46 @@ export type CoreInstallStatus = { running: boolean; success: boolean | null; log
 export function coreInstallStatus() {
   return call<CoreInstallStatus>('luci.hako', 'core_install_status')
 }
+
+// the WAN, the connections of sing-box and the bytes it moved since it
+// started, read every few seconds for the activity page
+export type Overview = {
+  network: { interface: string; proto: string; device?: string; address?: string; gateway?: string | null; uptime?: number } | null
+  dhcp_devices: number
+  connections: { count: number; devices: number; router: number; upload_total: number; download_total: number } | null
+}
+
+export const overviewQuery = queryOptions({
+  queryKey: ['hako', 'overview'],
+  queryFn: () => call<Overview>('luci.hako', 'overview'),
+  refetchInterval: 2000,
+})
+
+// the latency to the gateway, to the first DNS server of the WAN, and of the
+// node the default outbound uses now, in milliseconds
+export type Latency = {
+  gateway: { address: string; ms: number | null } | null
+  dns: { server: string; ms: number | null } | null
+  proxy: { name: string; type: string; ms: number | null } | null
+}
+
+export const latencyQuery = queryOptions({
+  queryKey: ['hako', 'latency'],
+  queryFn: () => call<Latency>('luci.hako', 'latency'),
+  refetchInterval: 60_000,
+  staleTime: 30_000,
+})
+
+export const externalIpQuery = queryOptions({
+  queryKey: ['hako', 'external-ip'],
+  queryFn: () => call<{ address?: string; source?: string; error?: string }>('luci.hako', 'external_ip'),
+  staleTime: 300_000,
+  refetchInterval: 300_000,
+})
+
+// the latest lines of the plugin log, newest first
+export const eventsQuery = queryOptions({
+  queryKey: ['hako', 'events'],
+  queryFn: async () => (await call<{ events?: string[] }>('luci.hako', 'events')).events ?? [],
+  refetchInterval: 10_000,
+})

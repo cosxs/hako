@@ -2,9 +2,10 @@
 
 import { readfile, writefile, unlink, access, popen, open, stat, lsdir, mkdtemp, rmdir } from 'fs';
 import { connect } from 'ubus';
+import * as socket from 'socket';
 import { cursor } from 'uci';
 import { clash_api, clash_request, config_modes } from 'hako.clash';
-import { dns_inbound } from 'hako.config';
+import { dns_inbound, tun_route, tun_route_params } from 'hako.config';
 import { SUBSCRIPTION_DIR, valid_name, profile_package, subscription_file, subscription_prefix, subscription_node } from 'hako.profile';
 
 const CONFIG_DIR = '/etc/config';
@@ -34,6 +35,15 @@ const INSTALL_EXIT = `${RUN_DIR}/core-install.exit`;
 const LOG_DIR = '/var/log/hako';
 const LOG_NAMES = [ 'app', 'core' ];
 const LOG_BYTES = 256 * 1024;
+// the leases dnsmasq writes, as OpenWrt sets it up by default
+const DHCP_LEASES = '/tmp/dhcp.leases';
+// the upstream servers of dnsmasq, those of the WAN
+const UPSTREAM_DNS = '/tmp/resolv.conf.d/resolv.conf.auto';
+// what the external address is asked of when the WAN has a private one: a
+// service in the mainland, which the rules let go out directly
+const EXTERNAL_IP_URL = 'https://ip.3322.net';
+// the latest events of the plugin log
+const EVENTS = 20;
 
 function command_output(cmd) {
   const proc = popen(cmd);
@@ -401,6 +411,100 @@ function takeover(config) {
     result.dns = { tag: dns.tag, port: dns.port };
 
   return result;
+}
+
+// the interface the default route goes out of, the WAN: its name, protocol,
+// device, IPv4 address and gateway; and the addresses of the router itself
+function network_state() {
+  const ubus = connect();
+  const dump = ubus.call('network.interface', 'dump');
+  ubus.disconnect();
+
+  let wan = null;
+  const own = [ '127.0.0.1', '::1' ];
+
+  for (let iface in dump?.interface ?? []) {
+    for (let address in [ ...(iface['ipv4-address'] ?? []), ...(iface['ipv6-address'] ?? []) ])
+      push(own, address.address);
+
+    if (wan || !iface.up)
+      continue;
+
+    for (let route in iface.route ?? [])
+      if (route.target == '0.0.0.0' && route.mask == 0) {
+        wan = {
+          interface: iface.interface,
+          proto: iface.proto,
+          device: iface.l3_device ?? iface.device,
+          address: iface['ipv4-address']?.[0]?.address,
+          gateway: route.nexthop != '0.0.0.0' ? route.nexthop : null,
+          uptime: iface.uptime
+        };
+        break;
+      }
+  }
+
+  return { wan: wan, own: own };
+}
+
+function private_ipv4(address) {
+  return match(address ?? '', /^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)/) != null;
+}
+
+// the mark of the connections of sing-box itself, which the firewall and the
+// routes of the tun leave alone: route.default_mark with tproxy, the output
+// mark of auto_redirect with a tun
+function own_mark(config) {
+  if (config?.route?.default_mark > 0)
+    return config.route.default_mark;
+
+  const tun = tun_route(config);
+  return tun?.auto_redirect ? +tun_route_params(config)[3] : null;
+}
+
+function elapsed_ms(start) {
+  const now = clock(true);
+  return int((now[0] - start[0]) * 1000 + (now[1] - start[1]) / 1000000);
+}
+
+// one A query for www.qq.com straight to a server, marked as sing-box's own
+// so neither the firewall nor a tun takes it over: the milliseconds to the
+// answer, or null
+function dns_ms(server, mark) {
+  const sk = socket.create(socket.AF_INET, socket.SOCK_DGRAM);
+  if (!sk)
+    return null;
+
+  if (mark)
+    sk.setopt(socket.SOL_SOCKET, socket.SO_MARK, mark);
+  sk.setopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, { sec: 2, usec: 0 });
+
+  const u16 = (n) => chr(n >> 8, n & 255);
+  let query = u16(0x4861) + u16(0x0100) + u16(1) + u16(0) + u16(0) + u16(0);
+  for (let label in [ 'www', 'qq', 'com' ])
+    query += chr(length(label)) + label;
+  query += chr(0) + u16(1) + u16(1);
+
+  let ms = null;
+  if (sk.connect(server, 53)) {
+    const start = clock(true);
+    if (sk.send(query) && length(sk.recv(512) ?? ''))
+      ms = elapsed_ms(start);
+  }
+
+  sk.close();
+  return ms;
+}
+
+// the round trip of one ping, in milliseconds, or null
+function ping_ms(address) {
+  if (!match(address ?? '', /^[0-9a-fA-F.:]+$/))
+    return null;
+
+  const out = command_output(`ping -c 1 -W 2 ${address} 2>/dev/null`) ?? '';
+  const time = match(out, /time=([0-9.]+) ?ms/);
+
+  return time ? int(+time[1] + 0.5) : null;
 }
 
 // the clash API of the running sing-box, or why it is not available
@@ -990,6 +1094,120 @@ const methods = {
       uci.commit('hako');
 
       return { result: true, reloaded: reload_running() };
+    }
+  },
+
+  // what the activity page shows besides the status, read every few
+  // seconds: the WAN, the connections of sing-box and the bytes it moved
+  // since it started, the devices among them and those with a DHCP lease
+  overview: {
+    call: function() {
+      const net = network_state();
+      const leases = trim(readfile(DHCP_LEASES) ?? '');
+      const result = {
+        network: net.wan,
+        dhcp_devices: length(leases) ? length(split(leases, '\n')) : 0,
+        connections: null
+      };
+
+      const running = running_clash_api();
+      if (running.error)
+        return result;
+
+      const resp = clash_request(running.api, 'GET', '/connections');
+      if (resp?.status != 200)
+        return result;
+
+      // the router's own addresses, and those of the tun it routes through
+      const own = {};
+      for (let address in net.own)
+        own[address] = true;
+      for (let inbound in load_json(RUN_CONFIG)?.inbounds ?? [])
+        for (let address in inbound.address ?? [])
+          own[split(address, '/')[0]] = true;
+
+      const devices = {};
+      let router = 0;
+      for (let conn in resp.data?.connections ?? []) {
+        const source = conn.metadata?.sourceIP;
+        if (!source || own[source])
+          router++;
+        else
+          devices[source] = true;
+      }
+
+      result.connections = {
+        count: length(resp.data?.connections ?? []),
+        devices: length(keys(devices)),
+        router: router,
+        upload_total: resp.data?.uploadTotal ?? 0,
+        download_total: resp.data?.downloadTotal ?? 0
+      };
+
+      return result;
+    }
+  },
+
+  // the latency to the gateway of the WAN, to its first DNS server and,
+  // through sing-box, of the node the default outbound uses now
+  latency: {
+    call: function() {
+      const net = network_state();
+      const config = load_json(RUN_CONFIG);
+      const server = match(readfile(UPSTREAM_DNS) ?? '', /nameserver ([0-9.]+)/)?.[1];
+
+      const result = {
+        gateway: net.wan?.gateway ? { address: net.wan.gateway, ms: ping_ms(net.wan.gateway) } : null,
+        dns: server ? { server: server, ms: dns_ms(server, instance_pid() ? own_mark(config) : null) } : null,
+        proxy: null
+      };
+
+      const running = running_clash_api();
+      if (running.error)
+        return result;
+
+      // the default outbound, followed through the groups to the node it uses
+      const proxies = clash_request(running.api, 'GET', '/proxies')?.data?.proxies ?? {};
+      let name = config?.route?.final;
+      for (let hops = 0; name && proxies[name]?.now && hops < 10; hops++)
+        name = proxies[name].now;
+      if (!name || !proxies[name])
+        return result;
+
+      const uci = cursor();
+      const url = uci.get('hako', 'latency', 'url');
+      const timeout = min(duration_ms(uci.get('hako', 'latency', 'timeout')) || DELAY_TIMEOUT, DELAY_TIMEOUT_MAX);
+      let query = `timeout=${timeout}`;
+      if (url)
+        query += `&url=${escape_path(url)}`;
+
+      const resp = clash_request(running.api, 'GET', `/proxies/${escape_path(name)}/delay?${query}`);
+      result.proxy = { name: name, type: lc(proxies[name].type ?? ''), ms: resp?.status == 200 ? resp.data?.delay : null };
+
+      return result;
+    }
+  },
+
+  // the external address: the one of the WAN when it is public, or else
+  // what a service in the mainland sees
+  external_ip: {
+    call: function() {
+      const wan = network_state().wan;
+      if (wan?.address && !private_ipv4(wan.address))
+        return { address: wan.address, source: 'interface' };
+
+      const out = trim(command_output(`uclient-fetch -q -T 5 -O - ${EXTERNAL_IP_URL} 2>/dev/null`) ?? '');
+      return match(out, /^[0-9a-fA-F.:]+$/) ? { address: out, source: 'service' } : { error: 'unreachable' };
+    }
+  },
+
+  // the latest lines of the plugin log, newest first
+  events: {
+    call: function() {
+      const content = trim(readfile(`${LOG_DIR}/app.log`) ?? '');
+      const lines = length(content) ? split(content, '\n') : [];
+
+      return { events: reverse(slice(lines, -EVENTS)) };
     }
   },
 
