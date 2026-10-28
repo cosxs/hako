@@ -439,6 +439,9 @@ msgstr ""
 msgid "Hako"
 msgstr ""
 
+msgid "Hako needs the storage of the browser to open."
+msgstr ""
+
 msgid "Headers"
 msgstr ""
 
@@ -791,6 +794,9 @@ msgid "Obfuscation password"
 msgstr ""
 
 msgid "Only clears what is shown here; the log file is kept."
+msgstr ""
+
+msgid "Opening Hako…"
 msgstr ""
 
 msgid "Operation failed, see the logs for details."

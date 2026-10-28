@@ -441,6 +441,9 @@ msgstr "HTTP 版本"
 msgid "Hako"
 msgstr "Hako"
 
+msgid "Hako needs the storage of the browser to open."
+msgstr "Hako 需要浏览器存储才能打开。"
+
 msgid "Headers"
 msgstr "请求头"
 
@@ -794,6 +797,9 @@ msgstr "混淆密码"
 
 msgid "Only clears what is shown here; the log file is kept."
 msgstr "只清空此处显示的内容，日志文件不受影响。"
+
+msgid "Opening Hako…"
+msgstr "正在打开 Hako…"
 
 msgid "Operation failed, see the logs for details."
 msgstr "操作失败，请查看日志。"

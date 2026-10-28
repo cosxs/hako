@@ -4,7 +4,7 @@
     "order": 60,
     "action": {
       "type": "view",
-      "path": "hako/activity"
+      "path": "hako/app"
     },
     "depends": {
       "acl": [

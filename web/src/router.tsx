@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query'
 import {
   createHashHistory,
   createRootRoute,
@@ -14,70 +13,39 @@ import { useEffect } from 'react'
 
 import { AppShell } from '@/components/app-shell'
 import { PAGES, type PagePath } from '@/lib/nav'
-import { hasSession, logout, onSessionExpired } from '@/lib/ubus'
-import { LoginPage } from '@/pages/login'
+import { hasSession, onSessionExpired, returnPath, toLuci } from '@/lib/ubus'
 import { PendingPage } from '@/pages/pending'
 
-// a session that is no longer accepted sends the app back to the login
+// a session that is no longer accepted sends the app to LuCI to log in,
+// back to the page it was on after
 function Root() {
   const router = useRouter()
-  const queryClient = useQueryClient()
-
-  useEffect(() => onSessionExpired(() => {
-    queryClient.clear()
-    router.navigate({ to: '/login', search: { redirect: router.state.location.pathname } })
-  }), [router, queryClient])
-
+  useEffect(() => onSessionExpired(() => toLuci(router.state.location.pathname)), [router])
   return <Outlet />
-}
-
-function Login() {
-  const router = useRouter()
-  const { redirect: to } = loginRoute.useSearch()
-  return <LoginPage onLogin={() => router.history.push(to ?? '/')} />
-}
-
-function Shell() {
-  const router = useRouter()
-  const queryClient = useQueryClient()
-
-  const leave = async () => {
-    await logout()
-    queryClient.clear()
-    router.navigate({ to: '/login', search: {} })
-  }
-
-  return <AppShell onLogout={leave} />
 }
 
 const rootRoute = createRootRoute({ component: Root })
 
-const loginRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/login',
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
-    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
-  beforeLoad: () => {
-    if (hasSession()) throw redirect({ to: '/' })
-  },
-  component: Login,
-})
-
-// every other page needs a session
+// every page needs the session of LuCI: without one the app goes to LuCI,
+// and waits there as it does
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
-  beforeLoad: ({ location }) => {
-    if (!hasSession()) throw redirect({ to: '/login', search: { redirect: location.pathname } })
+  beforeLoad: async ({ location }) => {
+    if (hasSession()) return
+    toLuci(location.pathname)
+    await new Promise(() => {})
   },
-  component: Shell,
+  component: AppShell,
 })
 
+// the page the app was sent to LuCI from, else the first one
 const indexRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/activity' })
+    const path = returnPath()
+    throw redirect({ to: PAGES.find((page) => page.path === path)?.path ?? '/activity' })
   },
 })
 
@@ -103,7 +71,7 @@ const pageRoutes = [
   pageRoute('/settings', lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage')),
 ] as const
 
-const routeTree = rootRoute.addChildren([loginRoute, appRoute.addChildren([indexRoute, ...pageRoutes])])
+const routeTree = rootRoute.addChildren([appRoute.addChildren([indexRoute, ...pageRoutes])])
 
 // hash routes: the router's web server has no fallback to index.html, so a
 // page reloaded at /hako/#/policy still finds the app

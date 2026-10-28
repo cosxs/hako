@@ -1,17 +1,9 @@
 // The router's ubus over HTTP (JSON-RPC at /ubus), as LuCI uses it: a call
-// names a session, an object, a method and its arguments. The session comes
-// from logging in with a system account, root on most routers, and lasts as
-// long as it is used.
+// names a session, an object, a method and its arguments. The session is the
+// one of LuCI, and lasts as long as it is used.
 
 const ENDPOINT = '/ubus'
-const NULL_SESSION = '00000000000000000000000000000000'
 const SESSION_KEY = 'hako.session'
-
-// how long a session lasts without being used, in seconds
-const SESSION_TIMEOUT = 3600
-
-// ubus status codes
-export const UBUS_PERMISSION_DENIED = 6
 
 export class UbusError extends Error {
   code: number
@@ -48,7 +40,8 @@ export function hasSession() {
   return session != null
 }
 
-// called once a session is no longer accepted, so the app can ask to log in
+// called once a session is no longer accepted, so the app can go to LuCI to
+// log in
 export function onSessionExpired(listener: () => void) {
   expiredListeners.add(listener)
   return () => {
@@ -56,7 +49,10 @@ export function onSessionExpired(listener: () => void) {
   }
 }
 
+// once, as the session goes: the calls that fail after it, such as the
+// queries refetched as the app leaves, do not send it to the login again
 function expire() {
+  if (!session) return
   session = null
   writeSession(null)
   expiredListeners.forEach((listener) => listener())
@@ -73,7 +69,7 @@ async function rpc<T>(sid: string, object: string, method: string, params: objec
   const reply = await response.json()
   if (reply.error) {
     // -32002: the session is unknown or has timed out
-    if (reply.error.code === -32002 && sid !== NULL_SESSION) expire()
+    if (reply.error.code === -32002 && sid === session) expire()
     throw new UbusError(reply.error.code, reply.error.message)
   }
 
@@ -84,40 +80,41 @@ async function rpc<T>(sid: string, object: string, method: string, params: objec
 }
 
 export function call<T = Record<string, unknown>>(object: string, method: string, params: object = {}) {
-  if (!session) {
-    expire()
-    return Promise.reject(new UbusError(-32002, 'Not logged in'))
-  }
+  if (!session) return Promise.reject(new UbusError(-32002, 'Not logged in'))
 
   return rpc<T>(session, object, method, params)
 }
 
-// a wrong user name or password is UBUS_PERMISSION_DENIED
-export async function login(username: string, password: string) {
-  const result = await rpc<{ ubus_rpc_session: string }>(NULL_SESSION, 'session', 'login', {
-    username,
-    password,
-    timeout: SESSION_TIMEOUT,
-  })
+// LuCI logs in: its Hako entry writes the session of LuCI into the storage
+// this app shares with it, on the same origin, and opens the app again at the
+// page it was sent away from
+const LUCI_ENTRY = '/cgi-bin/luci/admin/services/hako'
+const RETURN_KEY = 'hako.return'
 
-  session = result.ubus_rpc_session
-  writeSession(session)
+export function toLuci(path?: string) {
+  try {
+    if (path) localStorage.setItem(RETURN_KEY, path)
+  } catch {
+    // the app then opens at its first page
+  }
+  location.replace(LUCI_ENTRY)
 }
 
-export async function logout() {
-  const id = session
-  session = null
-  writeSession(null)
-  if (id) await rpc(id, 'session', 'destroy', {}).catch(() => {})
+// the page to open again once back from LuCI, read once
+export function returnPath() {
+  try {
+    const path = localStorage.getItem(RETURN_KEY)
+    localStorage.removeItem(RETURN_KEY)
+    return path
+  } catch {
+    return null
+  }
 }
 
 // a file written on the router through LuCI's cgi-upload, which the session
 // must be allowed to write by the ACL of the app
 export async function upload(path: string, file: File) {
-  if (!session) {
-    expire()
-    throw new UbusError(-32002, 'Not logged in')
-  }
+  if (!session) throw new UbusError(-32002, 'Not logged in')
   const form = new FormData()
   form.append('sessionid', session)
   form.append('filename', path)

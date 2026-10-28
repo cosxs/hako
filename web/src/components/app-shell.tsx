@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
-import { LogOutIcon } from 'lucide-react'
 
 import { Badge } from '@/components/reui/badge'
 import {
@@ -35,7 +34,7 @@ function ServiceStatus() {
   )
 }
 
-export function AppShell({ onLogout }: { onLogout: () => void }) {
+export function AppShell() {
   const { pathname } = useLocation()
   const page = PAGES.find((item) => pathname.startsWith(item.path))
 
@@ -63,14 +62,6 @@ export function AppShell({ onLogout }: { onLogout: () => void }) {
         </SidebarContent>
         <SidebarFooter>
           <ServiceStatus />
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={onLogout}>
-                <LogOutIcon />
-                <span>退出</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-w-0">
