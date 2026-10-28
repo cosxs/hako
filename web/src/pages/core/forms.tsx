@@ -1,11 +1,12 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  detourChoices,
   experimentalQuery,
   LOG_LEVELS,
   logValues,
@@ -14,13 +15,14 @@ import {
   saveLog,
   saveNtp,
   validDuration,
+  validJsonObject,
   type ExperimentalValues,
   type LogValues,
   type NtpValues,
 } from '@/lib/core'
 import { effectToast, untilApplied } from '@/lib/hako'
 import { label, type Profile } from '@/lib/policy'
-import { ChoiceSelect, SaveButton, TextInput, UnitInput } from '@/pages/core/fields'
+import { ChoiceSelect, JsonFieldsDialog, SaveButton, TextInput, UnitInput } from '@/pages/core/fields'
 import { FieldRow, FieldSection, SwitchRow } from '@/pages/rules/form'
 
 const URL_PATTERN = /^https?:\/\/\S+$/
@@ -93,18 +95,20 @@ export function NtpTab({ profile }: { profile: Profile }) {
 }
 
 function NtpForm({ profile, values }: { profile: Profile; values: NtpValues }) {
+  const [dialOpen, setDialOpen] = useState(false)
   const save = useSave((next: NtpValues) => saveNtp(profile, next), '已保存 NTP 设置')
   const form = useForm({
     defaultValues: values,
     validationLogic: revalidateLogic(),
     validators: {
       onDynamic: z
-        .object({ enabled: z.boolean(), server: z.string(), port: z.string(), interval: z.string(), detour: z.string() })
+        .object({ enabled: z.boolean(), server: z.string(), port: z.string(), interval: z.string(), dialFields: z.string() })
         .superRefine((value, context) => {
           const fail = (path: string) => context.addIssue({ code: 'custom', path: [path], message: '' })
           if (value.enabled && !value.server.trim()) fail('server')
           if (value.port.trim() && !(/^\d+$/.test(value.port.trim()) && Number(value.port) > 0 && Number(value.port) < 65536)) fail('port')
           if (!validDuration(value.interval)) fail('interval')
+          if (!validJsonObject(value.dialFields)) fail('dialFields')
         }),
     },
     onSubmit: ({ value }) => save.mutate(value),
@@ -144,10 +148,15 @@ function NtpForm({ profile, values }: { profile: Profile; values: NtpValues }) {
             </FieldRow>
           )}
         </form.Field>
-        <form.Field name="detour">
+        <form.Field name="dialFields">
           {(field) => (
-            <FieldRow label="出站" htmlFor="ntp-detour" wide>
-              <ChoiceSelect id="ntp-detour" items={detourChoices(profile)} value={field.state.value} onChange={field.handleChange} />
+            <FieldRow label="拨号字段" htmlFor="ntp-dial" wide>
+              <div className="flex justify-end">
+                <Button id="ntp-dial" type="button" variant="outline" size="sm" className="bg-background" onClick={() => setDialOpen(true)}>
+                  配置…
+                </Button>
+              </div>
+              {dialOpen && <JsonFieldsDialog title="拨号字段" value={field.state.value} onDone={field.handleChange} onOpenChange={setDialOpen} />}
             </FieldRow>
           )}
         </form.Field>

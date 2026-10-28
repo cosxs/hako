@@ -12,12 +12,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { joined } from '@/lib/core'
+import { Textarea } from '@/components/ui/textarea'
+import { joined, validJsonObject } from '@/lib/core'
 import type { UciSection } from '@/lib/uci'
 import { cn } from '@/lib/utils'
 
@@ -257,5 +259,61 @@ export function DeleteSectionDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+// sing-box fields written as a JSON object, in a dialog of their own; done
+// gives them back to the form, which saves them
+export function JsonFieldsDialog({
+  title,
+  value,
+  onDone,
+  onOpenChange,
+}: {
+  title: string
+  value: string
+  onDone: (value: string) => void
+  onOpenChange: (open: boolean) => void
+}) {
+  const [text, setText] = useState(value)
+  const [tried, setTried] = useState(false)
+  const valid = validJsonObject(text)
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <form
+          noValidate
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            // the form of the page is not submitted with it
+            event.stopPropagation()
+            setTried(true)
+            if (!valid) return
+            onDone(text)
+            onOpenChange(false)
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription className="sr-only">sing-box 字段的 JSON 对象，保存页面时一并保存。</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            aria-label={title}
+            rows={10}
+            spellCheck={false}
+            value={text}
+            aria-invalid={tried && !valid}
+            className="max-h-96 min-h-48 font-mono text-[13px]"
+            onChange={(event) => setText(event.target.value)}
+          />
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>取消</DialogClose>
+            <Button type="submit">完成</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

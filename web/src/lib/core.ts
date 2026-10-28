@@ -62,6 +62,17 @@ function durationValue(input: string, unit: string) {
   return /^\d+$/.test(value) ? (Number(value) > 0 ? `${value}${unit}` : '') : value
 }
 
+// a JSON object of sing-box fields, or nothing
+export function validJsonObject(text: string) {
+  if (!text.trim()) return true
+  try {
+    const value = JSON.parse(text)
+    return !!value && typeof value === 'object' && !Array.isArray(value)
+  } catch {
+    return false
+  }
+}
+
 export function validDuration(input: string) {
   return /^(\d*|(\d+(ns|us|µs|ms|s|m|h|d))+)$/.test(input.trim())
 }
@@ -368,7 +379,9 @@ export async function deleteProfileSection(profile: Profile, section: UciSection
 
 // NTP
 
-export type NtpValues = { enabled: boolean; server: string; port: string; interval: string; detour: string }
+// the dial fields written as JSON, an object of sing-box fields; detour and
+// domain_resolver, options of their own of earlier versions, are kept
+export type NtpValues = { enabled: boolean; server: string; port: string; interval: string; dialFields: string }
 
 export function ntpValues(profile: Profile): NtpValues {
   const ntp = sectionOf(profile, 'ntp')
@@ -377,7 +390,7 @@ export function ntpValues(profile: Profile): NtpValues {
     server: text(ntp?.server),
     port: text(ntp?.server_port) || '123',
     interval: durationIn(ntp?.interval, 'm') || '30',
-    detour: text(ntp?.detour),
+    dialFields: text(ntp?.dial_fields),
   }
 }
 
@@ -393,7 +406,8 @@ export async function saveNtp(profile: Profile, values: NtpValues) {
         server: values.server.trim(),
         server_port: values.port.trim(),
         interval: durationValue(values.interval, 'm'),
-        detour: values.detour,
+        // none when empty
+        dial_fields: /^\{\s*\}$/.test(values.dialFields.trim()) ? '' : values.dialFields.trim(),
       },
       'ntp',
     ),

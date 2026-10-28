@@ -109,9 +109,11 @@ const DNS_FIELDS = {
   reverse_mapping: 'bool', client_subnet: 'string', custom_rules: 'hako'
 };
 
+// the dial fields of ntp written as JSON in dial_fields go over detour and
+// domain_resolver, options of their own of earlier versions
 const NTP_FIELDS = {
   enabled: 'bool', server: 'string', server_port: 'number', interval: 'string',
-  detour: 'detour', domain_resolver: 'dns_server'
+  detour: 'detour', domain_resolver: 'dns_server', dial_fields: 'hako'
 };
 
 const ROUTE_FIELDS = {
@@ -1283,11 +1285,16 @@ const routeRules = filter(elements('route_rule', ROUTE_RULE_FIELDS, (rule) =>
   return false;
 });
 
+function ntp_object() {
+  const ntp = mirror('ntp', 'ntp', NTP_FIELDS, refs);
+  return ntp ? merge(ntp, json_fields(puci.get_all(PROFILE, 'ntp') ?? {}, 'dial_fields') ?? {}) : null;
+}
+
 const config = {
   '$schema': 'https://sing-box.sagernet.org/schema.json',
   log: mirror('log', 'log', LOG_FIELDS, refs),
   dns: merge(mirror('dns', 'dns', DNS_FIELDS, refs) ?? {}, { servers: dnsServerObjects, rules: dnsRules }),
-  ntp: mirror('ntp', 'ntp', NTP_FIELDS, refs),
+  ntp: ntp_object(),
   inbounds: inbounds,
   outbounds: [
     ...proxyOutbounds,
