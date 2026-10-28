@@ -3,24 +3,13 @@ config log 'log'
   option timestamp '1'
 
 config dns 'dns'
-  option final 'cloudflare'
+  option final 'local'
   option strategy 'ipv4_only'
   option optimistic '1'
 
 config dns_server 'local'
   option tag 'local'
   option type 'local'
-
-config dns_server 'alidns'
-  option tag 'alidns'
-  option type 'quic'
-  option server '223.5.5.5'
-
-config dns_server 'cloudflare'
-  option tag 'cloudflare'
-  option type 'https'
-  option server '1.1.1.1'
-  option detour 'proxy'
 
 config dns_server 'fakeip'
   option tag 'fakeip'
@@ -37,7 +26,7 @@ config dns_rule
 
 config dns_rule
   option action 'evaluate'
-  option server 'alidns'
+  option server 'local'
   option timeout '2s'
 
 config dns_rule
@@ -82,7 +71,7 @@ config http_client 'proxy_client'
 
 config route 'route'
   option final 'final'
-  option default_domain_resolver 'alidns'
+  option default_domain_resolver 'local'
   option find_neighbor '1'
 
 config rule_set 'cn_ip'

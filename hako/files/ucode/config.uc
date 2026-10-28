@@ -2,9 +2,11 @@
 // sing-box, shared by inspect.uc (for the shell scripts) and the rpcd plugin
 // of LuCI.
 //
-// import { tproxy_inbound, dns_inbound, tun_route, tun_route_params } from 'hako.config';
+// import { tproxy_inbound, dns_inbound, tun_route, tun_route_params, dnsmasq_uid } from 'hako.config';
 
 'use strict';
+
+import { readfile } from 'fs';
 
 function first_inbound(config, wanted) {
   for (let inbound in config?.inbounds ?? [])
@@ -55,4 +57,17 @@ function tun_route_params(config) {
   ];
 }
 
-export { tproxy_inbound, dns_inbound, tun_route, tun_route_params };
+// the user dnsmasq runs as: the system's resolver, which the local DNS server
+// of sing-box asks, so its queries to its upstream servers are kept from
+// sing-box, or they would come back to it; HAKO_PASSWD overrides the file
+function dnsmasq_uid() {
+  for (let line in split(readfile(getenv('HAKO_PASSWD') || '/etc/passwd') ?? '', '\n')) {
+    const fields = split(line, ':');
+    if (fields[0] == 'dnsmasq' && match(fields[2] ?? '', /^[0-9]+$/))
+      return +fields[2];
+  }
+
+  return null;
+}
+
+export { tproxy_inbound, dns_inbound, tun_route, tun_route_params, dnsmasq_uid };

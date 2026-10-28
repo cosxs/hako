@@ -2,12 +2,12 @@
 // Prints what the shell scripts need from the config sing-box runs, through
 // the functions of common.sh named the same.
 //
-// usage: inspect.uc <running config> uses_tproxy|uses_tun_route|tproxy_port|dns_inbound|tun_route_params
+// usage: inspect.uc <running config> uses_tproxy|uses_tun_route|tproxy_port|dns_inbound|tun_route_params|dnsmasq_uid
 
 'use strict';
 
 import { readfile } from 'fs';
-import { tproxy_inbound, dns_inbound, tun_route, tun_route_params } from 'hako.config';
+import { tproxy_inbound, dns_inbound, tun_route, tun_route_params, dnsmasq_uid } from 'hako.config';
 
 let config = null;
 try {
@@ -36,6 +36,12 @@ case 'dns_inbound':
 
 case 'tun_route_params':
   print(join(' ', tun_route_params(config)), '\n');
+  break;
+
+case 'dnsmasq_uid':
+  const uid = dnsmasq_uid();
+  if (uid != null)
+    print(uid, '\n');
   break;
 
 default:

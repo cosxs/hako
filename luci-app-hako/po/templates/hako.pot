@@ -889,6 +889,9 @@ msgstr ""
 msgid "RealIP"
 msgstr ""
 
+msgid "RealIP needs a DNS server added under Core settings › DNS first."
+msgstr ""
+
 msgid "Reality public key"
 msgstr ""
 
@@ -1255,7 +1258,7 @@ msgstr ""
 msgid "View: %s"
 msgstr ""
 
-msgid "While Hako runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
+msgid "While Hako runs, the DNS queries of LAN devices and of the router itself are redirected to this port of sing-box."
 msgstr ""
 
 msgid "With the IPv6 takeover off, IPv6 TCP and UDP connections to other addresses are refused, so clients fall back to IPv4."

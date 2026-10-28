@@ -69,10 +69,10 @@ show_diff() {
 }
 
 # run a script of Hako on the UCI files in a directory, with its own
-# directory for uncommitted changes
+# directory for uncommitted changes, on a router whose dnsmasq runs as uid 453
 hako() {
   HAKO_CONFDIR="$1" HAKO_SAVEDIR="$1/.uci" HAKO_SUBSCRIPTION_DIR="$1/subscriptions" \
-    HAKO_TEMPLATE_DIR="$ROOT/hako/files/template" "$UCODE" -L "$TMP/lib/*.uc" "$SCRIPTS/$2"
+    HAKO_TEMPLATE_DIR="$ROOT/hako/files/template" HAKO_PASSWD="$ROOT/tests/passwd" "$UCODE" -L "$TMP/lib/*.uc" "$SCRIPTS/$2"
 }
 
 # generate the config of a UCI directory into a file and check it

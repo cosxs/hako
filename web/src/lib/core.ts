@@ -126,10 +126,10 @@ export function dnsValues(profile: Profile): DnsValues {
   }
 }
 
-// the default DNS server answers what no rule sends elsewhere: not local or
-// fakeip, as while sing-box runs dnsmasq sends its queries back to it
+// the default DNS server answers what no rule sends elsewhere: not fakeip,
+// which answers A and AAAA only
 export function finalServers(profile: Profile) {
-  return sectionsOf(profile, 'dns_server').filter((section) => !['local', 'fakeip'].includes(String(section.type)))
+  return sectionsOf(profile, 'dns_server').filter((section) => section.type !== 'fakeip')
 }
 
 export async function saveDns(profile: Profile, values: DnsValues) {

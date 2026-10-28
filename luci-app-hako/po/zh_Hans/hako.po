@@ -891,6 +891,9 @@ msgstr "代理端口"
 msgid "RealIP"
 msgstr "RealIP"
 
+msgid "RealIP needs a DNS server added under Core settings › DNS first."
+msgstr "RealIP 需要先在「内核设置 › DNS」中添加一个 DNS 服务器。"
+
 msgid "Reality public key"
 msgstr "Reality 公钥"
 
@@ -1257,8 +1260,8 @@ msgstr "查看"
 msgid "View: %s"
 msgstr "查看：%s"
 
-msgid "While Hako runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well."
-msgstr "Hako 运行时，dnsmasq 自己不应答的查询改发到 sing-box 的这个端口，而不是它的上游服务器。TProxy 模式下，发往 53 端口的查询也会重定向到这里。"
+msgid "While Hako runs, the DNS queries of LAN devices and of the router itself are redirected to this port of sing-box."
+msgstr "Hako 运行时，局域网设备和路由器自身的 DNS 查询都重定向到 sing-box 的这个端口。"
 
 msgid "With the IPv6 takeover off, IPv6 TCP and UDP connections to other addresses are refused, so clients fall back to IPv4."
 msgstr "关闭 IPv6 接管时，发往其他 IPv6 地址的 TCP 和 UDP 连接会被拒绝，客户端会回退到 IPv4。"

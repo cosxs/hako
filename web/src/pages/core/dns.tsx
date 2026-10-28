@@ -95,6 +95,8 @@ function DnsForm({ profile, values }: { profile: Profile; values: DnsValues }) {
   const servers = sectionsOf(profile, 'dns_server')
   const server = (section: UciSection) => {
     if (section.type === 'fakeip') return [section.inet4_range, section.inet6_range].filter(Boolean).join(', ') || '—'
+    // the router's resolver, dnsmasq, which asks the servers of the ISP
+    if (section.type === 'local') return '系统 DNS'
     return typeof section.server === 'string' && section.server ? section.server : '—'
   }
   const detours = detourChoices(profile)

@@ -63,14 +63,17 @@ return view.extend({
     // answered with a TTL of 1 second, so devices hardly cache them and
     // get real ones as soon as Hako stops
     const modeRules = [ 'foreign', 'fallback' ].filter((name) => uci.get(profile, name));
-    // RealIP resolves through cloudflare, named remote in profiles made
-    // before
-    const realip = uci.get(profile, 'cloudflare') ? 'cloudflare' : 'remote';
+    // RealIP resolves foreign domains with a server added by hand, one
+    // through the proxy as a rule: not local, whose answers come from the
+    // ISP and may be polluted
+    const realips = uci.sections(profile, 'dns_server').filter((section) => !(section.type in { fakeip: 1, local: 1 }));
 
     let o = s.option(form.ListValue, '_dns_mode', _('DNS mode'));
     o.value('fakeip', _('FakeIP'));
-    o.value(realip, _('RealIP'));
+    realips.forEach((section) => o.value(section['.name'], _('RealIP') + ' · ' + (section.tag || section['.name'])));
     o.description = _('FakeIP answers foreign domains at once and lets the node resolve them. RealIP resolves them through the proxy first: slower on the first visit, but works with every app.');
+    if (!realips.length)
+      o.description += ' ' + _('RealIP needs a DNS server added under Core settings › DNS first.');
     o.cfgvalue = () => uci.get(profile, 'foreign', 'server');
     o.write = (section_id, value) => modeRules.forEach((name) => {
       uci.set(profile, name, 'server', value);
@@ -80,7 +83,7 @@ return view.extend({
 
     // keep a server set by hand selectable
     const current = uci.get(profile, 'foreign', 'server');
-    if (current && current != 'fakeip' && current != realip)
+    if (current && current != 'fakeip' && !realips.some((section) => section['.name'] == current))
       o.value(current, current);
 
     if (!modeRules.length)
@@ -127,8 +130,8 @@ return view.extend({
       uci.set('hako', 'tun', 'address', on ? [ ...v4, ...(v6.length ? v6 : [ TUN_IPV6 ]) ] : v4);
     };
 
-    // the dns inbound: dnsmasq sends its queries here while sing-box
-    // runs, and with tproxy the firewall redirects port 53 here
+    // the dns inbound: the firewall redirects the DNS of the LAN and of the
+    // router here while sing-box runs
     o = s.option(form.Value, '_dns_port', _('DNS port'));
     o.ucisection = 'dns_in';
     o.ucioption = 'listen_port';
@@ -136,7 +139,7 @@ return view.extend({
     o.placeholder = '1053';
     o.rmempty = false;
     o.retain = true;
-    o.description = _('While Hako runs, dnsmasq sends the queries it does not answer itself to this port of sing-box instead of its upstream servers. With TProxy, queries to port 53 are redirected here as well.');
+    o.description = _('While Hako runs, the DNS queries of LAN devices and of the router itself are redirected to this port of sing-box.');
 
     // tun
 

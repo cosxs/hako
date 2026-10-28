@@ -14,11 +14,12 @@ LOG_DIR="/var/log/hako"
 APP_LOG="$LOG_DIR/app.log"
 CORE_LOG="$LOG_DIR/core.log"
 FIREWALL_STATE="$RUN_DIR/firewall.state"
+# left by earlier versions, which sent the queries of dnsmasq to sing-box
 DNSMASQ_STATE="$RUN_DIR/dnsmasq.state"
+RESOLVER_RULE_STATE="$RUN_DIR/resolver-rule.state"
 # left by a reload that restarts sing-box with a new config, for the runner
-# that stops to keep dnsmasq sending to sing-box
+# that stops to leave what a tun set up to the next one
 RELOADING="$RUN_DIR/reloading"
-DNSMASQ_CONF="hako.conf"
 
 log() {
   mkdir -p "$LOG_DIR"
@@ -146,13 +147,6 @@ apply_mode() {
   ucode "$MODE_SCRIPT" "$RUN_CONFIG" "${1:-1}" >/dev/null 2>> "$APP_LOG"
 }
 
-# flush_dns_cache: dnsmasq caches the answers sing-box gives the router
-# itself; drop them whenever sing-box starts or exits, so no fakeip address
-# outlives it
-flush_dns_cache() {
-  killall -HUP dnsmasq 2> /dev/null || true
-}
-
 # inspect <what>: what the shell needs from the config sing-box runs, read by
 # inspect.uc for the functions below named the same
 inspect() {
@@ -163,6 +157,11 @@ inspect() {
 # tagged dns-in) of the config sing-box runs, separated by a space
 dns_inbound() {
   inspect dns_inbound
+}
+
+# dnsmasq_uid: the user dnsmasq runs as, from /etc/passwd
+dnsmasq_uid() {
+  inspect dnsmasq_uid
 }
 
 # tproxy_port: the listen port of the (first) tproxy inbound of the config
@@ -206,66 +205,9 @@ core_localtime() {
   echo "$file"
 }
 
-# dnsmasq_dirs: the conf-dir of each dnsmasq instance, as its init script
-# sets it up
-dnsmasq_dirs() {
-  local section dir
-
-  for section in $(uci -q -X show dhcp | sed -n 's/^dhcp\.\([^.=]*\)=dnsmasq$/\1/p'); do
-    dir=$(uci -q get "dhcp.$section.confdir")
-    dir="${dir:-/tmp/dnsmasq.$section.d}"
-    dir="${dir%%,*}"
-    case "$dir" in
-    /*) echo "$dir" ;;
-    esac
-  done
-}
-
-# dnsmasq_up: while sing-box runs, dnsmasq sends the queries it does not
-# answer itself (local names, private reverse lookups) to the dns inbound
-# instead of its upstream servers. Those are often private addresses, such as
-# the main router, and neither tun nor tproxy takes over the router's queries
-# to them; so the router itself and the devices asking dnsmasq get the answers
-# of sing-box too. The files written are kept in a state file.
-dnsmasq_up() {
-  local inbound server port dir file conf changed=
-
-  inbound=$(dns_inbound)
-  if [ -z "$inbound" ]; then
-    dnsmasq_down
-    log "no dns inbound in the running config: dnsmasq keeps its upstream servers"
-    return 0
-  fi
-
-  server="${inbound% *}"
-  port="${inbound#* }"
-  conf=$(printf '# set up by Hako while sing-box runs\nno-resolv\nserver=%s#%s' "$server" "$port")
-
-  # sing-box restarted by a reload: dnsmasq sends to it already, unless the
-  # address or the instances of dnsmasq changed
-  if [ -f "$DNSMASQ_STATE" ]; then
-    for dir in $(dnsmasq_dirs); do
-      [ "$(cat "$dir/$DNSMASQ_CONF" 2> /dev/null)" = "$conf" ] || changed=1
-    done
-    [ -n "$changed" ] || return 0
-
-    # the old files go with the restart below, not one of their own
-    while read -r file; do
-      rm -f "$file"
-    done < "$DNSMASQ_STATE"
-    rm -f "$DNSMASQ_STATE"
-  fi
-
-  for dir in $(dnsmasq_dirs); do
-    mkdir -p "$dir"
-    printf '%s\n' "$conf" > "$dir/$DNSMASQ_CONF"
-    echo "$dir/$DNSMASQ_CONF" >> "$DNSMASQ_STATE"
-  done
-
-  /etc/init.d/dnsmasq restart > /dev/null 2>&1
-  log "dnsmasq sends its queries to sing-box ($server#$port)"
-}
-
+# dnsmasq_down: dnsmasq is the router's resolver, which the local DNS server
+# of sing-box asks, so it keeps its upstream servers; earlier versions sent
+# its queries to sing-box while it ran, and what they left is removed here
 dnsmasq_down() {
   local file
 
@@ -339,24 +281,74 @@ core_cleanup() {
   return 0
 }
 
-# firewall_up: the rules that send traffic to the tproxy inbound, and a route
-# that delivers marked packets to the local host; what was set up is kept in
-# a state file so it can be removed after the config changed
+# resolver_rule_up <fallback priority>: dnsmasq is the router's resolver,
+# which the local DNS server of sing-box asks, so its queries to its upstream
+# servers must not come back to sing-box. The tun leaves its user out of its
+# nftables rules (exclude_uid, added by the generator), but with auto_redirect
+# what the main table has no route for goes to the tun at the fallback
+# priority, whoever sends it; the IPv6 default routes of OpenWrt are from
+# source prefixes, so a query of dnsmasq, whose source address is not chosen
+# yet, would. A rule just before it makes such a route unreachable for
+# dnsmasq: the kernel then chooses the source address and looks the route up
+# again, as when Hako does not run. What was set up is kept in a state file.
+resolver_rule_up() {
+  local pref="$(($1 - 1))" uid
+
+  resolver_rule_down
+
+  uid=$(dnsmasq_uid)
+  [ -n "$uid" ] || return 0
+
+  if ! ip -4 rule add pref "$pref" uidrange "$uid-$uid" unreachable 2>> "$APP_LOG"; then
+    log "failed to keep the queries of dnsmasq out of the tun"
+    return 1
+  fi
+  ip -6 rule add pref "$pref" uidrange "$uid-$uid" unreachable 2> /dev/null
+  echo "$pref $uid" > "$RESOLVER_RULE_STATE"
+}
+
+resolver_rule_down() {
+  local pref uid
+
+  [ -f "$RESOLVER_RULE_STATE" ] || return 0
+
+  read -r pref uid < "$RESOLVER_RULE_STATE"
+  ip -4 rule del pref "$pref" uidrange "$uid-$uid" unreachable 2> /dev/null
+  ip -6 rule del pref "$pref" uidrange "$uid-$uid" unreachable 2> /dev/null
+  rm -f "$RESOLVER_RULE_STATE"
+}
+
+# uses_firewall: whether the config sing-box runs needs the firewall of Hako,
+# for a tproxy or a dns inbound
+uses_firewall() {
+  uses_tproxy || [ -n "$(dns_inbound)" ]
+}
+
+# firewall_up: the rules of firewall.uc, which send DNS from the LAN to the
+# dns inbound and traffic to the tproxy inbound, and for tproxy a route that
+# delivers marked packets to the local host; what was set up is kept in a
+# state file so it can be removed after the config changed
 firewall_up() {
   local mark table priority
 
   firewall_down
 
-  mark=$(uci -q get hako.firewall.mark)
-  table=$(uci -q get hako.firewall.route_table)
-  priority=$(uci -q get hako.firewall.rule_priority)
-
   if ! ucode "$FIREWALL" "$RUN_CONFIG" > "$RUN_DIR/firewall.nft" 2>> "$APP_LOG" ||
      ! nft -f "$RUN_DIR/firewall.nft" 2>> "$APP_LOG"; then
-    log "failed to set up the firewall for tproxy"
+    log "failed to set up the firewall"
     nft delete table inet hako 2> /dev/null
     return 1
   fi
+
+  if ! uses_tproxy; then
+    : > "$FIREWALL_STATE"
+    log "firewall set up"
+    return 0
+  fi
+
+  mark=$(uci -q get hako.firewall.mark)
+  table=$(uci -q get hako.firewall.route_table)
+  priority=$(uci -q get hako.firewall.rule_priority)
 
   ip -4 rule add pref "$priority" fwmark "$mark" table "$table"
   ip -4 route add local default dev lo table "$table"
@@ -365,7 +357,7 @@ firewall_up() {
     ip -6 route add local default dev lo table "$table"
   fi
   echo "$priority $table" > "$FIREWALL_STATE"
-  log "tproxy firewall set up"
+  log "firewall set up, with tproxy"
 }
 
 firewall_down() {
@@ -376,12 +368,14 @@ firewall_down() {
 
   if [ -f "$FIREWALL_STATE" ]; then
     read -r priority table < "$FIREWALL_STATE"
-    ip -4 rule del pref "$priority" 2> /dev/null
-    ip -4 route flush table "$table" 2> /dev/null
-    ip -6 rule del pref "$priority" 2> /dev/null
-    ip -6 route flush table "$table" 2> /dev/null
+    if [ -n "$priority" ]; then
+      ip -4 rule del pref "$priority" 2> /dev/null
+      ip -4 route flush table "$table" 2> /dev/null
+      ip -6 rule del pref "$priority" 2> /dev/null
+      ip -6 route flush table "$table" 2> /dev/null
+    fi
     rm -f "$FIREWALL_STATE"
-    log "tproxy firewall removed"
+    log "firewall removed"
   fi
 
   return 0

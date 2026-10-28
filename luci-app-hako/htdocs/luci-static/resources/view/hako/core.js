@@ -127,11 +127,10 @@ return view.extend({
 
     // dns
 
-    // not local: while sing-box runs, dnsmasq sends its queries back to it,
-    // and a query no rule matched would go round
+    // not fakeip, which answers A and AAAA only
     o = s.taboption('dns', form.ListValue, 'final', _('Default DNS server'));
     o.ucisection = 'dns';
-    hako.sectionChoices(o, 'dns_server', null, (section) => !(section.type in { fakeip: 1, local: 1 }));
+    hako.sectionChoices(o, 'dns_server', null, (section) => section.type != 'fakeip');
 
     o = s.taboption('dns', form.ListValue, 'strategy', _('Resolve strategy'));
     o.ucisection = 'dns';

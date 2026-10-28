@@ -7,7 +7,7 @@ USE_PROCD=1
 . /usr/share/hako/common.sh
 
 extra_command 'rotate_logs' 'Move the logs of previous days into dated files'
-extra_command 'refresh_firewall' 'Set up the tproxy firewall again, e.g. after a LAN interface came up'
+extra_command 'refresh_firewall' 'Set up the firewall again, e.g. after a LAN interface came up'
 extra_command 'takeover_core' 'Stop and disable the service of the sing-box package so Hako can run it'
 
 CRON_TAG="#hako"
@@ -40,7 +40,7 @@ start_service() {
 		rm -f "$RUN_CONFIG"
 		set_cron 0
 		firewall_down
-		dnsmasq_down
+		resolver_rule_down
 		return 0
 	fi
 
@@ -72,7 +72,7 @@ start_service() {
 		return 1
 	fi
 
-	# the runner sets up the tproxy firewall while sing-box runs and removes
+	# the runner sets up the firewall while sing-box runs and removes
 	# it as soon as sing-box exits, crashed or stopped
 	procd_open_instance
 	procd_set_param command "$RUNNER"
@@ -83,13 +83,13 @@ start_service() {
 	set_cron 1
 
 	# a new config makes procd restart the instance, and the runner sets the
-	# outbound mode and the tproxy firewall itself
+	# outbound mode and the firewall itself
 	[ -n "$config_changed" ] && return 0
 
 	# a reload that leaves sing-box running: set the outbound mode on it, and
-	# the tproxy firewall again if its rules changed
+	# the firewall again if its rules changed
 	apply_mode
-	if [ -f "$FIREWALL_STATE" ] && uses_tproxy &&
+	if [ -f "$FIREWALL_STATE" ] &&
 	   ! ucode "$FIREWALL" "$RUN_CONFIG" 2> /dev/null | cmp -s - "$RUN_DIR/firewall.nft"; then
 		firewall_up
 	fi
@@ -129,8 +129,8 @@ prepare_config() {
 	fi
 
 	# a new config restarts sing-box: marked before it is in place, so the
-	# runner that stops keeps dnsmasq sending to sing-box, and a save waiting
-	# for it sees the restart coming
+	# runner that stops leaves what a tun set up to the next one, and a save
+	# waiting for it sees the restart coming
 	if ! cmp -s "$staged" "$RUN_CONFIG"; then
 		config_changed=1
 		touch "$RELOADING"
@@ -144,14 +144,10 @@ stop_service() {
 	log "stop"
 }
 
-service_started() {
-	flush_dns_cache
-}
-
 service_stopped() {
 	firewall_down
+	resolver_rule_down
 	dnsmasq_down
-	flush_dns_cache
 }
 
 # changes to the device settings and to the profile in use are applied, a

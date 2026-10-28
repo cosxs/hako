@@ -244,10 +244,9 @@ return view.extend({
     hako.sectionChoices(o, 'http_client', uci.sections(hako.profileConfig(), 'http_client').length
       ? _('First HTTP client') : _('No HTTP client defined'));
 
-    // the servers that are direct and not local: nodes resolve their servers
-    // through it before they are up, and while sing-box runs dnsmasq sends
-    // its queries back to it
+    // the servers that are direct and not fakeip: nodes resolve their
+    // servers through it before they are up
     o = s.option(form.ListValue, 'default_domain_resolver', _('Default domain resolver'));
-    hako.sectionChoices(o, 'dns_server', null, (section) => !(section.type in { fakeip: 1, local: 1 }) && !section.detour);
+    hako.sectionChoices(o, 'dns_server', null, (section) => section.type != 'fakeip' && !section.detour);
   }
 });

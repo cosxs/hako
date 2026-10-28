@@ -120,6 +120,9 @@
       ],
       "route_exclude_address_set": [
         "geoip-cn"
+      ],
+      "exclude_uid": [
+        453
       ]
     },
     {

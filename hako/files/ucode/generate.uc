@@ -12,6 +12,7 @@
 import { cursor } from 'uci';
 import { readfile } from 'fs';
 import { DEVICE, current_profile, profile_source, subscription_file, subscription_prefix, subscription_node } from 'hako.profile';
+import { dnsmasq_uid } from 'hako.config';
 
 // HAKO_CONFDIR and HAKO_SAVEDIR point the tests at their own config
 const uci = cursor(getenv('HAKO_CONFDIR'), getenv('HAKO_SAVEDIR'));
@@ -1109,6 +1110,15 @@ for (let inbound in inbounds) {
   delete inbound.username;
   delete inbound.password;
 }
+
+// a tun with auto_route takes the router's own connections too, and hijacks
+// its DNS queries: those of dnsmasq to its upstream servers stay out, as the
+// local DNS server asks dnsmasq
+const dnsmasqUid = dnsmasq_uid();
+if (dnsmasqUid != null)
+  for (let inbound in inbounds)
+    if (inbound.type == 'tun' && inbound.auto_route && !(dnsmasqUid in (inbound.exclude_uid ?? [])))
+      inbound.exclude_uid = [ ...(inbound.exclude_uid ?? []), dnsmasqUid ];
 
 // in Global mode every connection goes through sing-box, so nothing bypasses
 // it in the firewall; switching the mode keeps it in main.mode

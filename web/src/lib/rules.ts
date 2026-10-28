@@ -578,8 +578,7 @@ export function httpClients(profile: Profile) {
 }
 
 // the DNS servers that may resolve the domains of the outbounds: direct, as
-// the nodes are not up yet, and not local or fakeip, as while sing-box runs
-// dnsmasq sends its queries back to it
+// the nodes are not up yet, and not fakeip
 export function domainResolvers(profile: Profile) {
-  return profile.sections.filter((section) => section['.type'] === 'dns_server' && !['fakeip', 'local'].includes(String(section.type)) && !section.detour)
+  return profile.sections.filter((section) => section['.type'] === 'dns_server' && section.type !== 'fakeip' && !section.detour)
 }

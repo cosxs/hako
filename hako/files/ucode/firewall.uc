@@ -1,10 +1,12 @@
 #!/usr/bin/ucode
-// Print the nftables rules for taking over traffic with the tproxy inbound.
-// sing-box sets up its own rules for the tun inbound, so this only covers
-// tproxy: LAN traffic and the router's own traffic go to the tproxy inbound,
-// DNS goes to the dns inbound, and bypassed destinations never reach sing-box.
-// IPv6 is taken over the same way with firewall.ipv6; otherwise IPv6
-// connections are refused, so clients fall back to IPv4.
+// Print the nftables rules Hako sets up around sing-box. DNS from the LAN goes
+// to the dns inbound, also queries to the router itself, which no tun takes
+// over, and so do the router's own queries; dnsmasq is left as it is, the
+// resolver the local DNS server of sing-box asks. With the tproxy
+// inbound, LAN traffic and the router's own traffic go to it, and bypassed
+// destinations never reach sing-box; sing-box sets up its own rules for the
+// tun inbound. IPv6 is taken over the same way with firewall.ipv6; otherwise
+// IPv6 connections are refused, so clients fall back to IPv4.
 //
 // Usage: firewall.uc <running config>
 // Ports and the mark of sing-box's own connections come from the config
@@ -18,6 +20,7 @@ import { cursor } from 'uci';
 import { connect } from 'ubus';
 import { readfile } from 'fs';
 import { DEVICE } from 'hako.profile';
+import { tun_route, tun_route_params, dnsmasq_uid } from 'hako.config';
 
 const RUN_CONFIG = ARGV[0];
 
@@ -79,8 +82,13 @@ const outputMark = (running?.route?.default_mark > 0) ? sprintf('0x%x', running.
 const tproxyPort = port('tproxy');
 const dnsPort = port('direct', 'dns-in');
 
-if (!fwmark || !outputMark || !tproxyPort) {
-  warn('hako: firewall needs firewall.mark, and a tproxy inbound and route.default_mark in the running config\n');
+if (!tproxyPort && !dnsPort) {
+  warn('hako: firewall needs a tproxy or dns inbound in the running config\n');
+  exit(1);
+}
+
+if (tproxyPort && (!fwmark || !outputMark)) {
+  warn('hako: tproxy needs firewall.mark, and route.default_mark in the running config\n');
   exit(1);
 }
 
@@ -115,6 +123,14 @@ const TPROXY_LAN = `
     meta nfproto ipv6 meta l4proto { tcp, udp } meta mark set ${fwmark} tproxy ip6 to :${tproxyPort} accept` : ''}`;
 
 print(`table inet hako {
+  set lan {
+    type ifname
+    ${elements(map(lan, (device) => `"${device}"`))}
+  }
+`);
+
+if (tproxyPort)
+  print(`
   set bypass {
     type ipv4_addr
     flags interval
@@ -127,11 +143,6 @@ print(`table inet hako {
     flags interval
     auto-merge
     ${elements(bypass6)}
-  }
-
-  set lan {
-    type ifname
-    ${elements(map(lan, (device) => `"${device}"`))}
   }
 
   chain prerouting {
@@ -149,7 +160,7 @@ print(`table inet hako {
 // without ipv6 only IPv4 is taken over: IPv6 connections from the LAN and
 // the router are refused, so they fall back to IPv4 instead of going out
 // directly
-if (!ipv6)
+if (tproxyPort && !ipv6)
   print(`
   chain forward_ipv6 {
     type filter hook forward priority filter; policy accept;
@@ -164,25 +175,46 @@ if (!ipv6)
   }
 `);
 
-// DNS from the LAN and from the router goes to the dns inbound. The router's
-// own queries keep their source address, such as the WAN address, when
-// redirected to loopback; sing-box listens on all addresses and answers from
-// that one, which does not match the redirect, so they are sent from loopback
+// DNS from the LAN goes to the dns inbound: with tproxy all of it, with tun
+// what is sent to the router itself, as the tun hijacks the rest
 if (dnsPort)
   print(`
   chain dstnat {
     type nat hook prerouting priority dstnat; policy accept;
-    iifname @lan meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}
+    iifname @lan ${tproxyPort ? '' : 'fib daddr type local '}meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}
   }
+`);
 
+// the router's own queries go to the dns inbound as well, as the system DNS
+// of a device points at the proxy: those to dnsmasq on loopback, and with
+// tproxy those to any other server, which a tun hijacks itself. Left out are
+// the queries of sing-box, which carry the mark of its own connections, and
+// those of dnsmasq to its upstream servers: the local DNS server asks
+// dnsmasq, and either would come back to sing-box. A tun marks the
+// connections of sing-box with auto_redirect only; without it, they cannot
+// be told apart from the router's own, which stay with dnsmasq
+const dnsmasqUid = dnsmasq_uid();
+const tun = tun_route(running);
+const ownMark = tproxyPort ? outputMark : (tun?.auto_redirect ? tun_route_params(running)[3] : null);
+
+if (dnsPort && ownMark)
+  print(`
   chain nat_output {
     type nat hook output priority -100; policy accept;
-    meta mark ${outputMark} return
-    ip daddr 127.0.0.0/8 return
-    ip6 daddr ::1 return
-    meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}
+    meta mark ${ownMark} return${dnsmasqUid != null ? `
+    meta skuid ${dnsmasqUid} return` : ''}${tproxyPort ? `
+    meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}` : `
+    ip daddr 127.0.0.0/8 meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}
+    ip6 daddr ::1 meta l4proto { tcp, udp } th dport 53 redirect to :${dnsPort}`}
   }
+`);
 
+// redirected to loopback, the queries tproxy takes to other servers keep
+// their source address, such as the WAN address; sing-box listens on all
+// addresses and answers from that one, which does not match the redirect, so
+// they are sent from loopback
+if (dnsPort && tproxyPort)
+  print(`
   chain nat_postrouting {
     type nat hook postrouting priority srcnat; policy accept;
     oifname "lo" ct status dnat meta l4proto { tcp, udp } th dport ${dnsPort} ip saddr != 127.0.0.0/8 snat ip to 127.0.0.1
