@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -23,6 +23,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      # a release v<version> ships both packages at that PKG_VERSION
+      - if: startsWith(github.ref, 'refs/tags/v')
+        name: check version
+        run: |
+          for makefile in hako/Makefile luci-app-hako/Makefile; do
+            version=$(sed -n 's/^PKG_VERSION:=//p' "$makefile")
+            if [ "$version" != "${GITHUB_REF_NAME#v}" ]; then
+              echo "::error file=$makefile::PKG_VERSION $version does not match the tag $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
 
       # the SDK has no Node, so the frontend is built here into luci-app-hako
       - uses: pnpm/action-setup@v6
@@ -72,13 +84,6 @@ jobs:
         with:
           name: hako_${{ matrix.branch }}
           path: |
-            hako_${{ matrix.branch }}.tar.gz
-            hako_${{ matrix.branch }}.tar.gz.sha256
-
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
             hako_${{ matrix.branch }}.tar.gz
             hako_${{ matrix.branch }}.tar.gz.sha256
 
@@ -135,3 +140,25 @@ jobs:
 
       - name: run tests
         run: tests/run.sh
+
+  # a tag is released only when every package is built and the tests pass
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ build, test ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: hako_*
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            hako_*.tar.gz
+            hako_*.tar.gz.sha256
